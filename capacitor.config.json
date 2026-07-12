@@ -1,0 +1,10 @@
+{
+  "appId": "com.proppreserve.app",
+  "appName": "PropPreserve",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://work-order-maanagement-app.arnobmahmud123.workers.dev",
+    "cleartext": true
+  }
+}

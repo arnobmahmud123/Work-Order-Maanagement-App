@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "work-order-maanagement-app",
+  "main": ".open-next/worker.js",
+  "minify": true,
+  "compatibility_date": "2026-07-04",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "placement": {
+    "mode": "smart"
+  },
+  "workers_dev": true,
+  "account_id": "1746a71cfcb8a9d804564d3e0cd811a1",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXT_PUBLIC_ELEVENLABS_AGENT_ID": "agent_4801kwka6r2pfw7r47hskgx5wqz0",
+    "TWILIO_PHONE_NUMBER": "+16592137866"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "proppreserve",
+      "database_id": "8e915b6a-9410-430d-850b-dbe16dbdf216"
+    }
+  ]
+}

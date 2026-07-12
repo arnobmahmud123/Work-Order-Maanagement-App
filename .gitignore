@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.open-next/
+.DS_Store
+.env
+.env.*
+*.log
+dist/
+build/
+download.tar.gz
+
+.vercel
+.env*.local
+src/generated/
+tsconfig.tsbuildinfo
