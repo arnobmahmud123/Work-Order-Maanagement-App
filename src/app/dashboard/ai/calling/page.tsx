@@ -61,7 +61,6 @@ const CALL_STATUS_ICONS: Record<string, any> = {
 
 export default function AICallingPage() {
   const { data: session } = useSession();
-  const startCall = useCallStore((s) => s.startCall);
   const role = (session?.user as any)?.role;
 
   if (role === "CONTRACTOR") {
@@ -466,6 +465,7 @@ function DialerTab({
   setCallTimer: (t: number) => void;
 }) {
   const initiateCall = useInitiateCall();
+  const startCall = useCallStore((s) => s.startCall);
   const { data: workOrdersData } = useWorkOrders();
   const workOrders = workOrdersData?.workOrders || [];
 
