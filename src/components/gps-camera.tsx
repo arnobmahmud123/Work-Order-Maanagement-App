@@ -494,7 +494,7 @@ export function GPSCamera({
         <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3">
           <button
             onClick={retakePhoto}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-hover text-white hover:bg-surface-hover backdrop-blur-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm transition-all"
           >
             <RotateCcw className="h-4 w-4" />
             <span className="text-sm font-medium">Retake</span>

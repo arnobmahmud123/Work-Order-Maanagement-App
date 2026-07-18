@@ -3999,7 +3999,7 @@ export default function WorkOrderDetailPage({
               </div>
               <button
                 onClick={() => setGpsCameraOpen(false)}
-                className="p-1.5 rounded-lg bg-surface-hover text-white hover:bg-surface-hover transition-colors"
+                className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
