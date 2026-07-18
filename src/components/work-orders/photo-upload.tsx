@@ -464,6 +464,17 @@ export function PhotoUploadSection({
               imageUrl={editorPhoto.url}
               imageName={editorPhoto.name}
               onClose={() => setEditorPhoto(null)}
+              onSave={(blob) => {
+                if (onUpload) {
+                  const file = new File([blob], editorPhoto.name.replace(/\.[^.]+$/, "") + "-edited.png", { type: "image/png" });
+                  onUpload(file, editorPhoto.category).then((result) => {
+                    onPhotosChange(photos.map((p) =>
+                      p.id === editorPhoto.id ? { ...p, url: result.url, id: result.id, persisted: true } : p
+                    ));
+                  }).catch((err) => console.error("Failed to save edited image:", err));
+                }
+                setEditorPhoto(null);
+              }}
             />
           </Suspense>,
           document.body

@@ -33,6 +33,7 @@ import {
   Users,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   X,
   FileText,
   FileDown,
@@ -153,7 +154,7 @@ export default function ChatPage() {
   const users = Array.isArray(usersData) ? usersData : usersData?.users || [];
 
   useEffect(() => {
-    if (!activeChannelId && channels.length > 0) {
+    if (!activeChannelId && channels.length > 0 && window.innerWidth >= 768) {
       setActiveChannelId(channels[0].id);
     }
   }, [channels, activeChannelId]);
@@ -227,7 +228,10 @@ export default function ChatPage() {
 
       {/* Channel Sidebar */}
       {showSidebar && (
-      <div className="w-80 border-r border-border-subtle flex flex-col bg-surface flex-shrink-0 relative">
+      <div className={cn(
+        "w-full md:w-80 border-r border-border-subtle flex flex-col bg-surface flex-shrink-0 relative transition-all",
+        activeChannelId ? "hidden md:flex" : "flex"
+      )}>
         {/* Sidebar Header */}
         <div className="p-5 border-b border-border-subtle">
           <div className="flex items-center justify-between mb-5">
@@ -404,7 +408,10 @@ export default function ChatPage() {
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden">
+      <div className={cn(
+        "flex-1 flex flex-col min-w-0 bg-background overflow-hidden",
+        !activeChannelId ? "hidden md:flex" : "flex"
+      )}>
         {activeChannelId ? (
           <ChatArea
             channelId={activeChannelId}
@@ -417,7 +424,8 @@ export default function ChatPage() {
             setShowChannelInfo={setShowChannelInfo}
             users={users}
             soundEnabled={soundEnabled}
-            onToggleSound={() => setSoundEnabled(toggleSoundEnabled())}
+            onToggleSound={() => setSoundEnabled(!soundEnabled)}
+            onBack={() => setActiveChannelId(null)}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">
@@ -701,6 +709,7 @@ function ChatArea({
   users,
   soundEnabled,
   onToggleSound,
+  onBack,
 }: {
   channelId: string;
   userId: string;
@@ -713,6 +722,7 @@ function ChatArea({
   users: any[];
   soundEnabled: boolean;
   onToggleSound: () => void;
+  onBack?: () => void;
 }) {
   const { data: session } = useSession();
   const { data: channel } = useChatChannel(channelId);
@@ -1110,6 +1120,14 @@ function ChatArea({
       {/* Channel Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-border-subtle bg-surface/80 backdrop-blur-md">
         <div className="flex items-center gap-3 min-w-0">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden p-1.5 -ml-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-cyan-400 transition-all"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
           {isDM ? (
             <div className="flex items-center gap-3">
               <div className="relative">

@@ -12,6 +12,7 @@ import {
   MousePointerClick, Undo2, Image, FileText, Film, Music, Bold, Italic,
   Underline, List, ListOrdered, Link2, AlignLeft, AlignCenter, AlignRight,
   Minimize2, Maximize2, Save, UserPlus, ChevronLeft, ExternalLink,
+  PanelLeftOpen, PanelLeftClose,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDateTime, formatRelativeTime, cn, truncate } from "@/lib/utils";
@@ -105,6 +106,12 @@ export default function EmailPage() {
   const [composeMinimized, setComposeMinimized] = useState(false);
   const [inlineReply, setInlineReply] = useState(false);
 
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }, []);
+
   const { data, isLoading, refetch } = useEmails(folder, search || undefined);
   const updateEmail = useUpdateEmail(selectedEmail?.id || "");
 
@@ -194,11 +201,19 @@ export default function EmailPage() {
   const folderLabel = FOLDERS.find((f) => f.id === folder)?.label || "Inbox";
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] overflow-hidden rounded-2xl border border-border-subtle bg-surface/80">
+    <div className="flex h-[calc(100vh-5rem)] overflow-hidden rounded-2xl border border-border-subtle bg-surface/80 relative">
+      {/* Mobile Overlay */}
+      {!sidebarCollapsed && (
+        <div 
+          className="md:hidden absolute inset-0 bg-black/60 backdrop-blur-sm z-10"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
+      
       {/* ── Left Sidebar ──────────────────────────────────────────────── */}
       <div className={cn(
-        "flex flex-col border-r border-border-subtle bg-surface/60 transition-all duration-200 flex-shrink-0",
-        sidebarCollapsed ? "w-16" : "w-56"
+        "absolute md:relative z-20 h-full flex flex-col border-r border-border-subtle bg-surface/95 md:bg-surface/60 backdrop-blur-xl md:backdrop-blur-none transition-all duration-300 flex-shrink-0",
+        sidebarCollapsed ? "w-16 -translate-x-full md:translate-x-0" : "w-56 translate-x-0"
       )}>
         {/* Compose */}
         <div className="p-3">
@@ -309,10 +324,18 @@ export default function EmailPage() {
           <>
             {/* ── Toolbar ────────────────────────────────────────────── */}
             <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border-subtle bg-surface/90 backdrop-blur-md sticky top-0 z-10">
+              {/* Mobile Sidebar Toggle */}
+              <button
+                onClick={() => setSidebarCollapsed(false)}
+                className="md:hidden p-1.5 rounded hover:bg-surface-hover text-text-muted transition-colors"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+
               {/* Select all checkbox */}
               <button
                 onClick={selectAll}
-                className="p-1.5 rounded hover:bg-surface-hover text-text-muted transition-colors"
+                className="hidden sm:block p-1.5 rounded hover:bg-surface-hover text-text-muted transition-colors"
               >
                 {selectedIds.size === emails.length && emails.length > 0 ? (
                   <CheckSquare className="h-4 w-4 text-cyan-400" />
@@ -1161,7 +1184,7 @@ function ComposeModal({
   return (
     <div className="fixed inset-0 z-[2147483646] flex items-end sm:items-center justify-center sm:justify-end sm:pr-4">
       <div className="fixed inset-0 bg-black/40 sm:bg-transparent" onClick={onClose} />
-      <div className="relative w-full max-w-2xl sm:mr-0 mx-4 bg-surface border border-border-medium rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[80vh] animate-slide-up">
+      <div className="relative w-full sm:max-w-2xl bg-surface border-t border-border-medium sm:border sm:rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col h-[90vh] sm:h-auto sm:max-h-[80vh] animate-slide-up rounded-t-2xl">
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle bg-gradient-to-r from-white/[0.02] to-white/[0.04]">
           <h3 className="text-sm font-bold text-text-primary">

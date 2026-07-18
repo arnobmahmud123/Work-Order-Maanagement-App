@@ -33,26 +33,26 @@ export default function PerformancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
             <BarChart3 className="inline h-6 w-6 mr-2 text-cyan-400" />
             Performance
           </h1>
-          <p className="text-text-muted mt-1">
+          <p className="text-text-muted mt-1 text-sm">
             User metrics, working hours, and performance analytics
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto hide-scrollbar pb-1 sm:pb-0">
           {role === "ADMIN" && (
-            <div className="flex rounded-lg border border-border-subtle overflow-hidden">
+            <div className="flex rounded-lg border border-border-subtle flex-shrink-0 bg-surface">
               <button
                 onClick={() => setView("team")}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-all",
+                  "px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap",
                   view === "team"
                     ? "bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-lg shadow-cyan-500/10"
-                    : "bg-surface text-text-secondary hover:bg-surface-hover"
+                    : "text-text-secondary hover:bg-surface-hover"
                 )}
               >
                 Team
@@ -60,26 +60,26 @@ export default function PerformancePage() {
               <button
                 onClick={() => setView("personal")}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-all",
+                  "px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap",
                   view === "personal"
                     ? "bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-lg shadow-cyan-500/10"
-                    : "bg-surface text-text-secondary hover:bg-surface-hover"
+                    : "text-text-secondary hover:bg-surface-hover"
                 )}
               >
                 My Stats
               </button>
             </div>
           )}
-          <div className="flex rounded-lg border border-border-subtle overflow-hidden">
+          <div className="flex rounded-lg border border-border-subtle flex-shrink-0 bg-surface">
             {["7", "30", "90"].map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-all",
+                  "px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap",
                   period === p
                     ? "bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-lg shadow-cyan-500/10"
-                    : "bg-surface text-text-secondary hover:bg-surface-hover"
+                    : "text-text-secondary hover:bg-surface-hover"
                 )}
               >
                 {p} Days

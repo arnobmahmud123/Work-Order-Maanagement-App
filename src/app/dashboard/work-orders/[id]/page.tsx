@@ -2284,13 +2284,13 @@ export default function WorkOrderDetailPage({
       </div>
 
       {/* ── Tab Navigation ────────────────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 bg-surface/60 backdrop-blur-xl rounded-2xl border border-border-subtle overflow-x-auto scrollbar-none sticky top-0 z-20 shadow-2xl flex-wrap">
+      <div className="flex gap-1 p-1 bg-surface/60 backdrop-blur-xl rounded-2xl border border-border-subtle overflow-x-auto hide-scrollbar sticky top-0 z-20 shadow-2xl md:flex-wrap flex-nowrap">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 whitespace-nowrap group relative flex-1 min-w-max justify-center",
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 whitespace-nowrap group relative flex-1 md:min-w-max justify-center flex-shrink-0",
               activeTab === tab.id
                 ? "text-cyan-700 dark:text-cyan-400"
                 : "text-text-muted hover:text-text-primary"
@@ -3457,15 +3457,15 @@ export default function WorkOrderDetailPage({
           {/* New Invoice Form */}
           {showNewInvoiceForm && (
             <div className="bg-surface/60 backdrop-blur-md rounded-2xl border border-border-subtle overflow-hidden shadow-xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border-subtle pb-3 gap-3">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-text-primary">
                   New {invoiceType === "client" ? "Client" : "Contractor"} Invoice Items
                 </h4>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { cancelEditInvoice(); setShowNewInvoiceForm(false); }} className="px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary text-[10px] font-bold uppercase border border-border-subtle hover:text-foreground dark:hover:text-white transition-all">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                  <button onClick={() => { cancelEditInvoice(); setShowNewInvoiceForm(false); }} className="whitespace-nowrap px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary text-[10px] font-bold uppercase border border-border-subtle hover:text-foreground dark:hover:text-white transition-all">
                     Cancel
                   </button>
-                  <button onClick={handleSaveInvoice} disabled={savingInvoice} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r text-white text-[10px] font-black uppercase tracking-widest transition-all ${invoiceType === "client" ? "from-cyan-500 to-blue-600 shadow-cyan-500/20" : "from-emerald-500 to-teal-600 shadow-emerald-500/20"}`}>
+                  <button onClick={handleSaveInvoice} disabled={savingInvoice} className={`whitespace-nowrap flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r text-white text-[10px] font-black uppercase tracking-widest transition-all ${invoiceType === "client" ? "from-cyan-500 to-blue-600 shadow-cyan-500/20" : "from-emerald-500 to-teal-600 shadow-emerald-500/20"}`}>
                     {savingInvoice ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                     {savingInvoice ? "Saving..." : "Save Invoice"}
                   </button>
@@ -3473,8 +3473,8 @@ export default function WorkOrderDetailPage({
               </div>
 
               {/* Items Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto hide-scrollbar">
+                <table className="w-full min-w-[800px]">
                   <thead>
                     <tr className="border-b border-border-subtle bg-surface-hover/50">
                       <th className="text-center px-2 py-2 text-[9px] font-bold text-text-dim uppercase tracking-wider w-8">#</th>
@@ -3699,7 +3699,7 @@ export default function WorkOrderDetailPage({
                     return (
                       <div key={inv.id} className="border-b border-border-subtle last:border-b-0">
                         {/* Invoice sub-header */}
-                        <div className="px-5 py-2 bg-surface-hover/30 flex items-center gap-3">
+                        <div className="px-5 py-2 bg-surface-hover/30 flex flex-wrap items-center gap-3">
                           <span className="text-[10px] font-black text-text-primary">{inv.invoiceNumber}</span>
                           <Badge className={`text-[8px] px-1.5 py-0.5 ${colorClasses.badge}`}>{inv.status}</Badge>
                           {isEditing && (
@@ -3707,20 +3707,20 @@ export default function WorkOrderDetailPage({
                               INLINE EDITING
                             </span>
                           )}
-                          <div className="ml-auto flex items-center gap-2">
+                          <div className="ml-auto flex items-center gap-2 overflow-x-auto hide-scrollbar">
                             {isEditing ? (
                               <>
-                                <button onClick={() => cancelInlineEdit(inv.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-bold uppercase tracking-wider border border-border-medium hover:text-foreground dark:hover:text-white transition-all">
+                                <button onClick={() => cancelInlineEdit(inv.id)} className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-bold uppercase tracking-wider border border-border-medium hover:text-foreground dark:hover:text-white transition-all">
                                   <X className="h-3 w-3" /> Cancel
                                 </button>
-                                <button onClick={() => saveInlineEdit(inv.id)} disabled={savingInline === inv.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r text-white text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${color === "cyan" ? "from-cyan-500 to-blue-600" : "from-emerald-500 to-teal-600"}`}>
+                                <button onClick={() => saveInlineEdit(inv.id)} disabled={savingInline === inv.id} className={`whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r text-white text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${color === "cyan" ? "from-cyan-500 to-blue-600" : "from-emerald-500 to-teal-600"}`}>
                                   {savingInline === inv.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                                   {savingInline === inv.id ? "Saving..." : "Save Changes"}
                                 </button>
                               </>
                             ) : (
                               <>
-                                <button onClick={() => handlePrintInvoice(inv)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary hover:text-foreground dark:hover:text-white border border-border-subtle hover:border-border-medium transition-all text-[10px] font-black uppercase tracking-widest">
+                                <button onClick={() => handlePrintInvoice(inv)} className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary hover:text-foreground dark:hover:text-white border border-border-subtle hover:border-border-medium transition-all text-[10px] font-black uppercase tracking-widest">
                                   <Printer className="h-3 w-3" /> Print
                                 </button>
                                 <button onClick={async () => {
@@ -3733,10 +3733,10 @@ export default function WorkOrderDetailPage({
                                       toast.error("Failed to delete invoice");
                                     }
                                   }
-                                }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 hover:text-rose-700 dark:text-rose-400 border border-rose-500/20 transition-all text-[10px] font-black uppercase tracking-widest">
+                                }} className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 hover:text-rose-700 dark:text-rose-400 border border-rose-500/20 transition-all text-[10px] font-black uppercase tracking-widest">
                                   <Trash2 className="h-3 w-3" /> Delete
                                 </button>
-                                <button onClick={() => startInlineEdit(inv)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${colorClasses.edit}`}>
+                                <button onClick={() => startInlineEdit(inv)} className={`whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${colorClasses.edit}`}>
                                   <Edit className="h-3 w-3" /> Edit Items
                                 </button>
                               </>
@@ -3745,8 +3745,8 @@ export default function WorkOrderDetailPage({
                         </div>
 
                         {/* Items table */}
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
+                        <div className="overflow-x-auto hide-scrollbar">
+                          <table className="w-full min-w-[800px]">
                             <thead><tr className="border-b border-border-subtle bg-surface-hover/50">
                               <th className="text-center px-2 py-2 text-[9px] font-bold text-text-dim uppercase tracking-wider w-8">#</th>
                               <th className="text-left px-3 py-2 text-[9px] font-bold text-text-dim uppercase tracking-wider w-[18%]">Task</th>

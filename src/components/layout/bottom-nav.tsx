@@ -7,7 +7,7 @@ import { useUnreadCounts } from "@/hooks/use-data";
 import {
   LayoutDashboard,
   ClipboardList,
-  Camera,
+  MessageCircle,
   MessageSquare,
   Settings,
 } from "lucide-react";
@@ -15,8 +15,8 @@ import {
 const bottomNavItems = [
   { label: "Home", href: "/dashboard", icon: LayoutDashboard },
   { label: "Orders", href: "/dashboard/work-orders", icon: ClipboardList },
-  { label: "Camera", href: "/dashboard/camera", icon: Camera },
-  { label: "SMS", href: "/dashboard/sms-chat", icon: MessageSquare, badgeKey: "chat" as const },
+  { label: "Chat", href: "/dashboard/chat", icon: MessageCircle, badgeKey: "chat" as const },
+  { label: "SMS", href: "/dashboard/sms-chat", icon: MessageSquare },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

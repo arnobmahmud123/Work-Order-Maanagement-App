@@ -64,30 +64,30 @@ export default function LogisticsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
             <Truck className="inline h-6 w-6 mr-2 text-cyan-400" />
             Logistics & Supply Chain
           </h1>
-          <p className="text-text-muted mt-1">
+          <p className="text-text-muted mt-1 text-sm">
             Material inventory, suppliers, purchase orders, and delivery tracking.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={refresh}>
+        <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto hide-scrollbar pb-1 sm:pb-0">
+          <Button variant="outline" size="sm" onClick={refresh} className="flex-shrink-0">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
-          <div className="flex rounded-lg border border-border-medium overflow-hidden">
+          <div className="flex rounded-lg border border-border-medium flex-shrink-0 bg-surface">
             {(["overview", "materials", "suppliers", "orders", "tracking", "movements"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium capitalize",
+                  "px-3 py-1.5 text-xs font-medium capitalize whitespace-nowrap",
                   view === v
                     ? "bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-lg shadow-cyan-500/10"
-                    : "bg-surface text-text-secondary hover:bg-surface-hover"
+                    : "text-text-secondary hover:bg-surface-hover"
                 )}
               >
                 {v === "tracking" ? "deliveries" : v}

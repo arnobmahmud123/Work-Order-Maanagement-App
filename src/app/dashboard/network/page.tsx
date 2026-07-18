@@ -382,7 +382,7 @@ export default function NetworkFeedPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-text-secondary">Total Posts</span>
-                      <span className="text-text-primary font-medium">{pagination?.total || 0}</span>
+                      <span className="text-text-primary font-medium">{feedData?.pagination?.total || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -509,10 +509,18 @@ export default function NetworkFeedPage() {
           </div>
 
           {/* Right Sidebar - Post Detail / Job Requests */}
-          <div className="w-80 shrink-0 hidden xl:block">
-            <div className="sticky top-6">
+          <div className={cn(
+            "shrink-0",
+            selectedPost
+              ? "fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 xl:relative xl:z-auto xl:bg-transparent xl:p-0 xl:block xl:w-80"
+              : "hidden xl:block w-80"
+          )}>
+            <div className={cn(
+              "w-full bg-surface sm:bg-transparent rounded-t-2xl sm:rounded-none max-h-[90vh] overflow-y-auto xl:sticky xl:top-6",
+              selectedPost ? "max-w-lg xl:max-w-none" : ""
+            )}>
               {selectedPost ? (
-                <div className="bg-surface-hover border border-border-subtle rounded-2xl overflow-hidden network-sidebar-card">
+                <div className="bg-surface sm:bg-surface-hover border sm:border-border-subtle rounded-t-2xl sm:rounded-2xl overflow-hidden network-sidebar-card shadow-2xl xl:shadow-none">
                   {/* Post detail */}
                   <div className="p-4 border-b border-border-subtle">
                     <div className="flex items-center justify-between mb-3">

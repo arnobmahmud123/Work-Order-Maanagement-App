@@ -126,66 +126,67 @@ export function InvoiceFullViewModal({
     .reduce((sum: number, i: any) => sum + (i.amount || i.quantity * i.unitPrice), 0);
 
   return (
-    <div className="fixed inset-0 z-[2147483647] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[2147483647] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="fixed inset-0 bg-black/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
       
-      <div className="relative w-full max-w-5xl max-h-[90vh] bg-surface/95 backdrop-blur-2xl border border-border-medium rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-5xl h-[95vh] sm:max-h-[90vh] bg-surface/95 sm:backdrop-blur-2xl border sm:border-border-medium rounded-t-3xl sm:rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
         {/* Background Accents */}
-        <div className="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -ml-32 -mb-32 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-0 right-0 -mr-32 -mt-32 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none hidden sm:block" />
+        <div className="absolute bottom-0 left-0 -ml-32 -mb-32 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none hidden sm:block" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-10 py-8 border-b border-border-subtle relative z-10">
-          <div className="flex items-center gap-6">
-            <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_8px_20px_-4px_rgba(16,185,129,0.2)]">
-              <Receipt className="h-7 w-7 text-emerald-400" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 sm:px-10 py-5 sm:py-8 border-b border-border-subtle relative z-10 gap-4">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_8px_20px_-4px_rgba(16,185,129,0.2)] shrink-0">
+              <Receipt className="h-5 w-5 sm:h-7 sm:w-7 text-emerald-400" />
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-black text-text-primary tracking-tight">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <h2 className="text-lg sm:text-2xl font-black text-text-primary tracking-tight">
                   {invoice.invoiceNumber}
                 </h2>
-                <Badge className={cn("px-3 py-1 text-[10px] font-black uppercase tracking-widest border shadow-sm", statusColors[invoice.status])}>
+                <Badge className={cn("px-2 py-0.5 sm:px-3 sm:py-1 text-[8px] sm:text-[10px] font-black uppercase tracking-widest border shadow-sm", statusColors[invoice.status])}>
                   {INVOICE_STATUS_LABELS[invoice.status] || invoice.status}
                 </Badge>
                 {invoice.type === "CONTRACTOR" && (
-                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                  <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 sm:px-3 sm:py-1 text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
                     Contractor
                   </Badge>
                 )}
                 {invoice.noCharge && (
-                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 sm:px-3 sm:py-1 text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
                     No Charge
                   </Badge>
                 )}
               </div>
-              <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
+              <p className="text-[9px] sm:text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1.5 flex flex-wrap items-center gap-1.5 sm:gap-2">
                 Created on {formatDateTime(invoice.createdAt)}
-                <span className="h-1 w-1 rounded-full bg-text-dim" />
+                <span className="hidden sm:inline-block h-1 w-1 rounded-full bg-text-dim" />
+                <span className="sm:hidden">—</span>
                 ID: {invoice.id.slice(-8).toUpperCase()}
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 absolute right-3 top-3 sm:static">
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-surface-hover text-text-primary border border-border-subtle hover:bg-surface-hover hover:text-white transition-all text-[10px] font-black uppercase tracking-widest active:scale-95"
+              className="hidden sm:flex items-center gap-2 px-5 py-3 rounded-2xl bg-surface-hover text-text-primary border border-border-subtle hover:bg-surface-hover hover:text-white transition-all text-[10px] font-black uppercase tracking-widest active:scale-95"
             >
               <Printer className="h-4 w-4" />
               Print
             </button>
             <button
               onClick={onClose}
-              className="p-3 rounded-2xl hover:bg-surface-hover text-text-muted hover:text-white transition-all group active:scale-95 border border-transparent hover:border-border-subtle"
+              className="p-2 sm:p-3 rounded-full sm:rounded-2xl bg-surface-hover sm:bg-transparent text-text-secondary sm:text-text-muted hover:text-white transition-all group active:scale-95 border border-transparent hover:border-border-subtle"
             >
-              <X className="h-6 w-6 group-hover:rotate-90 transition-transform duration-300" />
+              <X className="h-5 w-5 sm:h-6 sm:w-6 sm:group-hover:rotate-90 transition-transform duration-300" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-10 py-10 space-y-10 custom-scrollbar relative z-10">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-10 py-6 sm:py-10 space-y-6 sm:space-y-10 custom-scrollbar relative z-10">
           {/* Top Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-surface/40 backdrop-blur-md rounded-[2rem] border border-border-subtle p-6 flex items-center gap-5 group hover:bg-surface-hover/60 transition-all">

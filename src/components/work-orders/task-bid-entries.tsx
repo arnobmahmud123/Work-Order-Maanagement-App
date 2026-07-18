@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
 import { Avatar } from "@/components/ui/avatar";
 import { PhotoUploadSection, PhotoItem } from "./photo-upload";
+import toast from "react-hot-toast";
 import EXCEL_TASKS from "./excel-tasks.json";
 import {
   CheckCircle2,
@@ -2377,6 +2378,9 @@ export function BidEntryList({
   className?: string;
 }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [showAIBid, setShowAIBid] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -2496,6 +2500,42 @@ export function BidEntryList({
       )
     );
     setEditingId(null);
+  }
+
+  async function handleAIBidGenerate() {
+    if (!aiPrompt.trim()) return;
+    setIsGenerating(true);
+    try {
+      const res = await fetch("/api/ai/bid-generator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt })
+      });
+      if (!res.ok) throw new Error("AI generation failed");
+      const data = await res.json();
+      
+      const newBid: BidEntry = {
+        id: `bid-ai-${Date.now()}`,
+        title: data.title || "AI Generated Bid",
+        amount: parseFloat(data.amount) || 0,
+        description: data.description || aiPrompt,
+        status: "PENDING",
+        photos: [],
+        expanded: true,
+        unit: data.unit,
+        quantity: data.quantity ? parseFloat(data.quantity) : undefined,
+        price: data.price ? parseFloat(data.price) : undefined,
+      };
+      
+      onBidsChange([...bids, newBid]);
+      setAiPrompt("");
+      setShowAIBid(false);
+      toast.success("AI Bid generated successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate bid via AI");
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   const totalAmount = bids.reduce((s, b) => s + b.amount, 0);
@@ -2884,7 +2924,18 @@ export function BidEntryList({
             <div className="h-8 w-8 rounded-xl bg-surface-hover group-hover:bg-emerald-500/10 flex items-center justify-center transition-all">
               <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
             </div>
-            <span className="text-sm font-black uppercase tracking-widest">Create New Financial Bid</span>
+            <span className="text-sm font-black uppercase tracking-widest hidden md:inline">Create New Bid</span>
+            <span className="text-sm font-black uppercase tracking-widest md:hidden">Create</span>
+          </button>
+          <button
+            onClick={() => setShowAIBid(true)}
+            className="flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-violet-500/20 bg-violet-500/[0.02] text-violet-500/80 hover:text-violet-400 hover:border-violet-500/40 hover:bg-violet-500/[0.05] transition-all group shadow-inner"
+          >
+            <div className="h-8 w-8 rounded-xl bg-violet-500/10 group-hover:bg-violet-500/20 flex items-center justify-center transition-all">
+              <Sparkles className="h-4 w-4 transition-transform group-hover:scale-110" />
+            </div>
+            <span className="text-sm font-black uppercase tracking-widest hidden md:inline">Generate via AI</span>
+            <span className="text-sm font-black uppercase tracking-widest md:hidden">AI Auto-Bid</span>
           </button>
           <button
             onClick={() => setShowBidTemplates(!showBidTemplates)}
@@ -2893,8 +2944,55 @@ export function BidEntryList({
             <div className="h-8 w-8 rounded-xl bg-emerald-500/5 group-hover:bg-emerald-500/10 flex items-center justify-center transition-all">
               <FileText className="h-4 w-4" />
             </div>
-            <span className="text-sm font-black uppercase tracking-widest">Bid Templates</span>
+            <span className="text-sm font-black uppercase tracking-widest hidden md:inline">Bid Templates</span>
+            <span className="text-sm font-black uppercase tracking-widest md:hidden">Templates</span>
           </button>
+        </div>
+      )}
+
+      {/* AI Bid Prompt Form */}
+      {showAIBid && (
+        <div className="p-6 rounded-3xl border border-violet-500/30 bg-violet-500/[0.02] backdrop-blur-xl shadow-2xl space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-8 w-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-violet-400" />
+            </div>
+            <h4 className="text-sm font-black text-violet-400 uppercase tracking-widest">AI Auto-Bidding</h4>
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1.5 block">Describe the work to be done</label>
+            <textarea
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder='e.g. "replace 900sqft asphalt roof" or "install 2 ceiling fans"'
+              rows={3}
+              className="w-full px-4 py-3 bg-surface-hover border border-violet-500/30 rounded-2xl text-xs text-text-primary focus:border-violet-500/60 focus:outline-none resize-none shadow-inner"
+              disabled={isGenerating}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleAIBidGenerate}
+              disabled={!aiPrompt.trim() || isGenerating}
+              className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-black uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-violet-500/20 flex items-center justify-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>Generate Bid Item</>
+              )}
+            </button>
+            <button 
+              onClick={() => { setShowAIBid(false); setAiPrompt(""); }} 
+              disabled={isGenerating}
+              className="px-6 py-3 rounded-2xl bg-surface-hover text-white text-xs font-black uppercase tracking-widest hover:bg-surface-hover disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

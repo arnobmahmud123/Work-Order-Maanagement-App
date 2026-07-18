@@ -417,6 +417,10 @@ function DialerTab({
 
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState("");
   const [loadingWorkOrder, setLoadingWorkOrder] = useState(false);
+  const [callMode, setCallMode] = useState<"ai" | "manual">("ai");
+  const [twilioDevice, setTwilioDevice] = useState<any>(null);
+  const [twilioCall, setTwilioCall] = useState<any>(null);
+
   const [configStatus, setConfigStatus] = useState({
     configured: false,
     provider: "Mock Simulation",
@@ -425,8 +429,49 @@ function DialerTab({
   });
 
   useEffect(() => {
+    // Load general config
     fetch("/api/calls/config")
       .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error("Failed to load config");
+      })
+      .then((data) => {
+        if (data) {
+          setConfigStatus({
+            configured: data.configured,
+            provider: data.provider,
+            twilioStatus: data.twilioStatus || "Connected",
+            elevenLabsStatus: data.elevenLabsStatus,
+          });
+        }
+      })
+      .catch(() => {});
+      
+    // Setup Twilio Device for manual calls
+    async function setupTwilio() {
+      try {
+        const res = await fetch("/api/twilio/token");
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // Dynamically import to avoid SSR issues
+        const { Device } = await import("@twilio/voice-sdk");
+        const device = new Device(data.token, {
+          codecPreferences: ["opus", "pcmu"],
+          fakeLocalDTMF: true,
+          enableRingingState: true,
+        });
+
+        device.on("registered", () => console.log("Twilio Device registered"));
+        device.on("error", (error: any) => console.error("Twilio Device Error:", error));
+        device.register();
+        setTwilioDevice(device);
+      } catch (err) {
+        console.error("Failed to setup Twilio Device", err);
+      }
+    }
+    setupTwilio();
+  }, []);
         if (res.ok) return res.json();
         throw new Error("Failed to load config");
       })
@@ -499,6 +544,33 @@ function DialerTab({
       toast.error("Phone number is required");
       return;
     }
+    
+    if (callMode === "manual") {
+      if (!twilioDevice) {
+        toast.error("Twilio Device not ready");
+        return;
+      }
+      try {
+        toast.loading("Initiating manual call...");
+        const call = await twilioDevice.connect({ params: { To: form.recipientPhone } });
+        setTwilioCall(call);
+        
+        call.on("accept", () => toast.success("Call connected"));
+        call.on("disconnect", () => {
+          toast.success("Call ended");
+          setTwilioCall(null);
+        });
+        call.on("error", (err: any) => {
+          toast.error("Call error: " + err.message);
+          setTwilioCall(null);
+        });
+      } catch (err: any) {
+        toast.error("Failed to connect: " + err.message);
+      }
+      return;
+    }
+
+    // AI Call path
     try {
       setCallTimer(0);
 
@@ -532,13 +604,65 @@ function DialerTab({
     }
   }
 
+  function handleEndManualCall() {
+    if (twilioCall) {
+      twilioCall.disconnect();
+      setTwilioCall(null);
+    }
+  }
+
   return (
     <div className="max-w-xl mx-auto space-y-6">
+      {twilioCall && (
+        <Card className="border-blue-200 bg-blue-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center animate-pulse">
+                <PhoneCall className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-blue-900">Manual Call in Progress</p>
+                <p className="text-sm text-blue-700">{form.recipientName || form.recipientPhone}</p>
+              </div>
+            </div>
+            <Button variant="danger" size="sm" onClick={handleEndManualCall}>
+              <PhoneOff className="h-4 w-4" />
+              End Call
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PhoneCall className="h-5 w-5 text-text-muted" />
-            Make a Call
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PhoneCall className="h-5 w-5 text-text-muted" />
+              Make a Call
+            </div>
+            
+            <div className="flex items-center bg-surface-hover rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => setCallMode("ai")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all",
+                  callMode === "ai" ? "bg-white dark:bg-black text-text-primary shadow-sm" : "text-text-muted"
+                )}
+              >
+                AI Voice
+              </button>
+              <button
+                type="button"
+                onClick={() => setCallMode("manual")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all",
+                  callMode === "manual" ? "bg-white dark:bg-black text-text-primary shadow-sm" : "text-text-muted"
+                )}
+              >
+                Manual
+              </button>
+            </div>
           </CardTitle>
         </CardHeader>
 
@@ -596,54 +720,58 @@ function DialerTab({
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-text-dim mb-1">
-              Voice Profile
-            </label>
-            <select
-              value={form.voiceProfileId}
-              onChange={(e) => setForm({ ...form, voiceProfileId: e.target.value })}
-              className="block w-full rounded-lg border border-border-medium px-3 py-2 text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
-            >
-              <option value="">Default (System Voice)</option>
-              {profiles.map((p: any) => (
-                <option key={p.id} value={p.id}>
-                  🎙️ {p.name} — {p.user?.name}
-                </option>
-              ))}
-            </select>
-            {form.voiceProfileId && (
-              <p className="text-xs text-purple-600 mt-1 flex items-center gap-1">
-                <Volume2 className="h-3 w-3" />
-                AI will use the cloned coordinator voice for this call
-              </p>
-            )}
-          </div>
+          {callMode === "ai" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-text-dim mb-1">
+                  Voice Profile
+                </label>
+                <select
+                  value={form.voiceProfileId}
+                  onChange={(e) => setForm({ ...form, voiceProfileId: e.target.value })}
+                  className="block w-full rounded-lg border border-border-medium px-3 py-2 text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
+                >
+                  <option value="">Default (System Voice)</option>
+                  {profiles.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      🎙️ {p.name} — {p.user?.name}
+                    </option>
+                  ))}
+                </select>
+                {form.voiceProfileId && (
+                  <p className="text-xs text-purple-600 mt-1 flex items-center gap-1">
+                    <Volume2 className="h-3 w-3" />
+                    AI will use the cloned coordinator voice for this call
+                  </p>
+                )}
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-text-dim mb-1">
-              Purpose
-            </label>
-            <input
-              type="text"
-              value={form.purpose}
-              onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-              placeholder="Schedule inspection, follow up on work order..."
-              className="block w-full rounded-lg border border-border-medium px-3 py-2 text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-text-dim mb-1">
+                  Purpose
+                </label>
+                <input
+                  type="text"
+                  value={form.purpose}
+                  onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+                  placeholder="Schedule inspection, follow up on work order..."
+                  className="block w-full rounded-lg border border-border-medium px-3 py-2 text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
 
           <Button
             type="submit"
             className="w-full"
             size="lg"
             loading={initiateCall.isPending}
-            disabled={!!activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"}
+            disabled={(!!activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED") || !!twilioCall}
           >
             <Phone className="h-5 w-5" />
-            {activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"
+            {callMode === "manual" ? "Start Manual Call" : (activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"
               ? "Call in Progress..."
-              : "Start Call"}
+              : "Start AI Call")}
           </Button>
         </form>
       </Card>

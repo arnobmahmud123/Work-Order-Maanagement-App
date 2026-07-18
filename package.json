@@ -49,6 +49,7 @@
     "@tiptap/extension-underline": "^3.22.5",
     "@tiptap/react": "^3.22.5",
     "@tiptap/starter-kit": "^3.22.5",
+    "@twilio/voice-sdk": "^2.18.3",
     "bcrypt-edge": "^0.1.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
@@ -69,6 +70,7 @@
     "serwist": "^9.5.11",
     "tailwind-merge": "^3.5.0",
     "tiptap": "^1.32.2",
+    "twilio": "^6.0.2",
     "zod": "^4.4.2",
     "zustand": "^5.0.12"
   },

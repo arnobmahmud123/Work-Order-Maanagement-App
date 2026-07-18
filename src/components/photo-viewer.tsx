@@ -240,7 +240,7 @@ export function PhotoViewer({
           </div>
         </div>
 
-        <div className="flex flex-1 min-h-0 gap-4">
+        <div className="flex flex-col lg:flex-row-reverse flex-1 min-h-0 gap-4">
           {/* Main image */}
           <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
             <img
