@@ -15,7 +15,23 @@ import {
   Pencil,
   ChevronLeft,
   ChevronRight,
+  Info,
+  RotateCcw,
+  RotateCw,
+  Sun,
+  Moon,
+  Link,
+  ChevronDown
 } from "lucide-react";
+import { readEXIF, type EXIFInfo } from "@/lib/exif";
+
+function parseEXIFDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const [datePart, timePart] = dateStr.split(" ");
+  if (!datePart || !timePart) return new Date();
+  const [y, m, d] = datePart.split(":");
+  return new Date(`${y}-${m}-${d}T${timePart}`);
+}
 
 // Lazy load the editor to avoid bloating initial bundle
 const ImageEditor = lazy(() =>
@@ -637,8 +653,28 @@ function PhotoLightboxNav({
     photos.findIndex((p) => p.id === currentPhoto.id)
   );
   const [isZoomed, setIsZoomed] = useState(false);
+  const [showInfo, setShowInfo] = useState(true);
+  const [exifData, setExifData] = useState<EXIFInfo | null>(null);
 
   const photo = photos[currentIndex] || currentPhoto;
+
+  useEffect(() => {
+    let active = true;
+    async function loadExif() {
+      try {
+        const res = await fetch(photo.url);
+        const buf = await res.arrayBuffer();
+        if (active) {
+          setExifData(readEXIF(buf));
+        }
+      } catch (err) {
+        console.warn("Failed to load EXIF:", err);
+      }
+    }
+    setExifData(null);
+    loadExif();
+    return () => { active = false; };
+  }, [photo.url]);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < photos.length - 1;
 
@@ -679,11 +715,131 @@ function PhotoLightboxNav({
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-hidden"
+      className="fixed inset-0 flex bg-black/90 backdrop-blur-md overflow-hidden"
       style={{ zIndex: 2147483647 }}
       onClick={onClose}
     >
-      <div className="relative flex h-full w-full max-w-6xl items-center justify-center">
+      {/* LEFT SIDEBAR (EXIF / INFO) */}
+      <div 
+        className={cn(
+          "flex-shrink-0 bg-[#111111] border-r border-white/10 flex flex-col transition-all duration-300 h-full overflow-y-auto text-white",
+          showInfo ? "w-72 md:w-80 translate-x-0" : "w-0 -translate-x-full"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {showInfo && (
+          <div className="w-72 md:w-80 flex flex-col p-4 space-y-6">
+            
+            {/* LABEL SECTION */}
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold text-white/50 tracking-wider">LABEL</p>
+              <div className="flex items-center justify-between bg-[#1A1A1A] px-3 py-2 rounded-md border border-white/10 cursor-pointer hover:bg-[#222]">
+                <span className="text-sm text-white/80">-- Select Label --</span>
+                <ChevronDown className="h-4 w-4 text-white/50" />
+              </div>
+            </div>
+
+            {/* SHARE SECTION */}
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold text-white/50 tracking-wider">SHARE</p>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(photo.url);
+                  toast.success("Link copied!");
+                }}
+                className="w-full flex items-center justify-center gap-2 bg-[#1A1A1A] px-3 py-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors"
+              >
+                <Link className="h-4 w-4 text-white/70" />
+                <span className="text-sm text-white/80">Copy Link</span>
+              </button>
+            </div>
+
+            {/* PHOTO INFO SECTION */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-semibold text-white/50 tracking-wider">PHOTO INFO</p>
+              
+              <div className="space-y-3 text-xs">
+                <div>
+                  <p className="text-white/50 mb-0.5">File Name</p>
+                  <p className="text-white break-all font-medium leading-relaxed">{photo.name}</p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">Uploaded By</p>
+                  <p className="text-white font-medium">System User</p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">Upload Time</p>
+                  <p className="text-white font-medium">{photo.timestamp ? new Date(photo.timestamp).toLocaleString() : "Unknown"}</p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">Upload Source</p>
+                  <p className="text-white font-medium">Web</p>
+                </div>
+                
+                {/* EXIF Data */}
+                <div>
+                  <p className="text-white/50 mb-0.5">Date Taken</p>
+                  <p className="text-white font-medium">
+                    {exifData?.dateTime ? parseEXIFDate(exifData.dateTime).toLocaleString() : (photo.timestamp ? new Date(photo.timestamp).toLocaleString() : "Unknown")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">GPS Latitude</p>
+                  <p className="text-white font-medium">{exifData?.gps?.latitude?.toFixed(6) || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">GPS Longitude</p>
+                  <p className="text-white font-medium">{exifData?.gps?.longitude?.toFixed(6) || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">Camera Make</p>
+                  <p className="text-white font-medium">{exifData?.make || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-0.5">Camera Model</p>
+                  <p className="text-white font-medium">{exifData?.model || "—"}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* EDIT SECTION */}
+            <div className="space-y-3 pt-2 border-t border-white/10">
+              <p className="text-[10px] font-semibold text-white/50 tracking-wider">EDIT</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Brightness edit not implemented")}>
+                  <Sun className="h-4 w-4 text-white/70" />
+                  <span className="text-[10px] text-white/70">Lighten</span>
+                </button>
+                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Contrast edit not implemented")}>
+                  <Moon className="h-4 w-4 text-white/70" />
+                  <span className="text-[10px] text-white/70">Darken</span>
+                </button>
+                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Rotation not implemented")}>
+                  <RotateCcw className="h-4 w-4 text-white/70" />
+                  <span className="text-[10px] text-white/70">Rotate L</span>
+                </button>
+                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Rotation not implemented")}>
+                  <RotateCw className="h-4 w-4 text-white/70" />
+                  <span className="text-[10px] text-white/70">Rotate R</span>
+                </button>
+              </div>
+              {onEdit && (
+                <button 
+                  onClick={() => onEdit(photo)}
+                  className="w-full flex items-center justify-center gap-2 bg-[#1A1A1A] px-3 py-2.5 rounded-md border border-white/10 hover:bg-[#222] transition-colors mt-2"
+                >
+                  <Pencil className="h-4 w-4 text-white/70" />
+                  <span className="text-xs text-white/80">Advanced Edit</span>
+                </button>
+              )}
+            </div>
+
+          </div>
+        )}
+      </div>
+
+      {/* MAIN IMAGE VIEWER AREA */}
+      <div className="relative flex-1 flex h-full items-center justify-center">
         {/* Prev button */}
         {hasPrev && (
           <button
@@ -709,7 +865,7 @@ function PhotoLightboxNav({
               "rounded-xl transition-all duration-300",
               isZoomed 
                 ? "max-w-none scale-150" 
-                : "max-w-[calc(100vw-96px)] max-h-[calc(100vh-120px)] object-contain"
+                : "max-w-[calc(100vw-64px)] max-h-[calc(100vh-64px)] object-contain"
             )}
           />
         </div>
@@ -727,6 +883,18 @@ function PhotoLightboxNav({
 
         {/* Top toolbar buttons */}
         <div className="absolute top-4 right-4 flex gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              showInfo
+                ? "bg-cyan-500 text-white border border-cyan-300/40 shadow-lg shadow-cyan-900/30"
+                : "bg-slate-950/75 text-white hover:bg-slate-950/90 border border-white/15 shadow-lg shadow-black/40 backdrop-blur-md"
+            )}
+            title="Toggle Info"
+          >
+            <Info className="h-4 w-4" />
+          </button>
           <button
             onClick={handleDownload}
             className="p-2 rounded-lg bg-slate-950/75 text-white hover:bg-slate-950/90 border border-white/15 shadow-lg shadow-black/40 backdrop-blur-md transition-colors"
@@ -746,15 +914,6 @@ function PhotoLightboxNav({
           >
             <ZoomIn className="h-4 w-4" />
           </button>
-          {onEdit && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(photo); }}
-              className="p-2 rounded-lg bg-cyan-500/80 text-white hover:bg-cyan-500 transition-colors"
-              title="Edit in editor"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )}
           {onRemove && (
             <button
               onClick={(e) => { e.stopPropagation(); onRemove(photo.id); }}
@@ -773,16 +932,9 @@ function PhotoLightboxNav({
           </button>
         </div>
 
-        {/* Bottom info + counter */}
-        <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between pointer-events-none">
-          <div className="bg-black/40 backdrop-blur-sm p-3 rounded-xl border border-border-subtle">
-            <p className="text-sm font-medium text-white">{photo.name}</p>
-            <p className="text-xs text-white/70">
-              {CATEGORY_CONFIG[photo.category]?.label} •{" "}
-              {(photo.size / 1024).toFixed(0)} KB
-            </p>
-          </div>
-          <span className="text-xs text-text-secondary bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-border-subtle">
+        {/* Bottom index counter */}
+        <div className="absolute bottom-4 right-4 flex items-end justify-between pointer-events-none">
+          <span className="text-xs font-medium text-white/90 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
             {currentIndex + 1} / {photos.length}
           </span>
         </div>
