@@ -126,7 +126,7 @@ export async function POST(
     // Debug foreign key constraints
     const woExists = await env.DB.prepare(`SELECT id FROM "WorkOrder" WHERE id = ?`).bind(workOrderId).first();
     const uploaderId = (session.user as any)?.id;
-    const validUploaderId = (uploaderId && uploaderId.trim() !== "") ? uploaderId : null;
+    let validUploaderId = (uploaderId && uploaderId.trim() !== "") ? uploaderId : null;
     
     let userExists = true;
     if (validUploaderId) {
@@ -138,9 +138,10 @@ export async function POST(
       console.error(`D1 POST file error: WorkOrder ${workOrderId} not found in DB`);
       return NextResponse.json({ error: `Work order not found in DB: ${workOrderId}` }, { status: 404 });
     }
+    
     if (!userExists && validUploaderId) {
-      console.error(`D1 POST file error: User ${validUploaderId} not found in DB`);
-      return NextResponse.json({ error: `User not found in DB: ${validUploaderId}` }, { status: 404 });
+      console.warn(`D1 POST file warning: User ${validUploaderId} not found in DB. Falling back to null uploader_id.`);
+      validUploaderId = null; // Prevent foreign key constraint failure for stale session cookies
     }
 
     // Save to Cloudflare D1
