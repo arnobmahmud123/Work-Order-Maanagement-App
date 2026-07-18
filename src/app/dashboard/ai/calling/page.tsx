@@ -594,6 +594,11 @@ function DialerTab({
           ? "Outbound call triggered via ElevenLabs"
           : "Mock call initiated"
       );
+    } catch {
+      toast.error("Failed to initiate call");
+    }
+  }
+
   return (
     <div className="max-w-xl mx-auto space-y-6">
 
