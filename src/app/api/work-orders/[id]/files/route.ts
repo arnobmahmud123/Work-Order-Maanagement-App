@@ -123,12 +123,32 @@ export async function POST(
   const createdAt = new Date().toISOString();
 
   try {
+    // Debug foreign key constraints
+    const woExists = await env.DB.prepare(`SELECT id FROM "WorkOrder" WHERE id = ?`).bind(workOrderId).first();
+    const uploaderId = (session.user as any)?.id;
+    const validUploaderId = (uploaderId && uploaderId.trim() !== "") ? uploaderId : null;
+    
+    let userExists = true;
+    if (validUploaderId) {
+      const dbUser = await env.DB.prepare(`SELECT id FROM users WHERE id = ?`).bind(validUploaderId).first();
+      if (!dbUser) userExists = false;
+    }
+
+    if (!woExists) {
+      console.error(`D1 POST file error: WorkOrder ${workOrderId} not found in DB`);
+      return NextResponse.json({ error: `Work order not found in DB: ${workOrderId}` }, { status: 404 });
+    }
+    if (!userExists && validUploaderId) {
+      console.error(`D1 POST file error: User ${validUploaderId} not found in DB`);
+      return NextResponse.json({ error: `User not found in DB: ${validUploaderId}` }, { status: 404 });
+    }
+
     // Save to Cloudflare D1
     await env.DB.prepare(
       `INSERT INTO work_order_files (id, work_order_id, public_url, original_name, filename, category, mime_type, size, uploader_id, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(fileId, workOrderId, pathUrl, originalName, originalName, fileCategory, mimeType, size, (session.user as any).id, createdAt)
+      .bind(fileId, workOrderId, pathUrl, originalName, originalName, fileCategory, mimeType, size, validUploaderId, createdAt)
       .run();
     try {
       await env.DB.prepare(
