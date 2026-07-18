@@ -25,7 +25,7 @@ export function SyncManager() {
     
     const handleOffline = () => {
       setIsOnline(false);
-      toast.warning("You are offline. Changes will be saved locally.");
+      toast.error("You are offline. Changes will be saved locally.", { icon: "⚠️" });
     };
 
     window.addEventListener("online", handleOnline);

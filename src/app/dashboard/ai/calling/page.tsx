@@ -458,9 +458,7 @@ function DialerTab({
         const { Device } = await import("@twilio/voice-sdk");
         const device = new Device(data.token, {
           codecPreferences: ["opus", "pcmu"],
-          fakeLocalDTMF: true,
-          enableRingingState: true,
-        });
+        } as any);
 
         device.on("registered", () => console.log("Twilio Device registered"));
         device.on("error", (error: any) => console.error("Twilio Device Error:", error));
