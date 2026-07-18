@@ -776,7 +776,7 @@ function PhotoLightboxNav({
       </div>
 
       {/* MAIN IMAGE VIEWER AREA */}
-      <div className="relative flex-1 flex h-full items-center justify-center">
+      <div className="relative flex-1 flex h-full items-center justify-center min-w-0">
         {/* Prev button */}
         {hasPrev && (
           <button

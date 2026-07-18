@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   XCircle,
   ChevronDown,
+  Bot,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime, formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -150,11 +151,12 @@ export default function AICallingPage() {
 
       {/* Active Call Banner */}
       {activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED" && (
-        <Card className="border-green-200 bg-green-50">
-          <div className="flex items-center justify-between">
+        <Card className="border-green-200 bg-green-50 overflow-hidden" padding={false}>
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 bg-white/50 border-b border-green-100">
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center animate-pulse">
+                <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center animate-pulse shadow-lg shadow-green-500/30">
                   <Phone className="h-6 w-6 text-white" />
                 </div>
               </div>
@@ -189,11 +191,61 @@ export default function AICallingPage() {
                   setCallTimer(0);
                 }}
               >
-                <PhoneOff className="h-4 w-4" />
+                <PhoneOff className="h-4 w-4 mr-2" />
                 End Call
               </Button>
             </div>
           </div>
+          
+          {/* Live Transcription & Recording Indicator */}
+          {activeCall.status === "IN_PROGRESS" && (
+            <div className="p-4 bg-green-50/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-red-600 font-medium text-sm animate-pulse bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
+                  <div className="h-2 w-2 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)]" />
+                  Recording Call...
+                </div>
+                <Badge variant="outline" className="text-green-700 border-green-200 bg-white">
+                  <FileText className="h-3 w-3 mr-1" />
+                  Live Transcript
+                </Badge>
+              </div>
+              
+              <div className="bg-white rounded-xl border border-green-100 p-5 h-48 overflow-y-auto space-y-4 shadow-inner">
+                <div className="flex gap-3">
+                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <Bot className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div className="bg-indigo-50/50 p-3 rounded-2xl rounded-tl-sm border border-indigo-100/50">
+                    <p className="text-xs font-semibold text-indigo-700 mb-1">AI Agent</p>
+                    <p className="text-sm text-text-primary leading-relaxed">Hello, this is {activeCall.voiceProfile?.name?.split(' ')[0] || "Sarah"} calling from the coordinator desk. I'm following up on the latest work order assigned to you.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 flex-row-reverse">
+                  <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-slate-600" />
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-2xl rounded-tr-sm border border-slate-100 text-right">
+                    <p className="text-xs font-semibold text-slate-700 mb-1">Contractor</p>
+                    <p className="text-sm text-text-primary leading-relaxed">Hi! Yes, I was just looking at that.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <Bot className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div className="bg-indigo-50/50 p-3 rounded-2xl rounded-tl-sm border border-indigo-100/50 flex items-center gap-2">
+                    <p className="text-xs font-semibold text-indigo-700">AI Agent</p>
+                    <span className="flex gap-1 items-center">
+                      <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                      <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                      <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
