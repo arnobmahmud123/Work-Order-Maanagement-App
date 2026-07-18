@@ -19,22 +19,25 @@ export async function POST(req: NextRequest) {
     }
 
     const systemPrompt = `You are a professional construction and property preservation estimator.
-Parse the user's natural language request into a structured bid item.
-Output ONLY valid JSON matching this schema exactly:
-{
-  "title": "Short descriptive title of the work",
-  "description": "Detailed description of what will be done",
-  "unit": "The unit of measurement (e.g., SQFT, EACH, CYD, LF, HR)",
-  "quantity": number,
-  "price": number (the price per unit),
-  "amount": number (quantity * price)
-}
+Parse the user's natural language request and break it down into a list of structured bid items.
+Output ONLY a valid JSON ARRAY matching this schema exactly:
+[
+  {
+    "title": "Short descriptive title of the work",
+    "description": "Detailed description of what will be done",
+    "unit": "The unit of measurement (e.g., SQFT, EACH, CYD, LF, HR)",
+    "quantity": number,
+    "price": number (the price per unit),
+    "amount": number (quantity * price)
+  }
+]
 Example 1: "replace 900sqft asphalt roof"
-{"title": "Roof Replacement", "description": "Remove and replace asphalt shingle roof", "unit": "SQFT", "quantity": 900, "price": 4.50, "amount": 4050}
-Example 2: "install 2 ceiling fans"
-{"title": "Install Ceiling Fan", "description": "Install new ceiling fan fixture including wiring connections", "unit": "EACH", "quantity": 2, "price": 125, "amount": 250}
-Make reasonable market-rate estimations for price if not specified.
-Return ONLY the raw JSON object, no markdown blocks, no backticks.`;
+[
+  {"title": "Tear-off existing roof", "description": "Remove and dispose of existing asphalt shingles", "unit": "SQ", "quantity": 9, "price": 85.00, "amount": 765},
+  {"title": "Install asphalt shingles", "description": "Install new architectural asphalt shingles including underlayment", "unit": "SQ", "quantity": 9, "price": 320.00, "amount": 2880}
+]
+Make reasonable market-rate estimations for price if not specified. Break complex jobs into logical line items.
+Return ONLY the raw JSON array, no markdown blocks, no backticks.`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",

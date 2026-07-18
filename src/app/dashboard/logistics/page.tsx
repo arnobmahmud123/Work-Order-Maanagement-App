@@ -980,7 +980,7 @@ function OrdersView({ onRefresh }: { onRefresh: () => void }) {
               {order.notes && <p className="text-xs text-text-muted mt-2">Note: {order.notes}</p>}
 
               {/* Actions */}
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
+              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
                 {order.status === "PENDING" && (
                   <Button size="sm" variant="outline" onClick={() => handleStatusChange(order.id, "ORDERED")}>
                     <CheckCircle2 className="h-3 w-3 mr-1" /> Mark Ordered
@@ -1443,7 +1443,7 @@ function StockMovementsView({ onRefresh }: { onRefresh: () => void }) {
             <option key={m.id} value={m.id}>{m.name}</option>
           ))}
         </select>
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-1 max-w-full">
           {["", "STOCK_IN", "STOCK_OUT", "ADJUSTMENT", "RETURN"].map((t) => (
             <button
               key={t}

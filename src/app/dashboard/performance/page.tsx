@@ -315,7 +315,7 @@ function PersonalView({ period }: { period: string }) {
             Weekly Trend
           </CardTitle>
         </CardHeader>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {metrics.weeklyTrend.map((week: any, i: number) => (
             <div key={i} className="p-3 bg-surface-hover rounded-lg text-center">
               <p className="text-xs text-text-muted mb-1">{week.week}</p>
@@ -344,7 +344,7 @@ function TeamView() {
   return (
     <div className="space-y-6">
       {/* Role filter */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
         {["", "CONTRACTOR", "COORDINATOR", "PROCESSOR", "CLIENT"].map((r) => (
           <button
             key={r}

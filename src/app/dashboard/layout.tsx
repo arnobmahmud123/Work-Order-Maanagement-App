@@ -5,6 +5,7 @@ import { TopNav } from "@/components/layout/top-nav";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { AIChat } from "@/components/ai-chat";
 import { SyncManager } from "@/components/sync-manager";
+import { SoftphoneDialer } from "@/components/calls/softphone-dialer";
 import { useState } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { cn } from "@/lib/utils";
@@ -88,6 +89,7 @@ export default function DashboardLayout({
 
       {/* Sync Manager */}
       <SyncManager />
+      <SoftphoneDialer />
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomNav />

@@ -2514,23 +2514,25 @@ export function BidEntryList({
       if (!res.ok) throw new Error("AI generation failed");
       const data = await res.json();
       
-      const newBid: BidEntry = {
-        id: `bid-ai-${Date.now()}`,
-        title: data.title || "AI Generated Bid",
-        amount: parseFloat(data.amount) || 0,
-        description: data.description || aiPrompt,
+      const parsedData = Array.isArray(data) ? data : [data];
+      
+      const newBids: BidEntry[] = parsedData.map((item: any, index: number) => ({
+        id: `bid-ai-${Date.now()}-${index}`,
+        title: item.title || "AI Generated Bid",
+        amount: parseFloat(item.amount) || 0,
+        description: item.description || aiPrompt,
         status: "PENDING",
         photos: [],
         expanded: true,
-        unit: data.unit,
-        quantity: data.quantity ? parseFloat(data.quantity) : undefined,
-        price: data.price ? parseFloat(data.price) : undefined,
-      };
+        unit: item.unit,
+        quantity: item.quantity ? parseFloat(item.quantity) : undefined,
+        price: item.price ? parseFloat(item.price) : undefined,
+      }));
       
-      onBidsChange([...bids, newBid]);
+      onBidsChange([...bids, ...newBids]);
       setAiPrompt("");
       setShowAIBid(false);
-      toast.success("AI Bid generated successfully");
+      toast.success(`Generated ${newBids.length} bid items`);
     } catch (err: any) {
       toast.error(err.message || "Failed to generate bid via AI");
     } finally {

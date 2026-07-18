@@ -15,13 +15,7 @@ import {
   Pencil,
   ChevronLeft,
   ChevronRight,
-  Info,
-  RotateCcw,
-  RotateCw,
-  Sun,
-  Moon,
-  Link,
-  ChevronDown
+  Info
 } from "lucide-react";
 import { readEXIF, type EXIFInfo } from "@/lib/exif";
 
@@ -34,8 +28,8 @@ function parseEXIFDate(dateStr: string): Date {
 }
 
 // Lazy load the editor to avoid bloating initial bundle
-const ImageEditor = lazy(() =>
-  import("@/components/image-editor").then((m) => ({ default: m.ImageEditor }))
+const PhotoEditor = lazy(() =>
+  import("@/components/photo-editor").then((m) => ({ default: m.PhotoEditor }))
 );
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -476,9 +470,8 @@ export function PhotoUploadSection({
               <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
             </div>
           }>
-            <ImageEditor
+            <PhotoEditor
               imageUrl={editorPhoto.url}
-              imageName={editorPhoto.name}
               onClose={() => setEditorPhoto(null)}
               onSave={(blob) => {
                 if (onUpload) {
@@ -609,9 +602,8 @@ export function PhotoUploadSection({
             <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
           </div>
         }>
-          <ImageEditor
+          <PhotoEditor
             imageUrl={editorPhoto.url}
-            imageName={editorPhoto.name}
             onClose={() => setEditorPhoto(null)}
             onSave={(blob) => {
               // If there's an upload handler, save the edited image
@@ -715,44 +707,20 @@ function PhotoLightboxNav({
 
   return (
     <div
-      className="fixed inset-0 flex bg-black/90 backdrop-blur-md overflow-hidden"
+      className="fixed inset-0 flex flex-col md:flex-row bg-black/90 backdrop-blur-md overflow-hidden"
       style={{ zIndex: 2147483647 }}
       onClick={onClose}
     >
-      {/* LEFT SIDEBAR (EXIF / INFO) */}
+      {/* SIDEBAR (EXIF / INFO) */}
       <div 
         className={cn(
-          "flex-shrink-0 bg-[#111111] border-r border-white/10 flex flex-col transition-all duration-300 h-full overflow-y-auto text-white",
-          showInfo ? "w-72 md:w-80 translate-x-0" : "w-0 -translate-x-full"
+          "flex-shrink-0 bg-[#111111] border-t md:border-t-0 md:border-r border-white/10 flex flex-col transition-all duration-300 overflow-y-auto text-white",
+          showInfo ? "h-1/2 md:h-full w-full md:w-80 translate-y-0 md:translate-x-0" : "h-0 md:h-full w-full md:w-0 translate-y-full md:translate-y-0 md:-translate-x-full"
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {showInfo && (
-          <div className="w-72 md:w-80 flex flex-col p-4 space-y-6">
-            
-            {/* LABEL SECTION */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold text-white/50 tracking-wider">LABEL</p>
-              <div className="flex items-center justify-between bg-[#1A1A1A] px-3 py-2 rounded-md border border-white/10 cursor-pointer hover:bg-[#222]">
-                <span className="text-sm text-white/80">-- Select Label --</span>
-                <ChevronDown className="h-4 w-4 text-white/50" />
-              </div>
-            </div>
-
-            {/* SHARE SECTION */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold text-white/50 tracking-wider">SHARE</p>
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(photo.url);
-                  toast.success("Link copied!");
-                }}
-                className="w-full flex items-center justify-center gap-2 bg-[#1A1A1A] px-3 py-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors"
-              >
-                <Link className="h-4 w-4 text-white/70" />
-                <span className="text-sm text-white/80">Copy Link</span>
-              </button>
-            </div>
+          <div className="w-full md:w-80 flex flex-col p-4 space-y-6">
 
             {/* PHOTO INFO SECTION */}
             <div className="space-y-3">
@@ -802,37 +770,6 @@ function PhotoLightboxNav({
               </div>
             </div>
 
-            {/* EDIT SECTION */}
-            <div className="space-y-3 pt-2 border-t border-white/10">
-              <p className="text-[10px] font-semibold text-white/50 tracking-wider">EDIT</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Brightness edit not implemented")}>
-                  <Sun className="h-4 w-4 text-white/70" />
-                  <span className="text-[10px] text-white/70">Lighten</span>
-                </button>
-                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Contrast edit not implemented")}>
-                  <Moon className="h-4 w-4 text-white/70" />
-                  <span className="text-[10px] text-white/70">Darken</span>
-                </button>
-                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Rotation not implemented")}>
-                  <RotateCcw className="h-4 w-4 text-white/70" />
-                  <span className="text-[10px] text-white/70">Rotate L</span>
-                </button>
-                <button className="flex flex-col items-center justify-center gap-1.5 bg-[#1A1A1A] p-2 rounded-md border border-white/10 hover:bg-[#222] transition-colors" onClick={() => toast("Rotation not implemented")}>
-                  <RotateCw className="h-4 w-4 text-white/70" />
-                  <span className="text-[10px] text-white/70">Rotate R</span>
-                </button>
-              </div>
-              {onEdit && (
-                <button 
-                  onClick={() => onEdit(photo)}
-                  className="w-full flex items-center justify-center gap-2 bg-[#1A1A1A] px-3 py-2.5 rounded-md border border-white/10 hover:bg-[#222] transition-colors mt-2"
-                >
-                  <Pencil className="h-4 w-4 text-white/70" />
-                  <span className="text-xs text-white/80">Advanced Edit</span>
-                </button>
-              )}
-            </div>
 
           </div>
         )}

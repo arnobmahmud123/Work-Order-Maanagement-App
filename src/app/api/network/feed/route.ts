@@ -36,15 +36,25 @@ export async function GET(req: NextRequest) {
       where.workOrderId = workOrderId;
     }
 
+    const andConditions: any[] = [];
+
     if (tags && tags.length > 0) {
-      where.tags = { hasSome: tags };
+      andConditions.push({
+        OR: tags.map(t => ({ tags: { contains: t } }))
+      });
     }
 
     if (search) {
-      where.OR = [
-        { title: { contains: search } },
-        { content: { contains: search } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search } },
+          { content: { contains: search } },
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     // Location filtering (simple bounding box)
@@ -150,8 +160,8 @@ export async function GET(req: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Feed fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: String(error) + "\n" + String(error?.stack) }, { status: 500 });
   }
 }

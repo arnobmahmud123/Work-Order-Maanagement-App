@@ -494,7 +494,7 @@ export function GPSCamera({
         <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3">
           <button
             onClick={retakePhoto}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition-all shadow-lg"
           >
             <RotateCcw className="h-4 w-4" />
             <span className="text-sm font-medium">Retake</span>
@@ -651,14 +651,14 @@ export function GPSCamera({
           <div className="flex flex-col gap-2">
             <button
               onClick={handleZoomIn}
-              className="p-2 rounded-full bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm transition-colors"
+              className="p-2.5 rounded-full bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition-colors shadow-lg"
             >
               <ZoomIn className="h-4 w-4" />
             </button>
             <button
               onClick={handleZoomOut}
               disabled={zoom <= 1}
-              className="p-2 rounded-full bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm transition-colors disabled:opacity-30"
+              className="p-2.5 rounded-full bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition-colors disabled:opacity-30 shadow-lg"
             >
               <ZoomOut className="h-4 w-4" />
             </button>
@@ -681,13 +681,13 @@ export function GPSCamera({
           <div className="flex flex-col gap-2">
             <button
               onClick={switchCamera}
-              className="p-2 rounded-full bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm transition-colors"
+              className="p-2.5 rounded-full bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition-colors shadow-lg"
             >
               <FlipHorizontal className="h-4 w-4" />
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-full bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm transition-colors"
+              className="p-2.5 rounded-full bg-black/60 text-white hover:bg-black/80 backdrop-blur-md transition-colors shadow-lg"
             >
               <X className="h-4 w-4" />
             </button>

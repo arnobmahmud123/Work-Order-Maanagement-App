@@ -29,8 +29,8 @@ import {
 } from "lucide-react";
 
 // Lazy load the editor
-const ImageEditor = lazy(() =>
-  import("@/components/image-editor").then((m) => ({ default: m.ImageEditor }))
+const PhotoEditor = lazy(() =>
+  import("@/components/photo-editor").then((m) => ({ default: m.PhotoEditor }))
 );
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -536,11 +536,16 @@ export function PhotoViewer({
             <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
           </div>
         }>
-          <ImageEditor
+          <PhotoEditor
             imageUrl={photoUrl}
-            imageName={photoName}
             onClose={() => setShowEditor(false)}
-            onSave={onSave}
+            onSave={(blob) => {
+              if (onSave) {
+                // Pass a dummy dataUrl to satisfy the signature if needed, or modify signature
+                const dataUrl = URL.createObjectURL(blob);
+                onSave(blob, dataUrl);
+              }
+            }}
           />
         </Suspense>,
         document.body

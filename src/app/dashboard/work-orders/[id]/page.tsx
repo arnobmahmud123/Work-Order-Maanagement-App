@@ -209,9 +209,11 @@ async function createStoredZip(files: ZipFileInput[]) {
 }
 
 // Lazy load the image editor
-const ImageEditor = lazy(() =>
-  import("@/components/image-editor").then((m) => ({ default: m.ImageEditor }))
+const PhotoEditor = lazy(() =>
+  import("@/components/photo-editor").then((m) => ({ default: m.PhotoEditor }))
 );
+
+import { CallOptionModal } from "@/components/calls/call-options-modal";
 
 // ─── Default Property Preservation Task Names ────────────────────────────────
 
@@ -2644,13 +2646,12 @@ export default function WorkOrderDetailPage({
                 </div>
                 <div className="grid grid-cols-2 gap-2 relative z-10">
                   {workOrder.coordinator.phone && (
-                    <a
-                      href={`tel:${workOrder.coordinator.phone}`}
-                      className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-surface-hover border border-border-subtle hover:bg-surface-hover hover:border-border-medium transition-all text-text-secondary"
-                    >
-                      <Phone className="h-3.5 w-3.5" />
-                      <span className="text-[10px] font-bold uppercase tracking-tighter">Call</span>
-                    </a>
+                    <CallOptionModal phoneNumber={workOrder.coordinator.phone}>
+                      <button className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-surface-hover border border-border-subtle hover:bg-surface-hover hover:border-border-medium transition-all text-text-secondary">
+                        <Phone className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-tighter">Call</span>
+                      </button>
+                    </CallOptionModal>
                   )}
                   {workOrder.coordinator.email && (
                     <a
@@ -2828,7 +2829,7 @@ export default function WorkOrderDetailPage({
             </div>
 
             {/* AI Assistant - Floating */}
-            <div className="relative group">
+            <div className="relative group hidden md:block">
               {showAIChat ? (
                 <div className="bg-surface/95 backdrop-blur-2xl rounded-[2rem] border border-border-medium shadow-[0_32px_128px_-16px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 duration-300">
                   <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
@@ -3473,8 +3474,8 @@ export default function WorkOrderDetailPage({
               </div>
 
               {/* Items Table */}
-              <div className="overflow-x-auto hide-scrollbar">
-                <table className="w-full min-w-[800px]">
+              <div className="overflow-x-auto hide-scrollbar -mx-5 px-5 sm:mx-0 sm:px-0">
+                <table className="w-full min-w-[750px]">
                   <thead>
                     <tr className="border-b border-border-subtle bg-surface-hover/50">
                       <th className="text-center px-2 py-2 text-[9px] font-bold text-text-dim uppercase tracking-wider w-8">#</th>
@@ -3745,8 +3746,8 @@ export default function WorkOrderDetailPage({
                         </div>
 
                         {/* Items table */}
-                        <div className="overflow-x-auto hide-scrollbar">
-                          <table className="w-full min-w-[800px]">
+                        <div className="overflow-x-auto hide-scrollbar -mx-5 px-5 sm:mx-0 sm:px-0">
+                          <table className="w-full min-w-[750px]">
                             <thead><tr className="border-b border-border-subtle bg-surface-hover/50">
                               <th className="text-center px-2 py-2 text-[9px] font-bold text-text-dim uppercase tracking-wider w-8">#</th>
                               <th className="text-left px-3 py-2 text-[9px] font-bold text-text-dim uppercase tracking-wider w-[18%]">Task</th>
@@ -4021,9 +4022,8 @@ export default function WorkOrderDetailPage({
             <Loader2 className="h-8 w-8 text-cyan-700 dark:text-cyan-400 animate-spin" />
           </div>
         }>
-          <ImageEditor
+          <PhotoEditor
             imageUrl={editorPhoto.url}
-            imageName={editorPhoto.name}
             onClose={() => setEditorPhoto(null)}
             onSave={async (blob: Blob) => {
               // Create a new file from the edited image
@@ -4410,9 +4410,12 @@ function WorkOrderMessagesTab({
         c.name?.toLowerCase().includes(workOrderId.slice(-8).toLowerCase()))
   );
 
+  const hasAttemptedCreate = useRef(false);
+
   // Auto-create a WORK_ORDERS channel if none exists
   useEffect(() => {
-    if (channelsData && !workOrderChannel && !creatingChannel) {
+    if (channelsData && !workOrderChannel && !creatingChannel && !hasAttemptedCreate.current) {
+      hasAttemptedCreate.current = true;
       setCreatingChannel(true);
       const shortId = workOrderId.slice(-8).toUpperCase();
       createChannel.mutate(
@@ -4423,11 +4426,14 @@ function WorkOrderMessagesTab({
         },
         {
           onSuccess: () => setCreatingChannel(false),
-          onError: () => setCreatingChannel(false),
+          onError: () => {
+            setCreatingChannel(false);
+            hasAttemptedCreate.current = false; // Allow retry on error
+          },
         }
       );
     }
-  }, [channelsData, workOrderChannel, creatingChannel, workOrderId, workOrderTitle, createChannel]);
+  }, [channelsData, workOrderChannel, creatingChannel, workOrderId, workOrderTitle]); // omitted createChannel to prevent infinite loops
 
   // Fetch messages for this specific channel only
   const channelId = workOrderChannel?.id || "";

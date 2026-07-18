@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 import withSerwistInit from "@serwist/next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+initOpenNextCloudflareForDev();
 
 const withSerwist = withSerwistInit({
   swSrc: "src/app/sw.ts",

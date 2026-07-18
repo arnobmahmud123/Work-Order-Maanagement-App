@@ -254,7 +254,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
   }, [isDragging]);
 
   // If user removed the assistant, show a small restore button
-  if (isRemoved && !isOpen) {
+  if (isRemoved && !isOpen && (!isMobile || embedded)) {
     return (
       <button
         onClick={() => setIsRemoved(false)}
@@ -271,6 +271,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
   }
 
   if (isRemoved) return null;
+  if (!embedded && isMobile) return null;
 
   // Floating button mode
   return (

@@ -9,7 +9,9 @@ import {
   Phone, Mail, ChevronDown, ChevronUp, Navigation,
   Shield, Zap, Briefcase, X, Locate, Loader2,
 } from "lucide-react";
+import { useAppStore } from "@/stores/app-store";
 import { cn } from "@/lib/utils";
+import { CallOptionModal } from "@/components/calls/call-options-modal";
 
 const SERVICE_TYPES = [
   { value: "", label: "All Services" },
@@ -814,12 +816,11 @@ function ContractorMapContent() {
                 {/* Action Buttons */}
                 <div className="px-4 pb-4 flex gap-2">
                   {selectedContractor.phone && (
-                    <a
-                      href={`tel:${selectedContractor.phone}`}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-sm font-medium hover:bg-emerald-500/30 transition-colors border border-emerald-500/20"
-                    >
-                      <Phone className="h-4 w-4" /> Call
-                    </a>
+                    <CallOptionModal phoneNumber={selectedContractor.phone} contractorId={selectedContractor.id}>
+                      <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-sm font-medium hover:bg-emerald-500/30 transition-colors border border-emerald-500/20">
+                        <Phone className="h-4 w-4" /> Call
+                      </button>
+                    </CallOptionModal>
                   )}
                   {selectedContractor.email && (
                     <a

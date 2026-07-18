@@ -201,7 +201,7 @@ export default function EmailPage() {
   const folderLabel = FOLDERS.find((f) => f.id === folder)?.label || "Inbox";
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] overflow-hidden rounded-2xl border border-border-subtle bg-surface/80 relative">
+    <div className="flex h-[calc(100dvh-12rem)] md:h-[calc(100vh-5rem)] overflow-hidden md:rounded-2xl border-y md:border border-border-subtle bg-surface/80 relative -mx-3 md:mx-0 shadow-xl">
       {/* Mobile Overlay */}
       {!sidebarCollapsed && (
         <div 
@@ -1184,7 +1184,7 @@ function ComposeModal({
   return (
     <div className="fixed inset-0 z-[2147483646] flex items-end sm:items-center justify-center sm:justify-end sm:pr-4">
       <div className="fixed inset-0 bg-black/40 sm:bg-transparent" onClick={onClose} />
-      <div className="relative w-full sm:max-w-2xl bg-surface border-t border-border-medium sm:border sm:rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col h-[90vh] sm:h-auto sm:max-h-[80vh] animate-slide-up rounded-t-2xl">
+      <div className="relative w-full sm:max-w-2xl bg-surface border-t border-border-medium sm:border sm:rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[80vh] animate-slide-up sm:rounded-t-2xl">
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle bg-gradient-to-r from-white/[0.02] to-white/[0.04]">
           <h3 className="text-sm font-bold text-text-primary">

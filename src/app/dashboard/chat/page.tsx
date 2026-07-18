@@ -212,7 +212,7 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] -m-4 lg:-m-6 bg-background overflow-hidden">
+    <div className="flex h-[calc(100dvh-11rem)] md:h-[calc(100vh-7rem)] lg:h-[calc(100vh-9rem)] -m-3 md:-m-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl">
       {/* Sidebar Toggle (when hidden) */}
       {!showSidebar && (
         <div className="flex-shrink-0 flex items-start pt-4 pl-3">
