@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { WifiOff, RefreshCw } from "lucide-react";
 import { getPendingMutations, removeMutation } from "@/lib/idb";
-import { toast } from "sonner";
+import { toast } from "react-hot-toast";
 import { cn } from "@/lib/utils";
 
 export function SyncManager() {

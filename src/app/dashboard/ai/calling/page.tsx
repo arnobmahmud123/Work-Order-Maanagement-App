@@ -472,21 +472,6 @@ function DialerTab({
     }
     setupTwilio();
   }, []);
-        if (res.ok) return res.json();
-        throw new Error("Failed to load config");
-      })
-      .then((data) => {
-        if (data) {
-          setConfigStatus({
-            configured: data.configured,
-            provider: data.provider,
-            twilioStatus: data.twilioStatus || "Connected",
-            elevenLabsStatus: data.elevenLabsStatus,
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const [form, setForm] = useState({
     recipientPhone: "",
