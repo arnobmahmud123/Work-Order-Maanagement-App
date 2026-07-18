@@ -93,6 +93,7 @@ import {
   fileUploadsToPhotos,
 } from "@/components/work-orders/photo-upload";
 import { GPSCamera, type CapturedPhoto } from "@/components/gps-camera";
+import { addPhotoToQueue } from "@/lib/offline-queue";
 import {
   TaskEntryList,
   TaskEntry,
@@ -280,8 +281,8 @@ function UnitSelector({
               type="button"
               onClick={() => { onChange(u.value); setSearch(u.value); setOpen(false); }}
               className={cn(
-                "w-full text-left px-3 py-1.5 text-xs hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors border-b border-border-subtle last:border-0",
-                value === u.value ? "bg-cyan-500/10 text-cyan-400 font-bold" : "text-text-secondary"
+                "w-full text-left px-3 py-1.5 text-xs hover:bg-cyan-500/10 hover:text-cyan-700 dark:text-cyan-400 transition-colors border-b border-border-subtle last:border-0",
+                value === u.value ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 font-bold" : "text-text-secondary"
               )}
             >
               {u.label}
@@ -436,8 +437,8 @@ function TaskNameSelector({
                 setCustom(false);
               }}
               className={cn(
-                "w-full text-left px-3 py-2 text-xs hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors border-b border-border-subtle last:border-0",
-                value === task ? "bg-cyan-500/10 text-cyan-400 font-bold" : "text-text-secondary"
+                "w-full text-left px-3 py-2 text-xs hover:bg-cyan-500/10 hover:text-cyan-700 dark:text-cyan-400 transition-colors border-b border-border-subtle last:border-0",
+                value === task ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 font-bold" : "text-text-secondary"
               )}
             >
               {task}
@@ -451,7 +452,7 @@ function TaskNameSelector({
               onChange("");
               inputRef.current?.focus();
             }}
-            className="w-full text-left px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/10 transition-colors border-t border-border-medium flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/10 transition-colors border-t border-border-medium flex items-center gap-2"
           >
             <span className="text-lg leading-none">+</span> Custom Task Name
           </button>
@@ -834,7 +835,7 @@ export default function WorkOrderDetailPage({
   .party-detail { font-size:11px; color:#64748b; line-height:1.8; }
 
   /* ── Meta Grid ── */
-  .meta-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin:0 48px 32px; border-radius:12px; overflow:hidden; border:1px solid #e2e8f0; }
+  .meta-grid { display:grid; grid-template-columns:repeat(1,1fr); } @media (min-width: 768px) { .meta-grid { grid-template-columns:repeat(2,1fr); } } @media (min-width: 1024px) { .meta-grid { grid-template-columns:repeat(4,1fr);; gap:0; margin:0 48px 32px; border-radius:12px; overflow:hidden; border:1px solid #e2e8f0; }
   .meta-cell { padding:16px 18px; border-right:1px solid #f1f5f9; }
   .meta-cell:last-child { border-right:none; }
   .meta-cell .label { font-size:8px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:2px; margin-bottom:6px; }
@@ -1266,8 +1267,61 @@ export default function WorkOrderDetailPage({
     }
   }
 
+  async function resizeImage(file: File, maxWidth = 1000): Promise<File> {
+    if (!file.type.startsWith("image/")) return file;
+    // Skip resizing for small files (under 400KB) to preserve EXIF data and avoid unnecessary processing
+    if (file.size < 400 * 1024) return file;
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(file);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
+          },
+          "image/jpeg",
+          0.6
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
   // Upload handler — uploads a file directly to Cloudflare R2 via pre-signed URL and saves metadata to DB
-  async function handlePhotoUpload(file: File, category: string): Promise<{ url: string; rawUrl?: string; id: string }> {
+  async function handlePhotoUpload(originalFile: File, category: string): Promise<{ url: string; rawUrl?: string; id: string }> {
+    const file = await resizeImage(originalFile);
+    
+    // OFFLINE MODE CHECK
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast("Saved offline. Will sync when back online.", { icon: "📶", style: { background: "#10b981", color: "#fff" } });
+      const tempId = `offline-${Date.now()}`;
+      await addPhotoToQueue({
+        id: tempId,
+        workOrderId: id as string,
+        category,
+        file,
+        photoName: file.name
+      });
+      return {
+        url: URL.createObjectURL(file), // mock url for immediate rendering
+        rawUrl: URL.createObjectURL(file),
+        id: tempId
+      };
+    }
+
     try {
       // 1. Get pre-signed PUT upload URL from backend
       const ticketRes = await fetch("/api/get-upload-url", {
@@ -1463,7 +1517,7 @@ export default function WorkOrderDetailPage({
       }
     }).catch((err) => {
       console.error("GPS photo upload failed:", err);
-      toast.error("GPS photo upload failed");
+      toast.error(`GPS photo upload failed: ${err.message || "Unknown error"}`);
     });
 
     // Add to appropriate photo list
@@ -1989,7 +2043,7 @@ export default function WorkOrderDetailPage({
         <div className="relative flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
                 WO-{workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
               </span>
               <h1 className="text-2xl md:text-3xl font-black text-text-primary tracking-tight leading-none">
@@ -2009,7 +2063,7 @@ export default function WorkOrderDetailPage({
             </div>
             
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-text-secondary">
-              <span className="flex items-center gap-2 group transition-colors hover:text-cyan-400">
+              <span className="flex items-center gap-2 group transition-colors hover:text-cyan-700 dark:text-cyan-400">
                 <MapPin className="h-4 w-4 text-cyan-500/70" />
                 <span className="truncate max-w-[250px]">
                   {workOrder.address}{workOrder.city && `, ${workOrder.city}`}{workOrder.state && `, ${workOrder.state}`}
@@ -2019,7 +2073,7 @@ export default function WorkOrderDetailPage({
                 <Activity className="h-3.5 w-3.5 text-text-muted" />
                 {SERVICE_TYPE_LABELS[workOrder.serviceType]}
               </span>
-              <span className="flex items-center gap-2 group transition-colors hover:text-violet-400">
+              <span className="flex items-center gap-2 group transition-colors hover:text-violet-700 dark:text-violet-400">
                 <Calendar className="h-4 w-4 text-violet-500/70" />
                 {workOrder.dueDate ? formatDate(workOrder.dueDate) : "No due date"}
               </span>
@@ -2058,7 +2112,7 @@ export default function WorkOrderDetailPage({
 
           </div>
 
-          <div className="flex items-center gap-2 self-start">
+          <div className="flex flex-wrap items-center gap-2 self-start w-full md:w-auto mt-4 md:mt-0">
             <button
               onClick={() => setShowQuickView(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all text-xs font-bold uppercase tracking-wider"
@@ -2133,7 +2187,7 @@ export default function WorkOrderDetailPage({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-xl bg-cyan-500/20 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+                <CheckCircle2 className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Tasks</span>
             </div>
@@ -2153,7 +2207,7 @@ export default function WorkOrderDetailPage({
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <DollarSign className="h-4 w-4 text-amber-400" />
+                <DollarSign className="h-4 w-4 text-amber-700 dark:text-amber-400" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Bids</span>
             </div>
@@ -2164,7 +2218,7 @@ export default function WorkOrderDetailPage({
           {approvedBids > 0 && (
             <div className="flex items-center gap-1.5 mt-2">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">
+              <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-tighter">
                 ${approvedBids.toLocaleString()} approved
               </p>
             </div>
@@ -2175,7 +2229,7 @@ export default function WorkOrderDetailPage({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
-                <Camera className="h-4 w-4 text-violet-400" />
+                <Camera className="h-4 w-4 text-violet-700 dark:text-violet-400" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Gallery</span>
             </div>
@@ -2204,7 +2258,7 @@ export default function WorkOrderDetailPage({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                <Shield className="h-4 w-4 text-emerald-400" />
+                <Shield className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Compliance</span>
             </div>
@@ -2238,7 +2292,7 @@ export default function WorkOrderDetailPage({
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 whitespace-nowrap group relative flex-1 min-w-max justify-center",
               activeTab === tab.id
-                ? "text-cyan-400"
+                ? "text-cyan-700 dark:text-cyan-400"
                 : "text-text-muted hover:text-text-primary"
             )}
           >
@@ -2274,10 +2328,10 @@ export default function WorkOrderDetailPage({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="relative overflow-hidden flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border border-amber-500/20 bg-surface/60 backdrop-blur-xl shadow-xl">
                 <div className="absolute top-0 right-0 p-4 opacity-5">
-                  <Activity className="h-16 w-16 text-amber-400" />
+                  <Activity className="h-16 w-16 text-amber-700 dark:text-amber-400" />
                 </div>
                 <div className="h-14 w-14 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                  <Activity className="h-7 w-7 text-amber-400" />
+                  <Activity className="h-7 w-7 text-amber-700 dark:text-amber-400" />
                 </div>
                 <div className="text-center relative z-10">
                   <p className="text-sm font-black text-text-primary uppercase tracking-widest mb-2">Current Status</p>
@@ -2318,7 +2372,7 @@ export default function WorkOrderDetailPage({
                             setNewStatus(workOrder.status);
                             setEditingStatus(true);
                           }}
-                          className="mt-2 text-[10px] font-black text-cyan-400 hover:text-cyan-300 uppercase tracking-widest transition-all"
+                          className="mt-2 text-[10px] font-black text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:text-cyan-300 uppercase tracking-widest transition-all"
                         >
                           Update State
                         </button>
@@ -2333,13 +2387,13 @@ export default function WorkOrderDetailPage({
                 className="relative overflow-hidden group flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border border-sky-500/20 bg-surface/60 backdrop-blur-xl hover:border-sky-500/40 hover:bg-sky-500/[0.08] transition-all shadow-xl disabled:opacity-50"
               >
                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                  <Building2 className="h-16 w-16 text-sky-400" />
+                  <Building2 className="h-16 w-16 text-sky-700 dark:text-sky-400" />
                 </div>
                 <div className="h-14 w-14 rounded-2xl bg-sky-500/20 flex items-center justify-center group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-all">
                   {uploadingFrontPhoto ? (
-                    <Loader2 className="h-7 w-7 text-sky-400 animate-spin" />
+                    <Loader2 className="h-7 w-7 text-sky-700 dark:text-sky-400 animate-spin" />
                   ) : (
-                    <Building2 className="h-7 w-7 text-sky-400" />
+                    <Building2 className="h-7 w-7 text-sky-700 dark:text-sky-400" />
                   )}
                 </div>
                 <div className="text-center relative z-10">
@@ -2362,7 +2416,7 @@ export default function WorkOrderDetailPage({
                 <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
-                      <Building2 className="h-4 w-4 text-sky-400" />
+                      <Building2 className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                     </div>
                     <div>
                       <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Main Property Photo</h3>
@@ -2371,7 +2425,7 @@ export default function WorkOrderDetailPage({
                   </div>
                   <button
                     onClick={() => frontPhotoInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-lg bg-surface-hover text-[10px] font-bold text-sky-400 hover:bg-surface-hover border border-border-subtle transition-all uppercase tracking-tighter"
+                    className="px-3 py-1.5 rounded-lg bg-surface-hover text-[10px] font-bold text-sky-700 dark:text-sky-400 hover:bg-surface-hover border border-border-subtle transition-all uppercase tracking-tighter"
                   >
                     Replace Asset
                   </button>
@@ -2384,7 +2438,7 @@ export default function WorkOrderDetailPage({
                       className="relative group rounded-2xl overflow-hidden aspect-[16/9] bg-surface-hover border border-border-subtle hover:border-sky-500/40 transition-all cursor-pointer shadow-inner"
                     >
                       <img
-                        src={photo.path}
+                        src={photo.url || photo.path}
                         alt={photo.originalName || "Property Front"}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                       />
@@ -2417,11 +2471,11 @@ export default function WorkOrderDetailPage({
             {/* Description */}
             {workOrder.description && (
               <div className="bg-surface/60 backdrop-blur-md rounded-2xl border border-border-subtle p-5 shadow-xl">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                   <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">Project Scope</h3>
                   <button
                     onClick={() => setExpandedProjectScope(!expandedProjectScope)}
-                    className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-tighter transition-all"
+                    className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:text-cyan-300 uppercase tracking-tighter transition-all"
                   >
                     {expandedProjectScope ? "Collapse" : "Expand"}
                   </button>
@@ -2440,13 +2494,13 @@ export default function WorkOrderDetailPage({
                 <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between bg-surface-hover">
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+                      <CheckCircle2 className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                     </div>
                     <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">Task Snapshot</h3>
                   </div>
                   <button
                     onClick={() => setActiveTab("tasks")}
-                    className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-tighter"
+                    className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:text-cyan-300 uppercase tracking-tighter"
                   >
                     Manage Tasks →
                   </button>
@@ -2460,7 +2514,7 @@ export default function WorkOrderDetailPage({
                       <div className="relative flex-shrink-0">
                         {task.completed ? (
                           <div className="h-5 w-5 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
-                            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                            <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                           </div>
                         ) : (
                           <div className="h-5 w-5 rounded-full border-2 border-border-medium group-hover/item:border-cyan-500/50 transition-colors" />
@@ -2507,7 +2561,7 @@ export default function WorkOrderDetailPage({
                 {workOrder.history?.length > 5 && (
                   <button
                     onClick={() => setShowAllHistory(!showAllHistory)}
-                    className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-tighter"
+                    className="text-[10px] font-bold text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:text-cyan-300 uppercase tracking-tighter"
                   >
                     {showAllHistory ? "Show less" : `View all (${workOrder.history.length})`}
                   </button>
@@ -2545,7 +2599,7 @@ export default function WorkOrderDetailPage({
                                 toast.success("Activity removed");
                               } catch { toast.error("Failed to remove"); }
                             }}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-rose-500/10 text-text-dim hover:text-rose-400 transition-all flex-shrink-0 self-start"
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-rose-500/10 text-text-dim hover:text-rose-700 dark:text-rose-400 transition-all flex-shrink-0 self-start"
                             title="Remove this entry"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -2569,7 +2623,7 @@ export default function WorkOrderDetailPage({
             {workOrder.coordinator && (
               <div className="bg-surface/60 backdrop-blur-md rounded-2xl border border-border-subtle p-5 shadow-xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Shield className="h-12 w-12 text-cyan-400" />
+                  <Shield className="h-12 w-12 text-cyan-700 dark:text-cyan-400" />
                 </div>
                 <div className="flex items-center gap-4 mb-5 relative z-10">
                   <div className="relative">
@@ -2620,7 +2674,7 @@ export default function WorkOrderDetailPage({
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <MessageSquare className="h-4 w-4 text-cyan-400" />
+                      <MessageSquare className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                     </div>
                     <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Messages</span>
                   </div>
@@ -2635,7 +2689,7 @@ export default function WorkOrderDetailPage({
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Receipt className="h-4 w-4 text-emerald-400" />
+                      <Receipt className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                     </div>
                     <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Invoices</span>
                   </div>
@@ -2659,7 +2713,7 @@ export default function WorkOrderDetailPage({
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Printer className="h-4 w-4 text-violet-400" />
+                      <Printer className="h-4 w-4 text-violet-700 dark:text-violet-400" />
                     </div>
                     <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Report</span>
                   </div>
@@ -2673,7 +2727,7 @@ export default function WorkOrderDetailPage({
               <div className="px-5 py-4 border-b border-border-subtle flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                    <FileText className="h-4 w-4 text-amber-400" />
+                    <FileText className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                   </div>
                   <div>
                     <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted">Documents</h3>
@@ -2682,7 +2736,7 @@ export default function WorkOrderDetailPage({
                 </div>
                 <button
                   onClick={() => documentUploadRef.current?.click()}
-                  className="px-3 py-1.5 rounded-lg bg-surface-hover text-[10px] font-bold text-amber-400 hover:bg-surface-hover border border-border-subtle transition-all uppercase tracking-tighter"
+                  className="px-3 py-1.5 rounded-lg bg-surface-hover text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:bg-surface-hover border border-border-subtle transition-all uppercase tracking-tighter"
                 >
                   <Upload className="h-3 w-3 inline mr-1" />
                   Upload
@@ -2724,7 +2778,7 @@ export default function WorkOrderDetailPage({
                       .map((file: any) => (
                         <div key={file.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface-hover border border-border-subtle group">
                           <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                            <FileText className="h-4 w-4 text-amber-400" />
+                            <FileText className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-text-primary truncate">{file.originalName}</p>
@@ -2734,7 +2788,7 @@ export default function WorkOrderDetailPage({
                             href={file.path}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all"
+                            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-cyan-700 dark:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all"
                           >
                             <Download className="h-3.5 w-3.5" />
                           </a>
@@ -2781,7 +2835,7 @@ export default function WorkOrderDetailPage({
                   <div className="px-6 py-5 border-b border-border-subtle flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.1)]">
-                        <Sparkles className="h-4 w-4 text-cyan-400" />
+                        <Sparkles className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-text-primary uppercase tracking-widest leading-none">Aura Intelligence</h4>
@@ -2790,7 +2844,7 @@ export default function WorkOrderDetailPage({
                     </div>
                     <button
                       onClick={() => setShowAIChat(false)}
-                      className="p-2 rounded-lg hover:bg-surface-hover text-text-muted hover:text-white transition-all active:scale-95"
+                      className="p-2 rounded-lg hover:bg-surface-hover text-text-muted hover:text-foreground dark:hover:text-white transition-all active:scale-95"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -2812,12 +2866,12 @@ export default function WorkOrderDetailPage({
                   className="w-full bg-surface/60 backdrop-blur-md rounded-2xl border border-border-subtle p-5 shadow-xl hover:border-cyan-500/40 hover:shadow-cyan-500/10 transition-all text-left relative overflow-hidden group/ai"
                 >
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover/ai:opacity-20 transition-all group-hover/ai:scale-110">
-                    <Sparkles className="h-16 w-16 text-cyan-400" />
+                    <Sparkles className="h-16 w-16 text-cyan-700 dark:text-cyan-400" />
                   </div>
                   <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="h-10 w-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shadow-lg">
-                        <Sparkles className="h-5 w-5 text-cyan-400 animate-pulse" />
+                        <Sparkles className="h-5 w-5 text-cyan-700 dark:text-cyan-400 animate-pulse" />
                       </div>
                       <div>
                         <h4 className="text-sm font-black text-text-primary tracking-tight">Need Assistance?</h4>
@@ -2848,7 +2902,7 @@ export default function WorkOrderDetailPage({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => openGPSCamera("global", "BEFORE")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-xs font-medium border border-emerald-500/20"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors text-xs font-medium border border-emerald-500/20"
               >
                 <MapPin className="h-3.5 w-3.5" />
                 GPS Camera
@@ -2856,7 +2910,7 @@ export default function WorkOrderDetailPage({
               {tasks.some((t) => t.photos?.length > 0) && (
                 <button
                   onClick={() => setAllPhotosModal({ open: true, source: "tasks" })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-colors text-xs font-medium border border-cyan-500/20"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 transition-colors text-xs font-medium border border-cyan-500/20"
                 >
                   <Camera className="h-3.5 w-3.5" />
                   View All Photos
@@ -2893,7 +2947,7 @@ export default function WorkOrderDetailPage({
               {bids.some((b) => b.photos?.length > 0) && (
                 <button
                   onClick={() => setAllPhotosModal({ open: true, source: "bids" })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 transition-colors text-xs font-medium border border-violet-500/20"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 text-violet-700 dark:text-violet-400 hover:bg-violet-500/20 transition-colors text-xs font-medium border border-violet-500/20"
                 >
                   <Camera className="h-3.5 w-3.5" />
                   View All Photos
@@ -2917,7 +2971,7 @@ export default function WorkOrderDetailPage({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-2xl bg-violet-500/10 flex items-center justify-center border border-violet-500/20">
-                <Shield className="h-5 w-5 text-violet-400" />
+                <Shield className="h-5 w-5 text-violet-700 dark:text-violet-400" />
               </div>
               <div>
                 <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Compliance Protocol</h3>
@@ -2928,7 +2982,7 @@ export default function WorkOrderDetailPage({
             </div>
             {complianceItems.length > 0 && (
               <div className="text-right">
-                <span className="text-lg font-black text-violet-400 leading-none">
+                <span className="text-lg font-black text-violet-700 dark:text-violet-400 leading-none">
                   {Math.round((complianceItems.filter(c => c.completed).length / complianceItems.length) * 100)}%
                 </span>
                 <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Safety Score</p>
@@ -2965,9 +3019,9 @@ export default function WorkOrderDetailPage({
                   </div>
                   <div className="flex items-center gap-2">
                     {item.completed ? (
-                      <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 uppercase tracking-widest border border-emerald-500/20">Verified</span>
+                      <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 uppercase tracking-widest border border-emerald-500/20">Verified</span>
                     ) : (
-                      <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 uppercase tracking-widest border border-rose-500/20">Required</span>
+                      <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 uppercase tracking-widest border border-rose-500/20">Required</span>
                     )}
                   </div>
                 </div>
@@ -2979,7 +3033,7 @@ export default function WorkOrderDetailPage({
           <div className="space-y-4 pt-6 border-t border-border-subtle">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-xl bg-cyan-500/10 flex items-center justify-center">
-                <Plus className="h-4 w-4 text-cyan-400" />
+                <Plus className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
               </div>
               <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Field Exceptions & Add-ons</h4>
             </div>
@@ -3090,7 +3144,7 @@ export default function WorkOrderDetailPage({
                           onClick={() => {
                             setCustomInspectionItems((prev) => prev.filter((_, ciIdx) => ciIdx !== i));
                           }}
-                          className="p-2 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10"
+                          className="p-2 rounded-lg text-text-muted hover:text-rose-700 dark:text-rose-400 hover:bg-rose-500/10"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -3136,7 +3190,7 @@ export default function WorkOrderDetailPage({
               <div className="p-6 rounded-3xl border border-border-medium bg-surface/60 backdrop-blur-xl shadow-2xl space-y-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="h-8 w-8 rounded-xl bg-cyan-500/10 flex items-center justify-center">
-                    <Plus className="h-4 w-4 text-cyan-400" />
+                    <Plus className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                   </div>
                   <h4 className="text-sm font-black text-text-primary uppercase tracking-widest">New Inspection Target</h4>
                 </div>
@@ -3202,7 +3256,7 @@ export default function WorkOrderDetailPage({
             ) : (
               <button
                 onClick={() => setShowAddInspection(true)}
-                className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-border-subtle bg-surface-hover text-text-muted hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all group"
+                className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-border-subtle bg-surface-hover text-text-muted hover:text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all group"
               >
                 <div className="h-8 w-8 rounded-xl bg-surface-hover group-hover:bg-cyan-500/10 flex items-center justify-center transition-all">
                   <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
@@ -3219,7 +3273,7 @@ export default function WorkOrderDetailPage({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-2xl bg-violet-500/10 flex items-center justify-center border border-violet-500/20">
-                <Camera className="h-5 w-5 text-violet-400" />
+                <Camera className="h-5 w-5 text-violet-700 dark:text-violet-400" />
               </div>
               <div>
                 <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Asset Repository</h3>
@@ -3245,7 +3299,7 @@ export default function WorkOrderDetailPage({
                     type="datetime-local"
                     value={photoTabCustomDateTime}
                     onChange={(e) => setPhotoTabCustomDateTime(e.target.value)}
-                    className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-400 outline-none"
+                    className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400 outline-none"
                   />
                 )}
               </div>
@@ -3301,7 +3355,7 @@ export default function WorkOrderDetailPage({
                             {photo.name?.split('-').pop() || 'VISUAL'}
                           </p>
                           {photo.category && (
-                            <span className="text-[7px] font-black text-cyan-400 uppercase tracking-widest mt-0.5">
+                            <span className="text-[7px] font-black text-cyan-700 dark:text-cyan-400 uppercase tracking-widest mt-0.5">
                               {photo.category}
                             </span>
                           )}
@@ -3336,7 +3390,7 @@ export default function WorkOrderDetailPage({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                <Receipt className="h-5 w-5 text-emerald-400" />
+                <Receipt className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
               </div>
               <div>
                 <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Invoice Generator</h3>
@@ -3357,7 +3411,7 @@ export default function WorkOrderDetailPage({
                   cancelEditInvoice(); 
                 }
                 setShowNewInvoiceForm(true); 
-              }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${invoiceType === "client" ? "from-cyan-500 to-blue-600 text-white border-cyan-400/20 shadow-cyan-500/10" : "from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5"}`}>
+              }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${invoiceType === "client" ? "from-cyan-500 to-blue-600 text-white border-cyan-400/20 shadow-cyan-500/10" : "from-cyan-500/10 to-blue-500/10 text-cyan-700 dark:text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5"}`}>
                 <Plus className="h-3.5 w-3.5" /> Client Invoice
               </button>
               <button onClick={() => { 
@@ -3371,7 +3425,7 @@ export default function WorkOrderDetailPage({
                   cancelEditInvoice(); 
                 }
                 setShowNewInvoiceForm(true); 
-              }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${invoiceType === "contractor" ? "from-emerald-500 to-teal-600 text-white border-emerald-400/20 shadow-emerald-500/10" : "from-emerald-500/10 to-teal-500/10 text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5"}`}>
+              }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${invoiceType === "contractor" ? "from-emerald-500 to-teal-600 text-white border-emerald-400/20 shadow-emerald-500/10" : "from-emerald-500/10 to-teal-500/10 text-emerald-700 dark:text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5"}`}>
                 <Plus className="h-3.5 w-3.5" /> Contractor Invoice
               </button>
             </div>
@@ -3408,7 +3462,7 @@ export default function WorkOrderDetailPage({
                   New {invoiceType === "client" ? "Client" : "Contractor"} Invoice Items
                 </h4>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { cancelEditInvoice(); setShowNewInvoiceForm(false); }} className="px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary text-[10px] font-bold uppercase border border-border-subtle hover:text-white transition-all">
+                  <button onClick={() => { cancelEditInvoice(); setShowNewInvoiceForm(false); }} className="px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary text-[10px] font-bold uppercase border border-border-subtle hover:text-foreground dark:hover:text-white transition-all">
                     Cancel
                   </button>
                   <button onClick={handleSaveInvoice} disabled={savingInvoice} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-gradient-to-r text-white text-[10px] font-black uppercase tracking-widest transition-all ${invoiceType === "client" ? "from-cyan-500 to-blue-600 shadow-cyan-500/20" : "from-emerald-500 to-teal-600 shadow-emerald-500/20"}`}>
@@ -3517,7 +3571,7 @@ export default function WorkOrderDetailPage({
                             <td className="px-1 py-2 text-center">
                               <button
                                 onClick={() => removeInvoiceItem(item.id)}
-                                className="p-1 rounded-lg text-text-dim hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                className="p-1 rounded-lg text-text-dim hover:text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 transition-all"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -3530,7 +3584,7 @@ export default function WorkOrderDetailPage({
                       <td colSpan={9} className="px-5 py-2">
                         <button
                           onClick={addInvoiceItem}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all text-[10px] font-bold uppercase tracking-wider"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all text-[10px] font-bold uppercase tracking-wider"
                         >
                           <Plus className="h-3 w-3" /> Add Row
                         </button>
@@ -3548,7 +3602,7 @@ export default function WorkOrderDetailPage({
                     {invoiceTotalDiscount > 0.01 && (
                       <tr>
                         <td colSpan={7} className="px-5 py-2 text-xs text-text-muted text-right uppercase tracking-wider">Discount</td>
-                        <td className="px-5 py-2 text-xs font-bold text-amber-400 text-right">-{formatCurrency(invoiceTotalDiscount)}</td>
+                        <td className="px-5 py-2 text-xs font-bold text-amber-700 dark:text-amber-400 text-right">-{formatCurrency(invoiceTotalDiscount)}</td>
                         <td></td>
                       </tr>
                     )}
@@ -3585,9 +3639,9 @@ export default function WorkOrderDetailPage({
                 return (
                   <div className="bg-surface/60 backdrop-blur-md rounded-2xl border border-border-subtle overflow-hidden shadow-xl">
                     <div className="px-5 py-3 border-b border-border-subtle bg-surface-hover flex items-center gap-4 flex-wrap">
-                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg border uppercase tracking-widest ${color === "cyan" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"}`}>{label}</span>
+                      <span className={`text-[9px] font-black px-2 py-1 rounded-lg border uppercase tracking-widest ${color === "cyan" ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"}`}>{label}</span>
                       <div className="ml-auto">
-                        <button onClick={() => { setInvoiceType(color === "cyan" ? "client" : "contractor"); cancelEditInvoice(); setShowNewInvoiceForm(true); }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${color === "cyan" ? "from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5" : "from-emerald-500/10 to-teal-500/10 text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5"}`}>
+                        <button onClick={() => { setInvoiceType(color === "cyan" ? "client" : "contractor"); cancelEditInvoice(); setShowNewInvoiceForm(true); }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${color === "cyan" ? "from-cyan-500/10 to-blue-500/10 text-cyan-700 dark:text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5" : "from-emerald-500/10 to-teal-500/10 text-emerald-700 dark:text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5"}`}>
                           <Plus className="h-3.5 w-3.5" /> Add Invoice
                         </button>
                       </div>
@@ -3597,8 +3651,8 @@ export default function WorkOrderDetailPage({
                 );
               }
               const colorClasses = color === "cyan"
-                ? { badge: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20", edit: "from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5", total: "text-cyan-500", accent: "cyan" }
-                : { badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", edit: "from-emerald-500/10 to-teal-500/10 text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5", total: "text-emerald-500", accent: "emerald" };
+                ? { badge: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20", edit: "from-cyan-500/10 to-blue-500/10 text-cyan-700 dark:text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5", total: "text-cyan-500", accent: "cyan" }
+                : { badge: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20", edit: "from-emerald-500/10 to-teal-500/10 text-emerald-700 dark:text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5", total: "text-emerald-500", accent: "emerald" };
 
               return (
                 <div className="bg-surface/60 backdrop-blur-md rounded-2xl border border-border-subtle overflow-hidden shadow-xl">
@@ -3624,7 +3678,7 @@ export default function WorkOrderDetailPage({
                           cancelEditInvoice(); 
                         }
                         setShowNewInvoiceForm(true); 
-                      }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${color === "cyan" ? "from-cyan-500/10 to-blue-500/10 text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5" : "from-emerald-500/10 to-teal-500/10 text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5"}`}>
+                      }} className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${color === "cyan" ? "from-cyan-500/10 to-blue-500/10 text-cyan-700 dark:text-cyan-400 hover:from-cyan-500/20 hover:to-blue-500/20 border-cyan-500/20 hover:border-cyan-500/40 shadow-cyan-500/5" : "from-emerald-500/10 to-teal-500/10 text-emerald-700 dark:text-emerald-400 hover:from-emerald-500/20 hover:to-teal-500/20 border-emerald-500/20 hover:border-emerald-500/40 shadow-emerald-500/5"}`}>
                         <Plus className="h-3.5 w-3.5" /> {invoices.length > 0 ? "Add Invoice Items" : "Add Invoice"}
                       </button>
                     </div>
@@ -3656,7 +3710,7 @@ export default function WorkOrderDetailPage({
                           <div className="ml-auto flex items-center gap-2">
                             {isEditing ? (
                               <>
-                                <button onClick={() => cancelInlineEdit(inv.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-bold uppercase tracking-wider border border-border-medium hover:text-white transition-all">
+                                <button onClick={() => cancelInlineEdit(inv.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-bold uppercase tracking-wider border border-border-medium hover:text-foreground dark:hover:text-white transition-all">
                                   <X className="h-3 w-3" /> Cancel
                                 </button>
                                 <button onClick={() => saveInlineEdit(inv.id)} disabled={savingInline === inv.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r text-white text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${color === "cyan" ? "from-cyan-500 to-blue-600" : "from-emerald-500 to-teal-600"}`}>
@@ -3666,7 +3720,7 @@ export default function WorkOrderDetailPage({
                               </>
                             ) : (
                               <>
-                                <button onClick={() => handlePrintInvoice(inv)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary hover:text-white border border-border-subtle hover:border-border-medium transition-all text-[10px] font-black uppercase tracking-widest">
+                                <button onClick={() => handlePrintInvoice(inv)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary hover:text-foreground dark:hover:text-white border border-border-subtle hover:border-border-medium transition-all text-[10px] font-black uppercase tracking-widest">
                                   <Printer className="h-3 w-3" /> Print
                                 </button>
                                 <button onClick={async () => {
@@ -3679,7 +3733,7 @@ export default function WorkOrderDetailPage({
                                       toast.error("Failed to delete invoice");
                                     }
                                   }
-                                }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 hover:text-rose-400 border border-rose-500/20 transition-all text-[10px] font-black uppercase tracking-widest">
+                                }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 hover:text-rose-700 dark:text-rose-400 border border-rose-500/20 transition-all text-[10px] font-black uppercase tracking-widest">
                                   <Trash2 className="h-3 w-3" /> Delete
                                 </button>
                                 <button onClick={() => startInlineEdit(inv)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r border transition-all text-[10px] font-black uppercase tracking-widest shadow-lg ${colorClasses.edit}`}>
@@ -3776,13 +3830,13 @@ export default function WorkOrderDetailPage({
                                       )}
                                     </td>
                                     <td className="px-3 py-2 text-right">
-                                      <span className={`text-sm font-bold tabular-nums ${isEditing ? (color === "cyan" ? "text-cyan-400" : "text-emerald-400") : "text-text-primary"}`}>
+                                      <span className={`text-sm font-bold tabular-nums ${isEditing ? (color === "cyan" ? "text-cyan-700 dark:text-cyan-400" : "text-emerald-700 dark:text-emerald-400") : "text-text-primary"}`}>
                                         {formatCurrency(itemAmount)}
                                       </span>
                                     </td>
                                     {(isEditing || inv.status === "DRAFT") && (
                                       <td className="px-1 py-2 text-center">
-                                        <button onClick={() => deleteInlineItem(inv.id, item.id)} disabled={deletingItem === item.id} className="p-1.5 rounded-lg text-text-dim hover:text-rose-400 hover:bg-rose-500/10 transition-all disabled:opacity-30">
+                                        <button onClick={() => deleteInlineItem(inv.id, item.id)} disabled={deletingItem === item.id} className="p-1.5 rounded-lg text-text-dim hover:text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 transition-all disabled:opacity-30">
                                           {deletingItem === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                                         </button>
                                       </td>
@@ -3793,7 +3847,7 @@ export default function WorkOrderDetailPage({
                               {isEditing && (
                                 <tr>
                                   <td colSpan={9} className="px-4 py-2">
-                                    <button onClick={() => addInlineItem(inv.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all text-[10px] font-bold uppercase tracking-wider">
+                                    <button onClick={() => addInlineItem(inv.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all text-[10px] font-bold uppercase tracking-wider">
                                       <Plus className="h-3 w-3" /> Add Row
                                     </button>
                                   </td>
@@ -3811,7 +3865,7 @@ export default function WorkOrderDetailPage({
                               {editDiscount > 0.01 && (
                                 <tr>
                                   <td colSpan={7} className="px-5 py-2 text-xs text-text-muted text-right uppercase tracking-wider">Discount</td>
-                                  <td className="px-5 py-2 text-sm font-bold text-amber-400 text-right">-{formatCurrency(editDiscount)}</td>
+                                  <td className="px-5 py-2 text-sm font-bold text-amber-700 dark:text-amber-400 text-right">-{formatCurrency(editDiscount)}</td>
                                   {isEditing && <td></td>}
                                 </tr>
                               )}
@@ -3938,7 +3992,7 @@ export default function WorkOrderDetailPage({
           <div className="w-full max-w-lg mx-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-cyan-400" />
+                <MapPin className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                 <span className="text-sm font-semibold text-white">
                   GPS Camera — {gpsCameraCategory.charAt(0) + gpsCameraCategory.slice(1).toLowerCase()} Photo
                 </span>
@@ -3964,7 +4018,7 @@ export default function WorkOrderDetailPage({
       {editorPhoto && createPortal(
         <Suspense fallback={
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90">
-            <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
+            <Loader2 className="h-8 w-8 text-cyan-700 dark:text-cyan-400 animate-spin" />
           </div>
         }>
           <ImageEditor
@@ -4059,11 +4113,11 @@ function WorkOrderQuickViewModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-surface-hover flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-              <FileText className="h-5 w-5 text-cyan-400" />
+              <FileText className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20 uppercase tracking-widest">
+                <span className="text-[10px] font-black text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20 uppercase tracking-widest">
                   WO-{workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
                 </span>
                 <Badge className={cn("text-[9px] px-2 py-0.5", STATUS_COLORS[workOrder.status])}>
@@ -4104,24 +4158,24 @@ function WorkOrderQuickViewModal({
           {/* Progress Overview */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-cyan-500/[0.04] border border-cyan-500/20">
-              <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-1">Tasks</p>
+              <p className="text-[9px] font-black text-cyan-700 dark:text-cyan-400 uppercase tracking-widest mb-1">Tasks</p>
               <p className="text-xl font-black text-text-primary">{completedTasks}<span className="text-xs text-text-dim">/{tasks.length}</span></p>
               <div className="h-1.5 bg-surface-hover rounded-full mt-2 overflow-hidden">
                 <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0}%` }} />
               </div>
             </div>
             <div className="p-4 rounded-xl bg-amber-500/[0.04] border border-amber-500/20">
-              <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1">Bids</p>
+              <p className="text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-1">Bids</p>
               <p className="text-xl font-black text-text-primary">${totalBids.toLocaleString()}</p>
-              {approvedBids > 0 && <p className="text-[9px] text-emerald-400 font-bold mt-1">${approvedBids.toLocaleString()} approved</p>}
+              {approvedBids > 0 && <p className="text-[9px] text-emerald-700 dark:text-emerald-400 font-bold mt-1">${approvedBids.toLocaleString()} approved</p>}
             </div>
             <div className="p-4 rounded-xl bg-violet-500/[0.04] border border-violet-500/20">
-              <p className="text-[9px] font-black text-violet-400 uppercase tracking-widest mb-1">Photos</p>
+              <p className="text-[9px] font-black text-violet-700 dark:text-violet-400 uppercase tracking-widest mb-1">Photos</p>
               <p className="text-xl font-black text-text-primary">{allPhotos.length}</p>
               <p className="text-[9px] text-text-muted mt-1">{beforePhotos.length}B · {duringPhotos.length}D · {afterPhotos.length}A</p>
             </div>
             <div className="p-4 rounded-xl bg-emerald-500/[0.04] border border-emerald-500/20">
-              <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Compliance</p>
+              <p className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-1">Compliance</p>
               <p className="text-xl font-black text-text-primary">{complianceItems.filter(c => c.completed).length}<span className="text-xs text-text-dim">/{complianceItems.length}</span></p>
               <div className="h-1.5 bg-surface-hover rounded-full mt-2 overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${complianceItems.length > 0 ? (complianceItems.filter(c => c.completed).length / complianceItems.length) * 100 : 0}%` }} />
@@ -4173,19 +4227,19 @@ function WorkOrderQuickViewModal({
             <div className="grid grid-cols-3 gap-3">
               {workOrder.lockCode && (
                 <div className="p-3 rounded-xl bg-cyan-500/[0.04] border border-cyan-500/20">
-                  <p className="text-[9px] font-bold text-cyan-400 uppercase tracking-widest mb-1">Lock Code</p>
+                  <p className="text-[9px] font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-widest mb-1">Lock Code</p>
                   <p className="text-sm font-mono font-bold text-text-primary">{workOrder.lockCode}</p>
                 </div>
               )}
               {workOrder.gateCode && (
                 <div className="p-3 rounded-xl bg-violet-500/[0.04] border border-violet-500/20">
-                  <p className="text-[9px] font-bold text-violet-400 uppercase tracking-widest mb-1">Gate Code</p>
+                  <p className="text-[9px] font-bold text-violet-700 dark:text-violet-400 uppercase tracking-widest mb-1">Gate Code</p>
                   <p className="text-sm font-mono font-bold text-text-primary">{workOrder.gateCode}</p>
                 </div>
               )}
               {workOrder.keyCode && (
                 <div className="p-3 rounded-xl bg-emerald-500/[0.04] border border-emerald-500/20">
-                  <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Key Code</p>
+                  <p className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-1">Key Code</p>
                   <p className="text-sm font-mono font-bold text-text-primary">{workOrder.keyCode}</p>
                 </div>
               )}
@@ -4200,7 +4254,7 @@ function WorkOrderQuickViewModal({
                 {tasks.map((task) => (
                   <div key={task.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-hover border border-border-subtle">
                     {task.completed ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 flex-shrink-0" />
                     ) : (
                       <div className="h-3.5 w-3.5 rounded-full border border-border-medium flex-shrink-0" />
                     )}
@@ -4224,15 +4278,15 @@ function WorkOrderQuickViewModal({
                 {bids.map((bid) => (
                   <div key={bid.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-hover border border-border-subtle">
                     <div className="flex items-center gap-3">
-                      <DollarSign className="h-3.5 w-3.5 text-amber-400" />
+                      <DollarSign className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                       <div>
                         <p className="text-xs font-bold text-text-primary">{bid.title}</p>
                         {bid.description && <p className="text-[10px] text-text-muted truncate max-w-[200px]">{bid.description}</p>}
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-black text-amber-400">${bid.amount.toLocaleString()}</p>
-                      <span className={cn("text-[8px] font-bold uppercase tracking-widest", bid.status === "APPROVED" ? "text-emerald-400" : bid.status === "REJECTED" ? "text-rose-400" : "text-text-muted")}>
+                      <p className="text-xs font-black text-amber-700 dark:text-amber-400">${bid.amount.toLocaleString()}</p>
+                      <span className={cn("text-[8px] font-bold uppercase tracking-widest", bid.status === "APPROVED" ? "text-emerald-700 dark:text-emerald-400" : bid.status === "REJECTED" ? "text-rose-700 dark:text-rose-400" : "text-text-muted")}>
                         {bid.status}
                       </span>
                     </div>
@@ -4262,7 +4316,7 @@ function WorkOrderQuickViewModal({
           {/* Special Instructions */}
           {workOrder.specialInstructions && (
             <div className="p-4 rounded-xl bg-amber-500/[0.04] border border-amber-500/20">
-              <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mb-2">Special Instructions</p>
+              <p className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-2">Special Instructions</p>
               <p className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed italic">
                 &quot;{workOrder.specialInstructions.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()}&quot;
               </p>
@@ -4279,11 +4333,11 @@ function WorkOrderQuickViewModal({
                   return (
                     <div key={inv.id} className={`flex items-center justify-between px-3 py-2 rounded-lg bg-surface-hover border ${isContractor ? "border-emerald-500/20" : "border-border-subtle"}`}>
                       <div className="flex items-center gap-3">
-                        <Receipt className={`h-3.5 w-3.5 ${isContractor ? "text-emerald-400" : "text-cyan-400"}`} />
+                        <Receipt className={`h-3.5 w-3.5 ${isContractor ? "text-emerald-700 dark:text-emerald-400" : "text-cyan-700 dark:text-cyan-400"}`} />
                         <div>
                           <div className="flex items-center gap-1.5">
                             <p className="text-xs font-bold text-text-primary">{inv.invoiceNumber}</p>
-                            <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${isContractor ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"}`}>
+                            <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${isContractor ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20" : "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20"}`}>
                               {isContractor ? "Contractor" : "Client"}
                             </span>
                           </div>
@@ -4291,7 +4345,7 @@ function WorkOrderQuickViewModal({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className={`text-xs font-black ${isContractor ? "text-emerald-400" : "text-cyan-400"}`}>${(inv.total || 0).toFixed(2)}</p>
+                        <p className={`text-xs font-black ${isContractor ? "text-emerald-700 dark:text-emerald-400" : "text-cyan-700 dark:text-cyan-400"}`}>${(inv.total || 0).toFixed(2)}</p>
                         <span className="text-[8px] font-bold text-text-muted uppercase">{inv.status}</span>
                       </div>
                     </div>
@@ -4309,7 +4363,7 @@ function WorkOrderQuickViewModal({
             <Link
               href={`/dashboard/work-orders/${workOrder.id}`}
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 text-[10px] font-bold uppercase tracking-widest border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
+              className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 text-[10px] font-bold uppercase tracking-widest border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
             >
               Open Full Page
             </Link>
@@ -4411,7 +4465,7 @@ function WorkOrderMessagesTab({
       <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between bg-surface-hover">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center shadow-lg shadow-amber-500/10">
-            <MessageSquare className="h-5 w-5 text-amber-400" />
+            <MessageSquare className="h-5 w-5 text-amber-700 dark:text-amber-400" />
           </div>
           <div>
             <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">{workOrderChannel?.name || `WO-${workOrderId.slice(-8).toUpperCase()}`}</h3>
@@ -4425,7 +4479,7 @@ function WorkOrderMessagesTab({
         </div>
         <Link
           href={`/dashboard/chat`}
-          className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all text-[10px] font-black uppercase tracking-widest border border-cyan-500/20 shadow-lg shadow-cyan-500/5"
+          className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 transition-all text-[10px] font-black uppercase tracking-widest border border-cyan-500/20 shadow-lg shadow-cyan-500/5"
         >
           <MessageSquare className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
           Full Channel
@@ -4436,7 +4490,7 @@ function WorkOrderMessagesTab({
       <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-white/[0.06] scrollbar-track-transparent">
         {isLoading || creatingChannel ? (
           <div className="h-full flex flex-col items-center justify-center opacity-50">
-            <Loader2 className="h-8 w-8 text-cyan-400 animate-spin mb-3" />
+            <Loader2 className="h-8 w-8 text-cyan-700 dark:text-cyan-400 animate-spin mb-3" />
             <p className="text-xs font-black text-text-muted uppercase tracking-widest">
               {creatingChannel ? "Creating channel..." : "Synchronizing..."}
             </p>
@@ -4609,8 +4663,8 @@ function PropertyHistoryTab({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total Assets", value: workOrders.length, icon: FileText, color: "text-text-secondary", bg: "bg-surface-hover" },
-          { label: "Resolved", value: workOrders.filter((wo: any) => wo.status === "COMPLETED" || wo.status === "CLOSED").length, icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-          { label: "Visual Documentation", value: workOrders.reduce((sum: number, wo: any) => sum + (wo.files?.length || 0), 0), icon: Camera, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+          { label: "Resolved", value: workOrders.filter((wo: any) => wo.status === "COMPLETED" || wo.status === "CLOSED").length, icon: CheckCircle2, color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10" },
+          { label: "Visual Documentation", value: workOrders.reduce((sum: number, wo: any) => sum + (wo.files?.length || 0), 0), icon: Camera, color: "text-cyan-700 dark:text-cyan-400", bg: "bg-cyan-500/10" },
           { 
             label: "Total Valuation", 
             value: `$${workOrders.reduce((sum: number, wo: any) => {
@@ -4618,7 +4672,7 @@ function PropertyHistoryTab({
               return sum + bids.reduce((s: number, b: any) => s + (b.amount || 0), 0);
             }, 0).toLocaleString()}`, 
             icon: DollarSign, 
-            color: "text-amber-400", 
+            color: "text-amber-700 dark:text-amber-400", 
             bg: "bg-amber-500/10" 
           }
         ].map((stat, i) => (
@@ -4668,9 +4722,9 @@ function PropertyHistoryTab({
                     <div className={cn(
                       "h-10 w-10 rounded-xl flex items-center justify-center border transition-colors",
                       wo.status === "COMPLETED" || wo.status === "CLOSED" 
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400" 
                         : wo.status === "IN_PROGRESS" 
-                          ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400 animate-pulse" 
+                          ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-700 dark:text-cyan-400 animate-pulse" 
                           : "bg-slate-500/10 border-slate-500/20 text-text-secondary"
                     )}>
                       {wo.status === "COMPLETED" || wo.status === "CLOSED" ? <CheckCircle2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
@@ -4680,7 +4734,7 @@ function PropertyHistoryTab({
                         <span className="text-[10px] font-black text-text-muted uppercase tracking-tighter">#{woNumber}</span>
                         <h4 className="text-sm font-bold text-text-primary truncate">{wo.title}</h4>
                         {isCurrent && (
-                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-widest">Active</span>
+                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20 uppercase tracking-widest">Active</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
@@ -4702,13 +4756,13 @@ function PropertyHistoryTab({
                       {totalBidAmount > 0 && (
                         <div className="text-center">
                           <p className="text-[9px] font-black text-text-dim uppercase tracking-widest leading-none mb-1">Value</p>
-                          <p className="text-xs font-bold text-amber-400">${totalBidAmount.toLocaleString()}</p>
+                          <p className="text-xs font-bold text-amber-700 dark:text-amber-400">${totalBidAmount.toLocaleString()}</p>
                         </div>
                       )}
                       {files.length > 0 && (
                         <div className="text-center">
                           <p className="text-[9px] font-black text-text-dim uppercase tracking-widest leading-none mb-1">Visuals</p>
-                          <p className="text-xs font-bold text-cyan-400">{files.length}</p>
+                          <p className="text-xs font-bold text-cyan-700 dark:text-cyan-400">{files.length}</p>
                         </div>
                       )}
                     </div>
@@ -4732,13 +4786,13 @@ function PropertyHistoryTab({
                       </div>
                       <div className="space-y-1">
                         <p className="text-[9px] font-black text-text-dim uppercase tracking-widest">Resolved</p>
-                        <p className="text-sm font-bold text-emerald-400">{wo.completedAt ? formatDate(wo.completedAt) : "Ongoing"}</p>
+                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{wo.completedAt ? formatDate(wo.completedAt) : "Ongoing"}</p>
                       </div>
                       <div className="space-y-1 text-right">
                         {!isCurrent && (
                           <Link
                             href={`/dashboard/work-orders/${wo.id}`}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 text-[10px] font-black uppercase tracking-widest transition-all"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 text-[10px] font-black uppercase tracking-widest transition-all"
                           >
                             Access Full Report →
                           </Link>
@@ -4759,7 +4813,7 @@ function PropertyHistoryTab({
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <h5 className="text-[10px] font-black text-text-muted uppercase tracking-widest">Task Execution</h5>
-                            <span className="text-[10px] font-bold text-emerald-400">{Math.round((completedTasks/tasks.length)*100)}% Match</span>
+                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">{Math.round((completedTasks/tasks.length)*100)}% Match</span>
                           </div>
                           <div className="space-y-1.5 max-h-[200px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/[0.06]">
                             {tasks.map((task: any, i: number) => (
@@ -4778,7 +4832,7 @@ function PropertyHistoryTab({
                           <div className="grid grid-cols-4 gap-2">
                             {files.filter((f: any) => f.mimeType?.startsWith("image/")).slice(0, 8).map((f: any) => (
                               <div key={f.id} className="aspect-square rounded-xl overflow-hidden bg-surface border border-border-medium shadow-lg group/img">
-                                <img src={f.path} alt="Historical Documentation" className="w-full h-full object-cover transition-transform group-hover/img:scale-110" />
+                                <img src={f.url || f.path} alt="Historical Documentation" className="w-full h-full object-cover transition-transform group-hover/img:scale-110" />
                               </div>
                             ))}
                           </div>
@@ -5085,10 +5139,10 @@ function AllPhotosModal({
     all: "All Photos",
   };
   const colorMap = {
-    tasks: { bg: "bg-cyan-500/10", text: "text-cyan-400", border: "border-cyan-500/20" },
-    bids: { bg: "bg-violet-500/10", text: "text-violet-400", border: "border-violet-500/20" },
-    inspection: { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
-    all: { bg: "bg-sky-500/10", text: "text-sky-400", border: "border-sky-500/20" },
+    tasks: { bg: "bg-cyan-500/10", text: "text-cyan-700 dark:text-cyan-400", border: "border-cyan-500/20" },
+    bids: { bg: "bg-violet-500/10", text: "text-violet-700 dark:text-violet-400", border: "border-violet-500/20" },
+    inspection: { bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", border: "border-amber-500/20" },
+    all: { bg: "bg-sky-500/10", text: "text-sky-700 dark:text-sky-400", border: "border-sky-500/20" },
   };
   const colors = colorMap[source];
 
@@ -5212,7 +5266,7 @@ function AllPhotosModal({
                       setSelectedSectionIndex(idx);
                       setSelectedIndex(0);
                     }}
-                    className="text-left text-sm font-semibold text-text-primary hover:text-white transition-colors"
+                    className="text-left text-sm font-semibold text-text-primary hover:text-foreground dark:hover:text-white transition-colors"
                     title="Open this item photo set"
                   >
                     {section.label}
@@ -5413,8 +5467,8 @@ function PhotoPopupModal({
                           photo.category === "BEFORE"
                             ? "bg-amber-500/20 text-amber-300"
                             : photo.category === "DURING"
-                            ? "bg-cyan-500/20 text-cyan-300"
-                            : "bg-emerald-500/20 text-emerald-300"
+                            ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300"
+                            : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
                         )}
                       >
                         {photo.category}
@@ -5455,12 +5509,20 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
   onEditPhoto?: (url: string, name: string, category?: PhotoCategory, source?: "global" | "task" | "bid" | "inspection", sourceId?: string) => void;
   onDeletePhoto?: (id: string) => void;
 }) {
-  const [showExif, setShowExif] = useState(false);
+  const [showExif, setShowExif] = useState(true);
   const [exifData, setExifData] = useState<any>(null);
   const [exifLoading, setExifLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setExifData(null);
+    if (showExif) {
+      loadExif();
+    }
+  }, [photo, showExif]);
+
 
   async function loadExif() {
     setExifLoading(true);
@@ -5535,7 +5597,78 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
       style={{ zIndex: 2147483647 }}
       onClick={onClose}
     >
-      <div className="relative flex h-full w-full max-w-6xl gap-4 items-center justify-center overflow-hidden">
+      <div className="relative flex h-full w-full max-w-6xl gap-4 items-center justify-center overflow-hidden flex-col-reverse md:flex-row">
+        {/* EXIF side panel */}
+        {showExif && (
+          <div className="w-full md:w-72 flex-shrink-0 bg-surface border border-border-subtle rounded-xl overflow-hidden self-start max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text-primary">Photo Information</h3>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowExif(false); }}
+                className="md:hidden p-1.5 rounded-lg bg-surface-hover text-text-secondary hover:bg-surface-hover transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {exifLoading ? (
+                <div className="text-center py-4"><Loader2 className="h-5 w-5 text-cyan-700 dark:text-cyan-400 animate-spin mx-auto" /></div>
+              ) : exifData ? (
+                <>
+                  {exifData.dateTime && (
+                    <div>
+                      <p className="text-[10px] text-text-muted mb-1">Date/Time (EXIF)</p>
+                      <p className="text-xs text-text-secondary font-mono">{exifData.dateTime}</p>
+                    </div>
+                  )}
+                  {exifData.gps && (
+                    <div>
+                      <p className="text-[10px] text-text-muted mb-1">GPS Location</p>
+                      <p className="text-xs text-text-secondary font-mono">{exifData.gps.latitude.toFixed(6)}, {exifData.gps.longitude.toFixed(6)}</p>
+                      {exifData.gps.altitude !== undefined && <p className="text-xs text-text-secondary">Alt: {exifData.gps.altitude.toFixed(1)}m</p>}
+                      {exifData.address && <p className="text-xs text-text-secondary mt-1">{exifData.address}</p>}
+                      <a href={`https://www.google.com/maps?q=${exifData.gps.latitude},${exifData.gps.longitude}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-cyan-700 dark:text-cyan-400 hover:text-cyan-700 dark:text-cyan-300 mt-1 inline-block" onClick={(e) => e.stopPropagation()}>Open in Maps →</a>
+                    </div>
+                  )}
+                  {exifData.make && (
+                    <div>
+                      <p className="text-[10px] text-text-muted mb-1">Camera</p>
+                      <p className="text-xs text-text-secondary">{exifData.make} {exifData.model || ""}</p>
+                    </div>
+                  )}
+                  {!exifData.gps && !exifData.dateTime && (
+                    <p className="text-xs text-text-muted text-center py-4">No EXIF data found</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-text-muted text-center py-4">Loading EXIF data...</p>
+              )}
+
+              {/* Download options */}
+              <div className="pt-3 border-t border-border-subtle space-y-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadOriginal(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-hover border border-border-subtle hover:bg-surface-hover transition-colors text-left"
+                >
+                  <Download className="h-3.5 w-3.5 text-text-secondary" />
+                  <span className="text-xs text-text-secondary">Download Original</span>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadWithTimestamp(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors text-left"
+                >
+                  {downloading ? (
+                    <Loader2 className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
+                  )}
+                  <span className="text-xs text-cyan-700 dark:text-cyan-400 font-medium">Download with Info</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Prev button */}
         {onPrev && selectedIndex !== undefined && selectedIndex > 0 && (
           <button
@@ -5609,7 +5742,7 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
           <div className="w-px h-4 bg-surface-hover mx-1" />
           <button
             onClick={(e) => { e.stopPropagation(); setZoom(1); }}
-            className="px-2 py-1 rounded-lg hover:bg-surface-hover text-[10px] font-bold text-cyan-400 uppercase tracking-tighter"
+            className="px-2 py-1 rounded-lg hover:bg-surface-hover text-[10px] font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-tighter"
           >
             Reset
           </button>
@@ -5620,7 +5753,7 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
           <button
             onClick={(e) => { e.stopPropagation(); downloadOriginal(); }}
             disabled={downloading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/20 transition-all text-xs font-bold disabled:opacity-40 shadow-lg shadow-cyan-500/5"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/20 transition-all text-xs font-bold disabled:opacity-40 shadow-lg shadow-cyan-500/5"
             title="Download original"
           >
             {downloading ? (
@@ -5633,7 +5766,7 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
           <button
             onClick={(e) => { e.stopPropagation(); downloadWithTimestamp(); }}
             disabled={downloading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 transition-all text-xs font-bold disabled:opacity-40 shadow-lg shadow-violet-500/5"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500/10 text-violet-700 dark:text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 transition-all text-xs font-bold disabled:opacity-40 shadow-lg shadow-violet-500/5"
             title="Download with timestamp overlay"
           >
             <Clock className="h-3.5 w-3.5" />
@@ -5660,7 +5793,7 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
                 onClose();
               }
             }}
-            className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-all shadow-lg"
+            className="p-2.5 rounded-xl bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-all shadow-lg"
             title="Delete photo"
           >
             <Trash2 className="h-4 w-4" />
@@ -5705,66 +5838,6 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
           )}
         </div>
 
-        {/* EXIF side panel */}
-        {showExif && (
-          <div className="w-72 flex-shrink-0 bg-surface border border-border-subtle rounded-xl overflow-hidden self-start max-h-[90vh] overflow-y-auto">
-            <div className="px-4 py-3 border-b border-border-subtle">
-              <h3 className="text-sm font-semibold text-text-primary">Photo Information</h3>
-            </div>
-            <div className="p-4 space-y-4">
-              {exifLoading ? (
-                <div className="text-center py-4"><Loader2 className="h-5 w-5 text-cyan-400 animate-spin mx-auto" /></div>
-              ) : exifData ? (
-                <>
-                  {exifData.dateTime && (
-                    <div>
-                      <p className="text-[10px] text-text-muted mb-1">Date/Time (EXIF)</p>
-                      <p className="text-xs text-text-secondary font-mono">{exifData.dateTime}</p>
-                    </div>
-                  )}
-                  {exifData.gps && (
-                    <div>
-                      <p className="text-[10px] text-text-muted mb-1">GPS Location</p>
-                      <p className="text-xs text-text-secondary font-mono">{exifData.gps.latitude.toFixed(6)}, {exifData.gps.longitude.toFixed(6)}</p>
-                      {exifData.gps.altitude !== undefined && <p className="text-xs text-text-secondary">Alt: {exifData.gps.altitude.toFixed(1)}m</p>}
-                      {exifData.address && <p className="text-xs text-text-secondary mt-1">{exifData.address}</p>}
-                      <a href={`https://www.google.com/maps?q=${exifData.gps.latitude},${exifData.gps.longitude}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-cyan-400 hover:text-cyan-300 mt-1 inline-block" onClick={(e) => e.stopPropagation()}>Open in Maps →</a>
-                    </div>
-                  )}
-                  {exifData.make && (
-                    <div>
-                      <p className="text-[10px] text-text-muted mb-1">Camera</p>
-                      <p className="text-xs text-text-secondary">{exifData.make} {exifData.model || ""}</p>
-                    </div>
-                  )}
-                  {!exifData.gps && !exifData.dateTime && (
-                    <p className="text-xs text-text-muted text-center py-4">No EXIF data found</p>
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-text-muted text-center py-4">Click to load EXIF data</p>
-              )}
-
-              {/* Download options */}
-              <div className="pt-3 border-t border-border-subtle space-y-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); downloadOriginal(); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-hover border border-border-subtle hover:bg-surface-hover transition-colors text-left"
-                >
-                  <Download className="h-3.5 w-3.5 text-text-secondary" />
-                  <span className="text-xs text-text-secondary">Download Original</span>
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); downloadWithTimestamp(); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors text-left"
-                >
-                  <Clock className="h-3.5 w-3.5 text-cyan-400" />
-                  <span className="text-xs text-cyan-300">Download with Timestamp</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -5871,7 +5944,7 @@ function EditWorkOrderModal({
         <div className="flex items-center justify-between px-10 py-8 border-b border-border-subtle relative z-10">
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shadow-[0_8px_20px_-4px_rgba(6,182,212,0.2)]">
-              <Pencil className="h-5 w-5 text-cyan-400" />
+              <Pencil className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
             </div>
             <div>
               <h2 className="text-xl font-black text-text-primary tracking-tight">Modify Protocols</h2>
@@ -5880,7 +5953,7 @@ function EditWorkOrderModal({
           </div>
           <button
             onClick={onClose}
-            className="p-3 rounded-2xl hover:bg-surface-hover text-text-muted hover:text-white transition-all group active:scale-95"
+            className="p-3 rounded-2xl hover:bg-surface-hover text-text-muted hover:text-foreground dark:hover:text-white transition-all group active:scale-95"
           >
             <X className="h-6 w-6 group-hover:rotate-90 transition-transform duration-300" />
           </button>
@@ -6048,7 +6121,7 @@ function EditWorkOrderModal({
                   <div key={field.key} className="space-y-2">
                     <label className="text-[10px] font-black text-text-dim uppercase tracking-widest ml-1">{field.label}</label>
                     <div className="relative group">
-                      <field.icon className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-dim group-focus-within:text-amber-400 transition-colors" />
+                      <field.icon className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-dim group-focus-within:text-amber-700 dark:text-amber-400 transition-colors" />
                       <input
                         type="text"
                         value={(form as any)[field.key]}
@@ -6115,7 +6188,7 @@ function EditWorkOrderModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-8 py-4 rounded-2xl bg-surface-hover text-text-secondary text-[10px] font-black uppercase tracking-widest border border-border-subtle hover:bg-surface-hover hover:text-white transition-all active:scale-95"
+            className="px-8 py-4 rounded-2xl bg-surface-hover text-text-secondary text-[10px] font-black uppercase tracking-widest border border-border-subtle hover:bg-surface-hover hover:text-foreground dark:hover:text-white transition-all active:scale-95"
           >
             Abort Changes
           </button>

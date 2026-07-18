@@ -166,7 +166,7 @@ export function PhotoViewer({
 
   return (
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-      <div className={cn("relative w-full max-w-[95vw] max-h-[95vh] mx-4 flex flex-col overflow-hidden", className)}>
+      <div className={cn("relative w-full max-w-[95vw] max-h-[95vh] mx-4 flex flex-col lg:flex-row overflow-hidden", className)}>
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 relative z-[9999]">
           <div className="flex items-center gap-3 min-w-0">
@@ -261,7 +261,7 @@ export function PhotoViewer({
 
           {/* Side panel: EXIF info */}
           {showExifPanel && (
-            <div className="w-72 flex-shrink-0 bg-surface border border-border-subtle rounded-xl overflow-hidden flex flex-col">
+            <div className="w-full lg:w-72 max-h-[40vh] lg:max-h-none flex-shrink-0 bg-surface border border-border-subtle rounded-xl overflow-hidden flex flex-col">
               <div className="px-4 py-3 border-b border-border-subtle">
                 <h3 className="text-sm font-semibold text-text-primary">Photo Information</h3>
               </div>

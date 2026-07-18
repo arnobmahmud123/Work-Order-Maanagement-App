@@ -3,6 +3,7 @@
 import { useState, useRef, lazy, Suspense, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import toast from "react-hot-toast";
 import {
   Camera,
   Upload,
@@ -377,6 +378,7 @@ export function PhotoUploadSection({
             });
           } catch (err) {
             console.error("Failed to upload:", files[i].name, err);
+            toast.error(`Failed to upload ${files[i].name}: ${err instanceof Error ? err.message : "Unknown error"}`);
           }
         }
 

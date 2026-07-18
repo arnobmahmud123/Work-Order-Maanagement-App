@@ -17,7 +17,7 @@ export async function GET(
 
   try {
     const { results } = await env.DB.prepare(
-      `SELECT f.id, f.public_url as path, f.original_name as originalName, f.mime_type as mimeType, f.size, f.category, f.work_order_id as workOrderId, f.uploader_id as uploaderId, f.created_at as createdAt, u.name as uploaderName 
+      `SELECT f.id, f.original_name as originalName, f.mime_type as mimeType, f.size, f.category, f.work_order_id as workOrderId, f.uploader_id as uploaderId, f.created_at as createdAt, u.name as uploaderName 
        FROM work_order_files f 
        LEFT JOIN users u ON f.uploader_id = u.id 
        WHERE f.work_order_id = ? 
@@ -28,12 +28,7 @@ export async function GET(
 
     const resolvedFiles = await Promise.all(
       (results || []).map(async (file: any) => {
-        let pathUrl = file.path;
-        try {
-          pathUrl = await getR2Url(file.path);
-        } catch (e) {
-          console.error("Failed to sign R2 url:", e);
-        }
+        const pathUrl = `/api/work-orders/${id}/files/${file.id}/content`;
         return {
           id: file.id,
           filename: file.originalName,
@@ -105,8 +100,18 @@ export async function POST(
     size = file.size;
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
+    let base64Str = "";
+    try {
+      const bytesArray = new Uint8Array(bytes);
+      const len = bytesArray.byteLength;
+      for (let i = 0; i < len; i++) {
+        base64Str += String.fromCharCode(bytesArray[i]);
+      }
+      base64Str = btoa(base64Str);
+    } catch (e: any) {
+      return NextResponse.json({ error: "Failed to process image buffer: " + e.message }, { status: 500 });
+    }
+    const base64 = `data:${file.type};base64,${base64Str}`;
     pathUrl = base64;
   }
 
@@ -137,12 +142,7 @@ export async function POST(
       console.log("Activity logging skipped or failed:", e);
     }
 
-    let signedPath = pathUrl;
-    try {
-      signedPath = await getR2Url(pathUrl);
-    } catch (e) {
-      console.error("Failed to sign URL:", e);
-    }
+    const signedPath = `/api/work-orders/${workOrderId}/files/${fileId}/content`;
 
     return NextResponse.json({
       id: fileId,
@@ -160,7 +160,7 @@ export async function POST(
 
   } catch (error: any) {
     console.error("D1 POST file error:", error.message);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
 

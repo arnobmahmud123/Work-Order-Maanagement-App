@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { TopNav } from "@/components/layout/top-nav";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { AIChat } from "@/components/ai-chat";
+import { OfflineSyncManager } from "@/components/offline-sync-manager";
 import { useState } from "react";
 import { useAppStore } from "@/stores/app-store";
 import { cn } from "@/lib/utils";
@@ -82,6 +83,9 @@ export default function DashboardLayout({
 
       {/* Floating AI Chat Overlay */}
       <AIChat context={{ type: "general" }} />
+
+      {/* Offline Sync Manager */}
+      <OfflineSyncManager />
 
       {/* Mobile Bottom Navigation Bar */}
       <BottomNav />

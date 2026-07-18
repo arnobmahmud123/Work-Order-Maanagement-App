@@ -118,11 +118,11 @@ export async function GET(
         where: { workOrderId: id },
         select: {
           id: true, filename: true, originalName: true, mimeType: true,
-          size: true, path: true, category: true, createdAt: true,
+          size: true, category: true, createdAt: true,
           uploader: { select: { name: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: 200,
       }).catch(() => []),
       prisma.thread.findMany({
         where: { workOrderId: id },
@@ -184,13 +184,6 @@ export async function GET(
       parsedMetadata = fullWorkOrder.metadata;
     }
 
-    // Dynamically sign R2 URLs for work order files and property front photos
-    const hasR2Creds =
-      !!process.env.R2_ENDPOINT &&
-      !!process.env.R2_ACCESS_KEY_ID &&
-      !!process.env.R2_SECRET_ACCESS_KEY &&
-      !!process.env.R2_BUCKET_NAME;
-
     let resolvedFiles: any[] = fullWorkOrder.files || [];
     let resolvedFrontPhotos: any[] = propertyFrontPhotos;
     let resolvedTasks: any[] = parsedTasks;
@@ -201,72 +194,64 @@ export async function GET(
       ? parsedMetadata.inspectionItems
       : [];
 
-    if (hasR2Creds) {
-      const [signedFiles, signedFrontPhotos, signedTasks, signedBids, signedInspectionItems] = await Promise.all([
-        Promise.all(
-          (fullWorkOrder.files || []).map(async (f: any) => ({
-            ...f,
-            path: await getR2Url(f.path),
-          }))
-        ),
-        Promise.all(
-          propertyFrontPhotos.map(async (p: any) => ({
-            ...p,
-            path: await getR2Url(p.path),
-          }))
-        ),
-        Promise.all(
-          resolvedTasks.map(async (task: any) => {
-            const resolvedPhotos = await Promise.all(
-              (Array.isArray(task?.photos) ? task.photos : []).map(async (photo: any) => ({
-                ...photo,
-                url: await getR2Url(photo?.url || photo?.path),
-                path: await getR2Url(photo?.path || photo?.url),
-              }))
-            );
-            return {
-              ...task,
-              photos: resolvedPhotos,
-            };
-          })
-        ),
-        Promise.all(
-          resolvedBids.map(async (bid: any) => {
-            const resolvedPhotos = await Promise.all(
-              (Array.isArray(bid?.photos) ? bid.photos : []).map(async (photo: any) => ({
-                ...photo,
-                url: await getR2Url(photo?.url || photo?.path),
-                path: await getR2Url(photo?.path || photo?.url),
-              }))
-            );
-            return {
-              ...bid,
-              photos: resolvedPhotos,
-            };
-          })
-        ),
-        Promise.all(
-          resolvedInspectionItems.map(async (item: any) => {
-            const resolvedPhotos = await Promise.all(
-              (Array.isArray(item?.photos) ? item.photos : []).map(async (photo: any) => ({
-                ...photo,
-                url: await getR2Url(photo?.url || photo?.path),
-                path: await getR2Url(photo?.path || photo?.url),
-              }))
-            );
-            return {
-              ...item,
-              photos: resolvedPhotos,
-            };
-          })
-        ),
-      ]);
-      resolvedFiles = signedFiles;
-      resolvedFrontPhotos = signedFrontPhotos;
-      resolvedTasks = signedTasks;
-      resolvedBids = signedBids;
-      resolvedInspectionItems = signedInspectionItems;
+    // Process all files to use our new endpoint to avoid huge base64 strings in the JSON payload
+    const signedFiles = [];
+    for (const f of resolvedFiles) {
+      signedFiles.push({ ...f, url: `/api/work-orders/${id}/files/${f.id}/content`, path: `/api/work-orders/${id}/files/${f.id}/content` });
     }
+
+    const signedFrontPhotos = [];
+    for (const p of propertyFrontPhotos) {
+      signedFrontPhotos.push({ ...p, url: `/api/properties/${property?.id || fullWorkOrder.propertyId}/front-photo/${p.id}/content`, path: `/api/properties/${property?.id || fullWorkOrder.propertyId}/front-photo/${p.id}/content` });
+    }
+
+    const signedTasks = [];
+    for (const task of resolvedTasks) {
+      const photos = Array.isArray(task?.photos) ? task.photos : [];
+      const resolvedPhotos = [];
+      for (const photo of photos) {
+        resolvedPhotos.push({
+          ...photo,
+          url: `/api/work-orders/${id}/files/${photo.id}/content`,
+          path: `/api/work-orders/${id}/files/${photo.id}/content`,
+        });
+      }
+      signedTasks.push({ ...task, photos: resolvedPhotos });
+    }
+
+    const signedBids = [];
+    for (const bid of resolvedBids) {
+      const photos = Array.isArray(bid?.photos) ? bid.photos : [];
+      const resolvedPhotos = [];
+      for (const photo of photos) {
+        resolvedPhotos.push({
+          ...photo,
+          url: `/api/work-orders/${id}/files/${photo.id}/content`,
+          path: `/api/work-orders/${id}/files/${photo.id}/content`,
+        });
+      }
+      signedBids.push({ ...bid, photos: resolvedPhotos });
+    }
+
+    const signedInspectionItems = [];
+    for (const item of resolvedInspectionItems) {
+      const photos = Array.isArray(item?.photos) ? item.photos : [];
+      const resolvedPhotos = [];
+      for (const photo of photos) {
+        resolvedPhotos.push({
+          ...photo,
+          url: `/api/work-orders/${id}/files/${photo.id}/content`,
+          path: `/api/work-orders/${id}/files/${photo.id}/content`,
+        });
+      }
+      signedInspectionItems.push({ ...item, photos: resolvedPhotos });
+    }
+
+    resolvedFiles = signedFiles;
+    resolvedFrontPhotos = signedFrontPhotos;
+    resolvedTasks = signedTasks;
+    resolvedBids = signedBids;
+    resolvedInspectionItems = signedInspectionItems;
 
     // Build response — include count fields the client expects
     const response = {
