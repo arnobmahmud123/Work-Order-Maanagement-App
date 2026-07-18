@@ -10,6 +10,7 @@ import {
   useCreateVoiceProfile,
   useWorkOrders,
 } from "@/hooks/use-data";
+import { useCallStore } from "@/hooks/use-call";
 import { Card, CardHeader, CardTitle, Button, Badge, Avatar, Modal } from "@/components/ui";
 import {
   Phone,
@@ -60,6 +61,7 @@ const CALL_STATUS_ICONS: Record<string, any> = {
 
 export default function AICallingPage() {
   const { data: session } = useSession();
+  const startCall = useCallStore((s) => s.startCall);
   const role = (session?.user as any)?.role;
 
   if (role === "CONTRACTOR") {
@@ -470,8 +472,6 @@ function DialerTab({
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState("");
   const [loadingWorkOrder, setLoadingWorkOrder] = useState(false);
   const [callMode, setCallMode] = useState<"ai" | "manual">("ai");
-  const [twilioDevice, setTwilioDevice] = useState<any>(null);
-  const [twilioCall, setTwilioCall] = useState<any>(null);
 
   const [configStatus, setConfigStatus] = useState({
     configured: false,
@@ -498,29 +498,6 @@ function DialerTab({
         }
       })
       .catch(() => {});
-      
-    // Setup Twilio Device for manual calls
-    async function setupTwilio() {
-      try {
-        const res = await fetch("/api/twilio/token");
-        if (!res.ok) return;
-        const data = await res.json();
-        
-        // Dynamically import to avoid SSR issues
-        const { Device } = await import("@twilio/voice-sdk");
-        const device = new Device(data.token, {
-          codecPreferences: ["opus", "pcmu"],
-        } as any);
-
-        device.on("registered", () => console.log("Twilio Device registered"));
-        device.on("error", (error: any) => console.error("Twilio Device Error:", error));
-        device.register();
-        setTwilioDevice(device);
-      } catch (err) {
-        console.error("Failed to setup Twilio Device", err);
-      }
-    }
-    setupTwilio();
   }, []);
 
   const [form, setForm] = useState({
@@ -581,27 +558,10 @@ function DialerTab({
     }
     
     if (callMode === "manual") {
-      if (!twilioDevice) {
-        toast.error("Twilio Device not ready");
-        return;
-      }
-      try {
-        toast.loading("Initiating manual call...");
-        const call = await twilioDevice.connect({ params: { To: form.recipientPhone } });
-        setTwilioCall(call);
-        
-        call.on("accept", () => toast.success("Call connected"));
-        call.on("disconnect", () => {
-          toast.success("Call ended");
-          setTwilioCall(null);
-        });
-        call.on("error", (err: any) => {
-          toast.error("Call error: " + err.message);
-          setTwilioCall(null);
-        });
-      } catch (err: any) {
-        toast.error("Failed to connect: " + err.message);
-      }
+      startCall(form.recipientPhone, {
+        workOrderId: selectedWorkOrderId || undefined,
+        contractorId: form.recipientId || undefined,
+      });
       return;
     }
 
@@ -634,39 +594,8 @@ function DialerTab({
           ? "Outbound call triggered via ElevenLabs"
           : "Mock call initiated"
       );
-    } catch {
-      toast.error("Failed to initiate call");
-    }
-  }
-
-  function handleEndManualCall() {
-    if (twilioCall) {
-      twilioCall.disconnect();
-      setTwilioCall(null);
-    }
-  }
-
   return (
     <div className="max-w-xl mx-auto space-y-6">
-      {twilioCall && (
-        <Card className="border-blue-200 bg-blue-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center animate-pulse">
-                <PhoneCall className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-blue-900">Manual Call in Progress</p>
-                <p className="text-sm text-blue-700">{form.recipientName || form.recipientPhone}</p>
-              </div>
-            </div>
-            <Button variant="danger" size="sm" onClick={handleEndManualCall}>
-              <PhoneOff className="h-4 w-4" />
-              End Call
-            </Button>
-          </div>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
@@ -801,7 +730,7 @@ function DialerTab({
             className="w-full"
             size="lg"
             loading={initiateCall.isPending}
-            disabled={(!!activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED") || !!twilioCall}
+            disabled={!!activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"}
           >
             <Phone className="h-5 w-5" />
             {callMode === "manual" ? "Start Manual Call" : (activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"
