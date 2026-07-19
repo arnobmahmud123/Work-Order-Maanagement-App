@@ -47,7 +47,9 @@ export default function AILeadFinderPage() {
         queryParams.append("state", location);
       }
       
-      queryParams.append("limit", "100");
+      const limitMatch = leadQuantity.match(/\d[\d,.]*/);
+      const limitVal = limitMatch ? parseInt(limitMatch[0].replace(/,/g, "")) : 100;
+      queryParams.append("limit", limitVal.toString());
 
       const res = await fetch(`/api/leads?${queryParams.toString()}`);
       if (res.ok) {
