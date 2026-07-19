@@ -8,12 +8,13 @@ export async function POST(req: NextRequest) {
 
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const response = new VoiceResponse();
-    const callerId = process.env.TWILIO_PHONE_NUMBER;
+    // Fallback to the configured Twilio number if process.env misses it on edge
+    const callerId = process.env.TWILIO_PHONE_NUMBER || "+16592137866";
 
     if (to) {
       // Outbound call
       const dial = response.dial({ callerId });
-      // If the "To" looks like a client identifier rather than a phone number
+      // If the "To" looks like a phone number
       if (/^[\d\+\-\(\) ]+$/.test(to)) {
         dial.number(to);
       } else {
@@ -25,13 +26,25 @@ export async function POST(req: NextRequest) {
       // You can implement forwarding here
     }
 
-    return new NextResponse(response.toString(), {
+    const twiml = response.toString();
+    console.log("Generated TwiML:", twiml);
+
+    return new NextResponse(twiml, {
       headers: {
         "Content-Type": "text/xml",
       },
     });
   } catch (error: any) {
     console.error("Twilio voice error:", error);
-    return new NextResponse("Error generating TwiML", { status: 500 });
+    
+    // Return a valid TwiML even on error to avoid generic "Application Error" from Twilio
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const fallback = new VoiceResponse();
+    fallback.say("We encountered a server error while connecting the call. Please check your setup or trial limits.");
+    
+    return new NextResponse(fallback.toString(), { 
+      status: 200, 
+      headers: { "Content-Type": "text/xml" } 
+    });
   }
 }
