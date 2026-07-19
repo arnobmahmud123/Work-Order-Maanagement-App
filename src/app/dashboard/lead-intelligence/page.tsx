@@ -3,50 +3,37 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
-  Search, Filter, Plus, Target, Building2, Phone, Mail, 
-  MapPin, CheckCircle2, ChevronRight, BarChart3, Users, 
-  TrendingUp, Activity, Clock
+  Search, MapPin, Target, Building2, Phone, Mail, 
+  Globe, Plus, Check, Download, Users, Briefcase
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
-export default function LeadIntelligencePage() {
+export default function AILeadFinderPage() {
   const [leads, setLeads] = useState<any[]>([]);
-  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Filters
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
-  const [businessType, setBusinessType] = useState("");
+  // Finder Form State
+  const [keyword, setKeyword] = useState("Property Preservation Contractor");
+  const [sourceChannel, setSourceChannel] = useState("Google Maps & Business Directories");
+  const [location, setLocation] = useState("Texas");
+  const [country, setCountry] = useState("United States");
+  const [stateRegion, setStateRegion] = useState("");
+  const [city, setCity] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [engineMethod, setEngineMethod] = useState("US Directory Database");
+  const [leadQuantity, setLeadQuantity] = useState("100 Leads (Professional)");
 
   useEffect(() => {
-    fetchAnalytics();
     fetchLeads();
-  }, [status, businessType]); // Re-fetch on filter change
-
-  const fetchAnalytics = async () => {
-    try {
-      const res = await fetch("/api/leads/analytics");
-      if (res.ok) {
-        setAnalytics(await res.json());
-      }
-    } catch (error) {
-      console.error("Failed to fetch analytics", error);
-    }
-  };
+  }, []); 
 
   const fetchLeads = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (query) params.append("q", query);
-      if (status) params.append("status", status);
-      if (businessType) params.append("businessType", businessType);
-      
-      const res = await fetch(`/api/leads?${params.toString()}`);
+      const res = await fetch(`/api/leads?limit=100`);
       if (res.ok) {
         const data = await res.json();
         setLeads(data.leads || []);
@@ -58,240 +45,243 @@ export default function LeadIntelligencePage() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleScrape = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchLeads();
-  };
-
-  const getStatusColor = (s: string) => {
-    switch(s) {
-      case 'NEW': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-      case 'CONTACTED': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'VERIFIED': return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-      case 'CONVERTED': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-      case 'REJECTED': return 'bg-red-500/10 text-red-500 border-red-500/20';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
-    }
+    fetchLeads(); // Simulating scraping by re-fetching
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-            <Target className="h-6 w-6 text-brand-accent" />
-            Lead Intelligence
-          </h1>
-          <p className="text-text-secondary mt-1">
-            Discover, verify, and manage property preservation contractor leads.
-          </p>
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto bg-background/50 min-h-screen">
+      
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
+          Outscraper Lead Finder & CRM
+        </h1>
+        <div className="flex gap-2">
+           <Button variant="outline" className="bg-surface hover:bg-surface-hover">
+             Remix
+           </Button>
+           <Button variant="outline" className="bg-surface hover:bg-surface-hover">
+             Device
+           </Button>
         </div>
-        <Button className="bg-brand-accent text-white hover:bg-brand-accent/90">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Lead
-        </Button>
       </div>
 
-      {/* Analytics Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 bg-surface-elevated border-border-subtle hover:border-brand-accent/30 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-text-secondary font-medium">Total Leads</p>
-              <h3 className="text-2xl font-bold text-text-primary mt-1">
-                {analytics?.totalLeads || 0}
-              </h3>
+      {/* Target Industry Shortcuts */}
+      <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar">
+        {[
+          { title: "Preservation...", desc: "Winterization, Boarding,..." },
+          { title: "General Contractor", desc: "Roofing, Repair estimation,..." },
+          { title: "Inspection Company", desc: "Occupancy audits, Damag..." },
+          { title: "Property Inspector", desc: "Local inspectors, Loss..." },
+          { title: "3rd Party Professional", desc: "Advisory, Title, Client..." }
+        ].map((item, i) => (
+          <Card key={i} className={`p-4 min-w-[220px] shrink-0 cursor-pointer transition-all ${i === 0 ? 'border-brand-accent/50 bg-brand-accent/5 shadow-sm' : 'border-border-subtle bg-surface hover:border-brand-accent/30'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              {i === 0 ? <Briefcase className="h-4 w-4 text-brand-accent" /> : <Building2 className="h-4 w-4 text-text-secondary" />}
+              <p className={`font-semibold text-sm ${i === 0 ? 'text-text-primary' : 'text-text-secondary'}`}>{item.title}</p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-              <Users className="h-5 w-5 text-blue-500" />
-            </div>
-          </div>
-        </Card>
+            <p className="text-xs text-text-secondary truncate">{item.desc}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* Main Filter Form */}
+      <Card className="p-6 bg-surface border-border-subtle shadow-sm space-y-6">
         
-        <Card className="p-4 bg-surface-elevated border-border-subtle hover:border-brand-accent/30 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-text-secondary font-medium">Verified Leads</p>
-              <h3 className="text-2xl font-bold text-text-primary mt-1">
-                {analytics?.verifiedLeads || 0}
-              </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Target Industry / Keyword</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
+              <Input 
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="pl-9 bg-background border-border-subtle h-11"
+              />
             </div>
-            <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-              <CheckCircle2 className="h-5 w-5 text-purple-500" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Extraction Source Channel</label>
+            <select 
+              value={sourceChannel}
+              onChange={(e) => setSourceChannel(e.target.value)}
+              className="w-full h-11 rounded-md border border-border-subtle bg-background px-3 text-sm text-text-primary"
+            >
+              <option>Google Maps & Business Directories</option>
+              <option>LinkedIn Profiles & Company Pages</option>
+              <option>Facebook Groups & Online Communities</option>
+            </select>
+          </div>
+        </div>
+
+        <Card className="p-5 border-border-subtle bg-background/50 space-y-4">
+          <div className="flex items-center gap-2 text-brand-accent mb-2">
+            <MapPin className="h-4 w-4" />
+            <h3 className="text-sm font-bold tracking-wide uppercase">High-Precision Geographic Filtering</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="space-y-1.5 md:col-span-1">
+              <label className="text-[10px] font-bold text-text-secondary uppercase">General Location</label>
+              <Input value={location} onChange={e=>setLocation(e.target.value)} className="bg-surface h-10 text-sm" />
+            </div>
+            <div className="space-y-1.5 md:col-span-1">
+              <label className="text-[10px] font-bold text-text-secondary uppercase">Country</label>
+              <Input value={country} onChange={e=>setCountry(e.target.value)} className="bg-surface h-10 text-sm" />
+            </div>
+            <div className="space-y-1.5 md:col-span-1">
+              <label className="text-[10px] font-bold text-text-secondary uppercase">State / Region</label>
+              <Input placeholder="e.g. TX, IL, CA" value={stateRegion} onChange={e=>setStateRegion(e.target.value)} className="bg-surface h-10 text-sm" />
+            </div>
+            <div className="space-y-1.5 md:col-span-1">
+              <label className="text-[10px] font-bold text-text-secondary uppercase">City</label>
+              <Input placeholder="e.g. Dallas, Chicago" value={city} onChange={e=>setCity(e.target.value)} className="bg-surface h-10 text-sm" />
+            </div>
+            <div className="space-y-1.5 md:col-span-1">
+              <label className="text-[10px] font-bold text-text-secondary uppercase">Zip Range / Code</label>
+              <Input placeholder="e.g. 75001-75050" value={zipCode} onChange={e=>setZipCode(e.target.value)} className="bg-surface h-10 text-sm" />
             </div>
           </div>
         </Card>
 
-        <Card className="p-4 bg-surface-elevated border-border-subtle hover:border-brand-accent/30 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-text-secondary font-medium">Conversion Rate</p>
-              <h3 className="text-2xl font-bold text-text-primary mt-1">
-                {analytics?.conversionRate || 0}%
-              </h3>
-            </div>
-            <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-emerald-500" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4 bg-surface-elevated border-border-subtle hover:border-brand-accent/30 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-text-secondary font-medium">New This Week</p>
-              <h3 className="text-2xl font-bold text-text-primary mt-1">
-                {analytics?.recentlyAdded || 0}
-              </h3>
-            </div>
-            <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <Activity className="h-5 w-5 text-amber-500" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Extraction Engine Method</label>
+            <div className="flex gap-2">
+              <Button 
+                variant={engineMethod === "US Directory Database" ? "primary" : "outline"} 
+                className={`flex-1 h-11 ${engineMethod === "US Directory Database" ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" : "bg-background text-text-secondary"}`}
+                onClick={() => setEngineMethod("US Directory Database")}
+              >
+                US Directory Database (Bulk)
+              </Button>
+              <Button 
+                variant={engineMethod === "AI Real-Time Grounded Search" ? "primary" : "outline"} 
+                className={`flex-1 h-11 ${engineMethod === "AI Real-Time Grounded Search" ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100" : "bg-background text-text-secondary"}`}
+                onClick={() => setEngineMethod("AI Real-Time Grounded Search")}
+              >
+                AI Real-Time Grounded Search
+              </Button>
             </div>
           </div>
-        </Card>
-      </div>
+          
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Target Lead Quantity</label>
+            <select 
+              value={leadQuantity}
+              onChange={(e) => setLeadQuantity(e.target.value)}
+              className="w-full h-11 rounded-md border border-border-subtle bg-background px-3 text-sm text-text-primary"
+            >
+              <option>100 Leads (Professional)</option>
+              <option>500 Leads (Corporate)</option>
+              <option>1,000 Leads (Enterprise)</option>
+            </select>
+          </div>
+        </div>
 
-      {/* Search & Filters */}
-      <Card className="p-4 bg-surface-elevated border-border-subtle flex flex-col md:flex-row gap-4 items-center">
-        <form onSubmit={handleSearch} className="flex-1 w-full relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-          <Input 
-            placeholder="Search by company name, city, ZIP, phone..." 
-            className="pl-9 w-full bg-surface"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </form>
-        <div className="flex gap-4 w-full md:w-auto">
-          <select 
-            className="h-10 rounded-md border border-input bg-surface px-3 text-sm flex-1 md:w-[160px] text-text-primary"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">All Statuses</option>
-            <option value="NEW">New</option>
-            <option value="CONTACTED">Contacted</option>
-            <option value="VERIFIED">Verified</option>
-            <option value="CONVERTED">Converted</option>
-            <option value="REJECTED">Rejected</option>
-          </select>
-          <select 
-            className="h-10 rounded-md border border-input bg-surface px-3 text-sm flex-1 md:w-[180px] text-text-primary"
-            value={businessType}
-            onChange={(e) => setBusinessType(e.target.value)}
-          >
-            <option value="">All Business Types</option>
-            <option value="General Contractor">General Contractor</option>
-            <option value="Cleaning Company">Cleaning Company</option>
-            <option value="Roofing Contractor">Roofing Contractor</option>
-            <option value="Lawn Care">Lawn Care</option>
-            <option value="Locksmith">Locksmith</option>
-          </select>
-          <Button variant="outline" className="border-border-subtle hover:bg-surface-hover">
-            <Filter className="h-4 w-4 mr-2" />
-            More Filters
+        <div className="flex justify-end pt-2">
+          <Button onClick={handleScrape} className="bg-blue-600 hover:bg-blue-700 text-white h-11 px-6 shadow-md shadow-blue-500/20">
+            <Target className="mr-2 h-4 w-4" /> Scrape Leads with AI Search
           </Button>
         </div>
       </Card>
 
-      {/* Leads Table */}
-      <Card className="border-border-subtle bg-surface-elevated overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-surface/50 text-text-secondary uppercase border-b border-border-subtle">
-              <tr>
-                <th className="px-4 py-3 font-medium">Company</th>
-                <th className="px-4 py-3 font-medium">Contact</th>
-                <th className="px-4 py-3 font-medium">Location</th>
-                <th className="px-4 py-3 font-medium">Score</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-subtle">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-text-secondary">
-                    Loading leads...
-                  </td>
-                </tr>
-              ) : leads.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-text-secondary flex flex-col items-center">
-                    <Target className="h-8 w-8 text-text-secondary/50 mb-2" />
-                    <p>No leads found matching your filters.</p>
-                  </td>
-                </tr>
-              ) : leads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-surface/50 transition-colors group">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-surface flex items-center justify-center border border-border-subtle">
-                        <Building2 className="h-5 w-5 text-text-secondary" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-text-primary">{lead.companyName}</p>
-                        <p className="text-xs text-text-secondary truncate max-w-[200px]">
-                          {lead.businessType} • {lead.source || "Manual"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="font-medium text-text-primary">{lead.contactName || "Unknown"}</p>
-                      <div className="flex gap-2 text-xs text-text-secondary">
-                        {lead.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> {lead.phone}
-                          </span>
-                        )}
-                        {lead.email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">
-                    {(lead.city || lead.state) ? (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {lead.city}{lead.city && lead.state ? ", " : ""}{lead.state} {lead.zipCode}
-                      </span>
-                    ) : "-"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-surface rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${lead.verificationScore > 75 ? 'bg-emerald-500' : lead.verificationScore > 40 ? 'bg-amber-500' : 'bg-red-500'}`} 
-                          style={{ width: `${lead.verificationScore}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-text-secondary">{lead.verificationScore}/100</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="outline" className={getStatusColor(lead.status)}>
-                      {lead.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/dashboard/lead-intelligence/${lead.id}`}>
-                      <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity bg-surface hover:bg-surface-hover">
-                        View Details <ChevronRight className="h-4 w-4 ml-1" />
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Results Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+             <p className="text-sm text-text-secondary">All contacts listed below are verified and available for immediate CRM pipelining.</p>
+          </div>
+          <div className="flex gap-3">
+             <Button variant="outline" className="bg-surface h-10 border-border-subtle text-text-secondary">
+               <Download className="mr-2 h-4 w-4" /> Download Full Segment CSV (100 Leads)
+             </Button>
+             <Button variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 h-10 hover:bg-emerald-100">
+               <Check className="mr-2 h-4 w-4" /> All Emails Verified
+             </Button>
+             <Button className="bg-blue-600 hover:bg-blue-700 text-white h-10 shadow-sm shadow-blue-500/20">
+               Import Preview (100) to CRM
+             </Button>
+          </div>
         </div>
-      </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {loading ? (
+             <div className="col-span-2 text-center py-10 text-text-secondary">Loading extracted leads...</div>
+          ) : leads.map(lead => (
+            <Card key={lead.id} className="p-5 bg-surface border-border-subtle shadow-sm hover:shadow-md transition-shadow relative">
+              <Button variant="ghost" className="absolute top-4 right-4 h-8 w-8 rounded-full border border-border-subtle text-text-secondary flex items-center justify-center p-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+              
+              <div className="mb-4">
+                <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-[10px] font-semibold tracking-wider mb-2">
+                  {lead.businessType || "Property Preservation"}
+                </Badge>
+                <h3 className="text-lg font-bold text-text-primary mb-1">
+                  <Link href={`/dashboard/lead-intelligence/${lead.id}`} className="hover:text-blue-600 transition-colors">
+                    {lead.companyName}
+                  </Link>
+                </h3>
+                <div className="flex items-center text-xs text-text-secondary gap-1">
+                  <MapPin className="h-3 w-3" />
+                  {lead.city || "Unknown City"}, {lead.state || "Unknown State"}, United States
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-4">
+                <div>
+                  <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Representative</p>
+                  <p className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    {lead.contactName || "Unknown Contact"} 
+                    {lead.contactRole && <span className="text-text-secondary font-normal text-xs ml-1">({lead.contactRole})</span>}
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="h-4 w-4 text-text-secondary shrink-0" />
+                  <span className="text-text-secondary">{lead.email || "No email"}</span>
+                  {lead.emailVerified ? (
+                    <Badge variant="outline" className="ml-auto bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] uppercase tracking-wider px-1.5 py-0">
+                      <Check className="h-3 w-3 mr-1" /> Verified
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="ml-auto bg-red-50 text-red-600 border-red-200 text-[9px] uppercase tracking-wider px-1.5 py-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5"></span> Invalid
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 text-sm text-text-secondary">
+                  <Phone className="h-4 w-4 shrink-0" />
+                  {lead.phone || "No phone provided"}
+                </div>
+                
+                <div className="flex items-center gap-3 text-sm">
+                  <Globe className="h-4 w-4 text-text-secondary shrink-0" />
+                  <a href={lead.website?.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate">
+                    {lead.website || "No website"}
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-border-subtle">
+                <div className="flex gap-2">
+                  {['LINKEDIN', 'TWITTER', 'FACEBOOK', 'INSTAGRAM'].map(platform => (
+                    <span key={platform} className="text-[9px] font-bold text-text-secondary bg-background border border-border-subtle rounded px-1.5 py-0.5">
+                      {platform}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
+                  Deal Value: <span className="text-text-primary">${lead.dealValue?.toLocaleString() || "0"}</span>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

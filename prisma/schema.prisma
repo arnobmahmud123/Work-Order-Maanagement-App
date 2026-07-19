@@ -1231,6 +1231,7 @@ model Lead {
   id                String         @id @default(cuid())
   companyName       String
   contactName       String?
+  contactRole       String?
   businessType      String         // e.g., "General Contractor", "Cleaning Company"
   address           String?
   city              String?
@@ -1238,10 +1239,16 @@ model Lead {
   zipCode           String?
   phone             String?
   email             String?
+  emailVerified     Boolean        @default(false)
   website           String?
   source            String?        // e.g., "Google", "LinkedIn", "Manual"
   status            String         @default("NEW") // "NEW", "CONTACTED", "VERIFIED", "CONVERTED", "REJECTED"
   verificationScore Int            @default(0) // 0-100
+  dealValue         Float?
+  linkedinUrl       String?
+  twitterUrl        String?
+  facebookUrl       String?
+  instagramUrl      String?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
