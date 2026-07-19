@@ -1225,4 +1225,73 @@ model SmsMessage {
   @@map("sms_messages")
 }
 
+// ─── Lead Intelligence CRM ───────────────────────────────────────────────────
 
+model Lead {
+  id                String         @id @default(cuid())
+  companyName       String
+  contactName       String?
+  businessType      String         // e.g., "General Contractor", "Cleaning Company"
+  address           String?
+  city              String?
+  state             String?
+  zipCode           String?
+  phone             String?
+  email             String?
+  website           String?
+  source            String?        // e.g., "Google", "LinkedIn", "Manual"
+  status            String         @default("NEW") // "NEW", "CONTACTED", "VERIFIED", "CONVERTED", "REJECTED"
+  verificationScore Int            @default(0) // 0-100
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  activities        LeadActivity[]
+  notes             LeadNote[]
+  tags              LeadTag[]      @relation("LeadTags")
+
+  @@index([state, city, zipCode])
+  @@index([businessType])
+  @@index([status])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id         String   @id @default(cuid())
+  leadId     String
+  type       String   // "CALL", "EMAIL", "STATUS_CHANGE", "NOTE_ADDED"
+  content    String?
+  authorId   String?  // References User id loosely
+  authorName String?
+  createdAt  DateTime @default(now())
+
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("lead_activities")
+}
+
+model LeadNote {
+  id         String   @id @default(cuid())
+  leadId     String
+  content    String
+  authorId   String?
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_notes")
+}
+
+model LeadTag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String @default("blue") // tag color for UI
+
+  leads Lead[] @relation("LeadTags")
+
+  @@map("lead_tags")
+}

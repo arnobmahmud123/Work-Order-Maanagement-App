@@ -38,6 +38,7 @@ import {
   Rss,
   Briefcase,
   Star,
+  Target,
 } from "lucide-react";
 
 const navItems = [
@@ -48,6 +49,7 @@ const navItems = [
   { label: "Chat", href: "/dashboard/chat", icon: Hash, badgeKey: "chat" as const },
   { label: "SMS Chat", href: "/dashboard/sms-chat", icon: MessageSquare },
   { label: "Email", href: "/dashboard/email", icon: Mail, badgeKey: "email" as const },
+  { label: "Lead Intelligence", href: "/dashboard/lead-intelligence", icon: Target },
   { label: "Inspectors", href: "/dashboard/inspectors", icon: MapPin },
   { label: "Vendors", href: "/dashboard/vendors", icon: Wrench },
   { label: "Logistics", href: "/dashboard/logistics", icon: Truck },
