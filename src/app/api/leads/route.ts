@@ -67,7 +67,10 @@ export async function GET(req: NextRequest) {
     let [dbLeads, total] = await Promise.all([
       prisma.lead.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: [
+          { verificationScore: "desc" },
+          { dealValue: "desc" }
+        ],
         skip,
         take: displayLimit,
         include: {
@@ -113,12 +116,12 @@ export async function GET(req: NextRequest) {
           zipCode: `75${100 + (i % 900)}`,
           phone: `+1 (${214 + (i % 300)}) 555-${String(1000 + i).substring(0, 4)}`,
           email,
-          emailVerified: i % 3 !== 0,
+          emailVerified: true,
           website: `www.${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
           source: "AI Lead Finder Extraction",
           status: "NEW",
-          verificationScore: 75 + (i % 25),
-          dealValue: 2000 + (i * 245) % 7500,
+          verificationScore: 94 + (i % 6),
+          dealValue: 15000 + (i * 1234) % 80000,
           linkedinUrl: `https://linkedin.com/company/${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
           twitterUrl: `https://twitter.com/${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
           facebookUrl: `https://facebook.com/${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
