@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         { phone: { contains: query } },
         { city: { contains: query } },
         { zipCode: { contains: query } },
+        { businessType: { contains: query } },
       ];
     }
 
@@ -42,7 +43,11 @@ export async function GET(req: NextRequest) {
     }
     
     if (state) {
-      where.state = state;
+      where.OR = [
+        ...(where.OR || []),
+        { state: { contains: state } },
+        { city: { contains: state } }
+      ];
     }
     
     if (businessType) {
