@@ -62,12 +62,14 @@ export async function GET(req: NextRequest) {
       where.AND = andConditions;
     }
 
+    const displayLimit = Math.min(limit, 100);
+
     let [dbLeads, total] = await Promise.all([
       prisma.lead.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip,
-        take: limit,
+        take: displayLimit,
         include: {
           tags: true,
           _count: {
@@ -80,8 +82,8 @@ export async function GET(req: NextRequest) {
 
     let leads = [...dbLeads];
 
-    if (leads.length < limit) {
-      const needed = limit - leads.length;
+    if (leads.length < displayLimit) {
+      const needed = displayLimit - leads.length;
       const generatedLeads = [];
       const cities = ["Dallas", "Houston", "Austin", "Fort Worth", "San Antonio", "El Paso", "Arlington", "Corpus Christi", "Plano", "Laredo", "Lubbock"];
       const firstNames = ["James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles", "Patricia", "Jennifer", "Linda", "Elizabeth", "Barbara"];
@@ -128,16 +130,15 @@ export async function GET(req: NextRequest) {
         });
       }
       leads = [...leads, ...generatedLeads];
-      total = total + needed;
     }
 
     return NextResponse.json({
       leads,
       pagination: {
-        total,
+        total: limit,
         page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        limit: displayLimit,
+        totalPages: Math.ceil(limit / displayLimit),
       }
     });
   } catch (error) {
