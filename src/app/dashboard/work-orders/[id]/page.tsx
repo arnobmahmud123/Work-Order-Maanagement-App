@@ -2977,23 +2977,23 @@ export default function WorkOrderDetailPage({
               <div>
                 <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Property Inspection</h3>
                 <p className="text-[10px] font-bold text-text-muted">
-                  {complianceItems.filter(c => c.completed).length + customInspectionItems.filter(c => c.completed).length} of {complianceItems.length + customInspectionItems.length} inspection items verified
+                  {customInspectionItems.filter(c => c.completed).length} of {customInspectionItems.length} inspection items verified
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowAddInspection(true)}
-                className="px-3 py-1.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-700 dark:text-violet-400 border border-violet-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-violet-500 hover:bg-violet-400 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-violet-500/20 cursor-pointer"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-4 w-4" />
                 <span>Add Inspection Item</span>
               </button>
 
-              {(complianceItems.length > 0 || customInspectionItems.length > 0) && (
+              {customInspectionItems.length > 0 && (
                 <div className="text-right">
                   <span className="text-lg font-black text-violet-700 dark:text-violet-400 leading-none">
-                    {Math.round(((complianceItems.filter(c => c.completed).length + customInspectionItems.filter(c => c.completed).length) / (complianceItems.length + customInspectionItems.length || 1)) * 100)}%
+                    {Math.round((customInspectionItems.filter(c => c.completed).length / customInspectionItems.length) * 100)}%
                   </span>
                   <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Inspection Score</p>
                 </div>
@@ -3001,54 +3001,27 @@ export default function WorkOrderDetailPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* System/Auto Inspection Items */}
-            {complianceItems.map((item, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "group relative overflow-hidden rounded-2xl border transition-all duration-300 p-5",
-                  item.completed
-                    ? "bg-emerald-500/[0.04] border-emerald-500/20 shadow-[0_4px_20px_-10px_rgba(16,185,129,0.1)]"
-                    : "bg-surface/60 backdrop-blur-md border-border-subtle"
-                )}
+          {/* Inspection Items List */}
+          {customInspectionItems.length === 0 && !showAddInspection ? (
+            <div className="p-12 text-center rounded-3xl border border-dashed border-border-medium bg-surface/40 backdrop-blur-md space-y-4">
+              <div className="h-14 w-14 rounded-3xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto text-violet-700 dark:text-violet-400">
+                <Shield className="h-7 w-7" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1">
+                <h4 className="text-base font-extrabold text-text-primary">No Inspection Items Added</h4>
+                <p className="text-xs text-text-muted">
+                  Add custom property inspection targets to track damage assessments, safety findings, or condition reports with photos.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddInspection(true)}
+                className="px-4 py-2.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white font-bold text-xs inline-flex items-center gap-2 transition-all shadow-lg shadow-violet-500/20 cursor-pointer"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "mt-1 h-5 w-5 rounded-full flex items-center justify-center border-2 transition-colors",
-                      item.completed ? "bg-emerald-500 border-emerald-500" : "border-border-medium"
-                    )}>
-                      {item.completed && <CheckCircle2 className="h-3 w-3 text-white" />}
-                    </div>
-                    <div>
-                      <h4 className={cn("text-sm font-bold", item.completed ? "text-text-secondary" : "text-text-primary")}>
-                        {item.label}
-                      </h4>
-                      {item.description && <p className="text-[11px] text-text-muted mt-1 italic line-clamp-1 group-hover:line-clamp-none transition-all">{item.description}</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {item.completed ? (
-                      <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 uppercase tracking-widest border border-emerald-500/20">Verified</span>
-                    ) : (
-                      <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 uppercase tracking-widest border border-rose-500/20">Required</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Custom Inspection Items */}
-          <div className="space-y-4 pt-6 border-t border-border-subtle">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-xl bg-cyan-500/10 flex items-center justify-center">
-                <Plus className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
-              </div>
-              <h4 className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Field Exceptions & Add-ons</h4>
+                <Plus className="h-4 w-4" />
+                <span>Add First Inspection Item</span>
+              </button>
             </div>
-
+          ) : (
             <div className="space-y-3">
               {customInspectionItems.map((item, i) => (
                 <div
@@ -3056,7 +3029,7 @@ export default function WorkOrderDetailPage({
                   className={cn(
                     "group relative overflow-hidden rounded-2xl border transition-all duration-300",
                     item.completed
-                      ? "bg-emerald-500/[0.04] border-emerald-500/20 shadow-[0_4px_20px_-10px_rgba(16,185,129,0.1)]"
+                      ? "bg-emerald-500/10 border-emerald-500/20 shadow-md"
                       : "bg-surface/60 backdrop-blur-md border-border-subtle hover:border-border-subtle"
                   )}
                 >
@@ -3196,8 +3169,9 @@ export default function WorkOrderDetailPage({
                 </div>
               ))}
             </div>
+          )}
 
-            {showAddInspection ? (
+          {showAddInspection ? (
               <div className="p-6 rounded-3xl border border-border-medium bg-surface/60 backdrop-blur-xl shadow-2xl space-y-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="h-8 w-8 rounded-xl bg-cyan-500/10 flex items-center justify-center">
@@ -3267,7 +3241,7 @@ export default function WorkOrderDetailPage({
             ) : (
               <button
                 onClick={() => setShowAddInspection(true)}
-                className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-border-subtle bg-surface-hover text-text-muted hover:text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all group"
+                className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-border-subtle bg-surface-hover text-text-muted hover:text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/10 transition-all group"
               >
                 <div className="h-8 w-8 rounded-xl bg-surface-hover group-hover:bg-cyan-500/10 flex items-center justify-center transition-all">
                   <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
@@ -3275,7 +3249,6 @@ export default function WorkOrderDetailPage({
                 <span className="text-sm font-black uppercase tracking-widest">Add Custom Inspection Point</span>
               </button>
             )}
-          </div>
         </div>
       )}
 
