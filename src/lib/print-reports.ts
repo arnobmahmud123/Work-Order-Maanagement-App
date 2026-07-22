@@ -51,8 +51,21 @@ export function getAbsolutePhotoUrl(photo: any): string {
 export async function imageToBase64(url: string): Promise<string> {
   if (!url || url.startsWith("data:")) return url;
   try {
-    const res = await fetch(url);
+    let fetchUrl = url;
+    // Proxy cross-origin image requests to bypass browser CORS constraints,
+    // ensuring we can always convert remote bucket images to Base64 for the iOS Share Sheet.
+    if (url.startsWith("http") && typeof window !== "undefined" && !url.startsWith(window.location.origin)) {
+      fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
+    }
+
+    const res = await fetch(fetchUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status} from image fetch`);
+
     const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) {
+       throw new Error(`Invalid content type: ${blob.type}`);
+    }
+
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
