@@ -303,10 +303,30 @@ export function executePrint(html: string, titleName: string = "Property Preserv
         jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
       };
 
-      await (window as any).html2pdf().set(opt).from(container).save();
-      
+      // Output as blob instead of direct save (since anchor downloads silently fail in iOS PWAs)
+      const pdfBlob = await (window as any).html2pdf().set(opt).from(container).outputPdf('blob');
       document.body.removeChild(container);
-      downloadBtn.innerHTML = "✅ Downloaded!";
+
+      const fileName = `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+      const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: fileName,
+        });
+        downloadBtn.innerHTML = "✅ Shared!";
+      } else {
+        // Fallback for browsers that don't support sharing files
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        downloadBtn.innerHTML = "✅ Downloaded!";
+      }
     } catch (e) {
       console.error("PDF generation failed:", e);
       downloadBtn.innerHTML = "❌ Failed";
