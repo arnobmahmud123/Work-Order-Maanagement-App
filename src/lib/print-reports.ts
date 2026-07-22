@@ -255,30 +255,18 @@ export function executePrint(html: string, titleName: string = "Property Preserv
   closeBtn?.addEventListener("click", () => overlay.remove());
 
   const handleMobilePrintOrShare = async () => {
-    // IMPORTANT: We MUST avoid `navigator.share` for HTML files on iOS!
-    // iOS QuickLook strictly blocks Base64 images and network requests in shared local HTML files.
-    // By triggering native `window.print()`, we force WebKit to render the live DOM (which allows Base64 images).
-    // Users can easily save as PDF from the native print dialog.
-
+    // iOS Safari completely ignores `iframe.contentWindow.print()` without throwing an error.
+    // The most robust way to print/save on iOS (especially in PWAs) is to open the Blob URL
+    // in a new Safari tab. From there, the native Safari toolbar provides Print and Save to PDF.
+    
     try {
-      if (iframeEl.contentWindow) {
-        iframeEl.contentWindow.focus();
-        iframeEl.contentWindow.print();
-        return;
+      const newWin = window.open(blobUrl, "_blank");
+      if (!newWin || newWin.closed) {
+        // Fallback if popup blocked: navigate current window
+        window.location.href = blobUrl;
       }
     } catch (e) {
-      console.warn("Iframe print failed", e);
-    }
-
-    // Fallback if iframe print fails
-    const newWin = window.open(blobUrl, "_blank");
-    if (!newWin || newWin.closed) {
       window.location.href = blobUrl;
-    } else {
-      setTimeout(() => {
-        newWin.focus();
-        newWin.print();
-      }, 500);
     }
   };
 
