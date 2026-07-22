@@ -223,6 +223,14 @@ export function executePrint(html: string, titleName: string = "Property Preserv
   overlay.style.cssText =
     "position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;display:flex;flex-direction:column;background:#090d16;font-family:-apple-system,BlinkMacSystemFont,sans-serif;";
 
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  const instructionBanner = isIOS ? `
+    <div style="background:#eff6ff;color:#1e3a8a;padding:10px 16px;font-size:12px;text-align:center;border-bottom:1px solid #bfdbfe;font-weight:500;display:flex;align-items:center;justify-content:center;gap:8px;">
+      <span style="font-size:16px;">💡</span>
+      <span><b>To Save as PDF:</b> Tap the Share icon (square with arrow) at the top of the Print dialog.</span>
+    </div>
+  ` : "";
+
   overlay.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;padding-top:max(env(safe-area-inset-top, 20px), 16px);padding-bottom:12px;padding-left:max(env(safe-area-inset-left, 16px), 16px);padding-right:max(env(safe-area-inset-right, 16px), 16px);background:#0f172a;border-bottom:1px solid #1e293b;color:#fff;">
       <div style="display:flex;align-items:center;gap:10px;overflow:hidden;flex:1;margin-right:8px;">
@@ -241,6 +249,7 @@ export function executePrint(html: string, titleName: string = "Property Preserv
         </button>
       </div>
     </div>
+    ${instructionBanner}
     <div style="flex:1;width:100%;height:100%;overflow:hidden;background:#f8fafc;-webkit-overflow-scrolling:touch;">
       <iframe id="mobile-print-iframe-element" src="${blobUrl}" style="width:100%;height:100%;border:none;" />
     </div>
