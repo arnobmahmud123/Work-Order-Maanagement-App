@@ -93,13 +93,19 @@ export async function imageToBase64(url: string): Promise<string> {
       let fetchOptions: RequestInit = {};
 
       if (url.startsWith("http") && typeof window !== "undefined") {
-        // External HTTP URLs: proxy through our server to handle CORS
-        // The proxy-image route forwards cookies for authenticated internal routes
-        fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
-        fetchOptions = { credentials: "include" };
+        const isInternal = url.startsWith(window.location.origin);
+        if (isInternal) {
+          // Same-domain: fetch directly so the browser sends cookies naturally
+          fetchUrl = url;
+          fetchOptions = { credentials: "include" };
+        } else {
+          // External HTTP URLs: proxy through our server to handle CORS
+          fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
+          fetchOptions = { credentials: "include" };
+        }
       } else if (url.startsWith("/")) {
-        // Relative API paths (e.g. /api/work-orders/.../files/.../content):
-        // Fetch directly with credentials so session cookies are sent
+        // Relative API paths: fetch directly
+        fetchUrl = url;
         fetchOptions = { credentials: "include" };
       }
 
