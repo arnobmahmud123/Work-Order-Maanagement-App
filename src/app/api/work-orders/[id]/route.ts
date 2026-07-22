@@ -118,7 +118,7 @@ export async function GET(
         where: { workOrderId: id },
         select: {
           id: true, filename: true, originalName: true, mimeType: true,
-          size: true, category: true, createdAt: true,
+          size: true, category: true, createdAt: true, path: true,
           uploader: { select: { name: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -210,10 +210,12 @@ export async function GET(
       const photos = Array.isArray(task?.photos) ? task.photos : [];
       const resolvedPhotos = [];
       for (const photo of photos) {
+        // Only rewrite URL if the photo has a real persisted file ID (not a temp gps- or temp- ID)
+        const isPersistedFile = photo.id && !photo.id.startsWith("gps-") && !photo.id.startsWith("temp-") && !photo.id.startsWith("offline-");
         resolvedPhotos.push({
           ...photo,
-          url: `/api/work-orders/${id}/files/${photo.id}/content`,
-          path: `/api/work-orders/${id}/files/${photo.id}/content`,
+          url: isPersistedFile ? `/api/work-orders/${id}/files/${photo.id}/content` : (photo.url || ""),
+          path: isPersistedFile ? `/api/work-orders/${id}/files/${photo.id}/content` : (photo.path || photo.url || ""),
         });
       }
       signedTasks.push({ ...task, photos: resolvedPhotos });
@@ -224,10 +226,12 @@ export async function GET(
       const photos = Array.isArray(bid?.photos) ? bid.photos : [];
       const resolvedPhotos = [];
       for (const photo of photos) {
+        // Only rewrite URL if the photo has a real persisted file ID (not a temp gps- or temp- ID)
+        const isPersistedFile = photo.id && !photo.id.startsWith("gps-") && !photo.id.startsWith("temp-") && !photo.id.startsWith("offline-");
         resolvedPhotos.push({
           ...photo,
-          url: `/api/work-orders/${id}/files/${photo.id}/content`,
-          path: `/api/work-orders/${id}/files/${photo.id}/content`,
+          url: isPersistedFile ? `/api/work-orders/${id}/files/${photo.id}/content` : (photo.url || ""),
+          path: isPersistedFile ? `/api/work-orders/${id}/files/${photo.id}/content` : (photo.path || photo.url || ""),
         });
       }
       signedBids.push({ ...bid, photos: resolvedPhotos });
@@ -238,10 +242,12 @@ export async function GET(
       const photos = Array.isArray(item?.photos) ? item.photos : [];
       const resolvedPhotos = [];
       for (const photo of photos) {
+        // Only rewrite URL if the photo has a real persisted file ID (not a temp gps- or temp- ID)
+        const isPersistedFile = photo.id && !photo.id.startsWith("gps-") && !photo.id.startsWith("temp-") && !photo.id.startsWith("offline-");
         resolvedPhotos.push({
           ...photo,
-          url: `/api/work-orders/${id}/files/${photo.id}/content`,
-          path: `/api/work-orders/${id}/files/${photo.id}/content`,
+          url: isPersistedFile ? `/api/work-orders/${id}/files/${photo.id}/content` : (photo.url || ""),
+          path: isPersistedFile ? `/api/work-orders/${id}/files/${photo.id}/content` : (photo.path || photo.url || ""),
         });
       }
       signedInspectionItems.push({ ...item, photos: resolvedPhotos });

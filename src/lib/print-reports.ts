@@ -34,6 +34,9 @@ export interface ReportBidItem {
 export function getAbsolutePhotoUrl(photo: any): string {
   const url = photo?.url || photo?.rawUrl || photo?.path || (typeof photo === "string" ? photo : "");
   if (!url) return "";
+  // Don't try to make a full URL from bare filenames (e.g. "gps-bid-123.jpg") — they can't be resolved here
+  const isBareFilename = !url.includes("/") && !url.startsWith("http") && !url.startsWith("data:") && !url.startsWith("blob:");
+  if (isBareFilename) return "";
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
     return url;
   }
@@ -77,18 +80,30 @@ function resizeBase64Image(dataUrl: string, maxWidth = 800): Promise<string> {
  */
 export async function imageToBase64(url: string): Promise<string> {
   if (!url) return "";
+  // Skip bare filenames that couldn't be resolved — no point trying to fetch them
+  const isBareFilename = url && !url.includes("/") && !url.startsWith("http") && !url.startsWith("data:") && !url.startsWith("blob:");
+  if (isBareFilename) return "";
+
   try {
     let base64Data = url;
     
     // If it's not already a data URI, we need to fetch it first
     if (!url.startsWith("data:")) {
       let fetchUrl = url;
-      // Proxy ALL HTTP image requests to bypass browser CORS constraints.
+      let fetchOptions: RequestInit = {};
+
       if (url.startsWith("http") && typeof window !== "undefined") {
+        // External HTTP URLs: proxy through our server to handle CORS
+        // The proxy-image route forwards cookies for authenticated internal routes
         fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
+        fetchOptions = { credentials: "include" };
+      } else if (url.startsWith("/")) {
+        // Relative API paths (e.g. /api/work-orders/.../files/.../content):
+        // Fetch directly with credentials so session cookies are sent
+        fetchOptions = { credentials: "include" };
       }
 
-      const res = await fetch(fetchUrl);
+      const res = await fetch(fetchUrl, fetchOptions);
       if (!res.ok) throw new Error(`HTTP ${res.status} from image fetch`);
 
       const blob = await res.blob();

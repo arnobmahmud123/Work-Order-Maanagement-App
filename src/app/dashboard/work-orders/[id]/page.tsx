@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useRef, useEffect, Fragment, lazy, Suspense, useCallback } from "react";
+import { use, useState, useRef, useEffect, Fragment, lazy, Suspense, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1555,26 +1555,45 @@ export default function WorkOrderDetailPage({
     setGpsCameraOpen(true);
   }
 
-  // Initialize tasks from workOrder data exactly once
+  // Build a lookup map from file ID and filename to content-path URL for resolving fileref: references
+  // Also indexes by filename so that legacy records saved with bare filenames (e.g. "gps-bid-123.jpg")
+  // can be resolved to their proper /api/.../content paths.
+  const fileMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (workOrder && Array.isArray(workOrder.files)) {
+      for (const f of workOrder.files) {
+        const contentPath = f.path || f.url || "";
+        if (f.id) map[f.id] = contentPath;
+        // Index by filename for legacy records that saved bare filenames
+        if (f.filename) map[f.filename] = contentPath;
+        if (f.originalName) map[f.originalName] = contentPath;
+      }
+    }
+    return map;
+  }, [workOrder]);
+
+  const resolvePhotoUrl = useCallback((p: any): string => {
+    const raw = p.url || p.path || "";
+    if (!raw) return "";
+    // Resolve fileref: ID references
+    if (raw.startsWith("fileref:")) {
+      const fileId = raw.slice(8);
+      return fileMap[fileId] || "";
+    }
+    // If it's a bare filename (no slashes, no protocol) — look it up in fileMap by name
+    // This handles legacy records saved before compactUrl was introduced.
+    const isBareFilename = !raw.includes("/") && !raw.startsWith("http") && !raw.startsWith("data:") && !raw.startsWith("blob:");
+    if (isBareFilename) {
+      return fileMap[raw] || "";
+    }
+    return raw;
+  }, [fileMap]);
+
+  // Initialize tasks from workOrder metadata exactly once
   useEffect(() => {
     if (workOrder && !tasksInitialized.current) {
       tasksInitialized.current = true;
       const rawTasks = Array.isArray(workOrder.tasks) ? workOrder.tasks : [];
-      // Build a lookup map from file ID to path URL for resolving fileref: references
-      const fileMap: Record<string, string> = {};
-      if (Array.isArray(workOrder.files)) {
-        for (const f of workOrder.files) {
-          if (f.id) fileMap[f.id] = f.path || f.url || "";
-        }
-      }
-      function resolvePhotoUrl(p: any): string {
-        const raw = p.url || p.path || "";
-        if (raw.startsWith("fileref:")) {
-          const fileId = raw.slice(8);
-          return fileMap[fileId] || "";
-        }
-        return raw;
-      }
       setTasks(
         rawTasks.map((t: any) => ({
           id: t.id,
@@ -1627,7 +1646,8 @@ export default function WorkOrderDetailPage({
           price: b.price,
           photos: (Array.isArray(b.photos) ? b.photos : []).map((p: any) => ({
             id: p.id || `bid-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            url: p.url || p.path,
+            url: resolvePhotoUrl(p),
+            rawUrl: p.rawUrl,
             name: p.name || p.originalName || "photo.jpg",
             size: p.size || 0,
             category: p.category || "BID",
@@ -1653,7 +1673,8 @@ export default function WorkOrderDetailPage({
           completed: item.completed ?? false,
           photos: (Array.isArray(item.photos) ? item.photos : []).map((p: any) => ({
             id: p.id || `inspection-photo-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            url: p.url || p.path,
+            url: resolvePhotoUrl(p),
+            rawUrl: p.rawUrl,
             name: p.name || p.originalName || "photo.jpg",
             size: p.size || 0,
             category: p.category || "INSPECTION",
