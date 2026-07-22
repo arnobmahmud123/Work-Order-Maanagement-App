@@ -45,13 +45,16 @@ export function getAbsolutePhotoUrl(photo: any): string {
 
 /**
  * Universal print trigger optimized for Desktop, iOS Safari, Android Chrome, PWAs, and WebViews.
- * On mobile/PWA devices, if window.open is blocked or fails, it displays a responsive full-screen 
- * in-app Print & PDF Viewer Modal with direct AirPrint, PDF Save, and Web Share actions.
+ * Respects Mobile Safe Areas (iPhone Notch/Dynamic Island), strips duplicate inner toolbars, 
+ * and provides robust native AirPrint, PDF Save, and Web Share actions.
  */
 export function executePrint(html: string, titleName: string = "Property Preservation Report") {
   if (typeof window === "undefined") return;
 
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  // Clean HTML: Remove redundant inner toolbars when rendering inside viewer modal
+  const cleanHtml = html.replace(/<div class="toolbar no-print">[\s\S]*?<\/div>/gi, "");
+
+  const blob = new Blob([cleanHtml], { type: "text/html;charset=utf-8" });
   const blobUrl = URL.createObjectURL(blob);
 
   // Function to wait for images in a window/doc to finish loading
@@ -102,57 +105,58 @@ export function executePrint(html: string, titleName: string = "Property Preserv
     }, 2500);
   };
 
-  // 1. Try opening Blob URL in a new window/tab first for Desktop & Mobile browsers
-  let printWindow: Window | null = null;
-  try {
-    printWindow = window.open(blobUrl, "_blank");
-  } catch (e) {
-    printWindow = null;
-  }
-
-  // 2. If opened successfully in desktop browser, attach load trigger and focus
   const isMobile =
     typeof navigator !== "undefined" &&
     (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as any).standalone === true);
 
-  if (!isMobile && printWindow && !printWindow.closed && typeof printWindow.closed !== "undefined") {
+  // 1. Desktop Window Opening
+  if (!isMobile) {
+    let printWindow: Window | null = null;
     try {
-      printWindow.focus();
-      triggerPrintWhenImagesLoaded(printWindow, printWindow.document);
-      return;
-    } catch (err) {
-      console.warn("Popup focus warning:", err);
+      printWindow = window.open(blobUrl, "_blank");
+    } catch (e) {
+      printWindow = null;
+    }
+
+    if (printWindow && !printWindow.closed && typeof printWindow.closed !== "undefined") {
+      try {
+        printWindow.focus();
+        triggerPrintWhenImagesLoaded(printWindow, printWindow.document);
+        return;
+      } catch (err) {
+        console.warn("Popup focus warning:", err);
+      }
     }
   }
 
-  // 3. Mobile / PWA / Blocked Popup Fallback: Render full-screen Mobile Print Preview Modal inside app
+  // 2. Mobile / PWA / Standalone App Fallback: Full-screen Safe-Area Compliant Modal
   const existingModal = document.getElementById("mobile-print-preview-modal");
   if (existingModal) existingModal.remove();
 
   const overlay = document.createElement("div");
   overlay.id = "mobile-print-preview-modal";
   overlay.style.cssText =
-    "position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;display:flex;flex-direction:column;background:rgba(15,23,42,0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);font-family:-apple-system,BlinkMacSystemFont,sans-serif;";
+    "position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;display:flex;flex-direction:column;background:#090d16;font-family:-apple-system,BlinkMacSystemFont,sans-serif;";
 
   overlay.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f172a;border-bottom:1px solid #334155;color:#fff;">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">📄</span>
-        <div>
-          <div style="font-size:14px;font-weight:900;color:#f8fafc;letter-spacing:0.3px;">${titleName}</div>
-          <div style="font-size:10px;color:#38bdf8;font-weight:700;">Mobile PWA Print & PDF Viewer</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-top:max(env(safe-area-inset-top, 20px), 16px);padding-bottom:12px;padding-left:max(env(safe-area-inset-left, 16px), 16px);padding-right:max(env(safe-area-inset-right, 16px), 16px);background:#0f172a;border-bottom:1px solid #1e293b;color:#fff;">
+      <div style="display:flex;align-items:center;gap:10px;overflow:hidden;flex:1;margin-right:8px;">
+        <span style="font-size:18px;flex-shrink:0;">📄</span>
+        <div style="overflow:hidden;">
+          <div style="font-size:13px;font-weight:900;color:#f8fafc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${titleName}</div>
+          <div style="font-size:9px;color:#38bdf8;font-weight:700;">Mobile PWA Print & PDF Viewer</div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button id="mobile-print-action-btn" style="background:linear-gradient(135deg,#06b6d4,#0284c7);color:#ffffff;border:none;font-weight:800;padding:8px 14px;border-radius:10px;font-size:12px;cursor:pointer;box-shadow:0 4px 12px rgba(6,182,212,0.3);">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button id="mobile-print-action-btn" style="background:linear-gradient(135deg,#06b6d4,#0284c7);color:#ffffff;border:none;font-weight:800;padding:8px 12px;border-radius:10px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 4px 12px rgba(6,182,212,0.3);">
           🖨️ Print / PDF
         </button>
-        <button id="mobile-share-action-btn" style="background:#334155;color:#fff;border:none;font-weight:700;padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;">
+        <button id="mobile-share-action-btn" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;font-weight:800;padding:8px 10px;border-radius:10px;font-size:11px;cursor:pointer;">
           📲 Share
         </button>
-        <button id="mobile-close-action-btn" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;">
+        <button id="mobile-close-action-btn" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;padding:8px 10px;border-radius:10px;font-size:11px;cursor:pointer;">
           ✕
         </button>
       </div>
@@ -171,36 +175,37 @@ export function executePrint(html: string, titleName: string = "Property Preserv
 
   closeBtn?.addEventListener("click", () => overlay.remove());
 
-  printBtn?.addEventListener("click", () => {
+  const handleMobilePrintOrShare = async () => {
+    // 1. Try Web Share API (native iOS / Android print & save PDF sheet)
     try {
-      if (iframeEl.contentWindow) {
-        iframeEl.contentWindow.focus();
-        iframeEl.contentWindow.print();
-      }
-    } catch (e) {
-      window.open(blobUrl, "_blank");
-    }
-  });
-
-  shareBtn?.addEventListener("click", async () => {
-    try {
-      if (typeof navigator !== "undefined" && navigator.share && navigator.canShare) {
-        const file = new File([blob], `${titleName.replace(/\s+/g, "_")}.html`, { type: "text/html" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: titleName });
+      if (typeof navigator !== "undefined" && navigator.share) {
+        const file = new File([cleanHtml], `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.html`, { type: "text/html" });
+        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: titleName,
+          });
           return;
         }
       }
-    } catch (err) {}
-    window.open(blobUrl, "_blank");
-  });
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+    }
 
-  // Auto trigger image check & print after iframe loads
-  iframeEl.onload = () => {
-    if (iframeEl.contentWindow && iframeEl.contentDocument) {
-      triggerPrintWhenImagesLoaded(iframeEl.contentWindow, iframeEl.contentDocument);
+    // 2. Fallback: Open Blob URL directly in a top-level tab/window
+    const newWin = window.open(blobUrl, "_blank");
+    if (!newWin || newWin.closed) {
+      try {
+        iframeEl.contentWindow?.focus();
+        iframeEl.contentWindow?.print();
+      } catch (e) {
+        window.location.href = blobUrl;
+      }
     }
   };
+
+  printBtn?.addEventListener("click", handleMobilePrintOrShare);
+  shareBtn?.addEventListener("click", handleMobilePrintOrShare);
 }
 
 /**
