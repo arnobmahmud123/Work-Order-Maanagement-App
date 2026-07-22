@@ -62,53 +62,18 @@ export async function triggerFileDownload(blobOrUrl: Blob | string, filename: st
   }
 }
 
+import { printTasksReport, printBidsReport } from "./print-reports";
+
 export function downloadSingleBid(bid: any, workOrderNumber?: string) {
-  const content = `=====================================================
-PROPERTY PRESERVATION BID PROPOSAL
-Work Order: #${workOrderNumber || "WO-ITEM"}
-Date: ${new Date().toLocaleDateString()}
-=====================================================
-
-ITEM TITLE: ${bid.title || "Untitled Bid"}
-STATUS: ${bid.status || "PENDING"}
-TOTAL AMOUNT: $${(bid.amount || 0).toLocaleString()}
-${bid.unit ? `UNIT: ${bid.unit}` : ""}
-${bid.quantity != null ? `QUANTITY: ${bid.quantity}` : ""}
-${bid.price != null ? `UNIT PRICE: $${bid.price.toFixed(2)}` : ""}
-
-DESCRIPTION:
-${bid.description || "No description provided"}
-
-ATTACHED PHOTOS (${bid.photos?.length || 0}):
-${bid.photos && bid.photos.length > 0 ? bid.photos.map((p: any, i: number) => `  ${i + 1}. ${p.name || p.originalName || "Photo"} - ${p.url || p.path}`).join("\n") : "  None"}
-=====================================================`;
-
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8;" });
-  triggerFileDownload(blob, `bid-${(bid.title || "item").toLowerCase().replace(/[^a-z0-9]/g, "-")}.txt`);
+  if (typeof window !== "undefined") {
+    printBidsReport([bid], workOrderNumber || "WO-ITEM");
+  }
 }
 
 export function downloadSingleTask(task: any, workOrderNumber?: string) {
-  const content = `=====================================================
-PROPERTY PRESERVATION TASK DETAILS
-Work Order: #${workOrderNumber || "WO-ITEM"}
-Date: ${new Date().toLocaleDateString()}
-=====================================================
-
-TASK TITLE: ${task.title || "Untitled Task"}
-STATUS: ${task.completed ? "COMPLETED" : "PENDING"}
-${task.completedAt ? `COMPLETED AT: ${new Date(task.completedAt).toLocaleString()}` : ""}
-${task.category ? `CATEGORY: ${task.category}` : ""}
-${task.price != null ? `ESTIMATED COST: $${task.price.toFixed(2)}` : ""}
-
-DESCRIPTION / INSTRUCTIONS:
-${task.description || "No description provided"}
-
-ATTACHED PHOTOS (${task.photos?.length || 0}):
-${task.photos && task.photos.length > 0 ? task.photos.map((p: any, i: number) => `  ${i + 1}. ${p.name || p.originalName || "Photo"} (${p.category || "GENERAL"}) - ${p.url || p.path}`).join("\n") : "  None"}
-=====================================================`;
-
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8;" });
-  triggerFileDownload(blob, `task-${(task.title || "item").toLowerCase().replace(/[^a-z0-9]/g, "-")}.txt`);
+  if (typeof window !== "undefined") {
+    printTasksReport([task], workOrderNumber || "WO-ITEM");
+  }
 }
 
 export function downloadSingleInspection(item: any, index: number, photos: any[] = [], workOrderNumber?: string) {

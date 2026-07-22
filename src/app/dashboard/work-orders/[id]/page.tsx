@@ -5754,10 +5754,10 @@ function PhotoLightbox({ photo, photos, selectedIndex, onPrev, onNext, onClose, 
           </button>
         </div>
 
-        {/* Top Action Header (Positioned Below Device Notch) */}
+        {/* Top Action Header (Positioned Safely Below Device Camera Notch) */}
         <div
           className="absolute right-3 flex items-center gap-2 z-50"
-          style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
+          style={{ top: "max(3.5rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
         >
           <button
             onClick={(e) => { e.stopPropagation(); downloadOriginal(); }}

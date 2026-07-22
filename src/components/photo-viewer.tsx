@@ -165,7 +165,7 @@ export function PhotoViewer({
     : null;
 
   return (
-    <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+    <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden" style={{ paddingTop: 'max(3.5rem, calc(env(safe-area-inset-top) + 0.5rem))' }}>
       <div className={cn("relative w-full max-w-[95vw] max-h-[95vh] mx-4 flex flex-col lg:flex-row overflow-hidden", className)}>
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 relative z-[9999]">
@@ -212,10 +212,11 @@ export function PhotoViewer({
             {/* Edit button */}
             <button
               onClick={() => setShowEditor(true)}
-              className="p-2 rounded-lg bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 transition-colors"
-              title="Edit photo"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white border border-violet-400/40 shadow-sm transition-all text-xs font-bold active:scale-95 cursor-pointer"
+              title="Edit photo (Draw, Crop, Text, Filters)"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-4 w-4 text-violet-200" />
+              <span>Edit</span>
             </button>
 
             {/* EXIF Info toggle */}

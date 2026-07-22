@@ -472,16 +472,17 @@ export default function SmsChatDashboard() {
         )}>
           {activePhone ? (
             <>
-              {/* Active Header */}
-              <div className="px-5 py-4 border-b border-border-subtle bg-surface-hover/30 flex items-center justify-between">
+              {/* Active Header (Sticky Top for Permanent Mobile Navigation) */}
+              <div className="sticky top-0 z-30 px-4 py-3.5 border-b border-border-subtle bg-surface/95 backdrop-blur-md flex items-center justify-between shadow-md">
                 <div className="flex items-center gap-2">
                   {/* Mobile Back Button */}
                   <button
                     onClick={() => setActivePhone(null)}
-                    className="lg:hidden p-1.5 hover:bg-surface-hover rounded-xl text-cyan-400 mr-1 shrink-0 flex items-center justify-center border border-border-subtle/50 bg-surface"
-                    title="Back to Threads"
+                    className="lg:hidden px-3 py-1.5 hover:bg-cyan-500/20 active:scale-95 transition-all rounded-xl text-cyan-400 font-semibold text-xs mr-2 shrink-0 flex items-center gap-1 border border-cyan-500/30 bg-cyan-950/60 shadow-sm cursor-pointer"
+                    title="Back to Conversation List"
                   >
-                    <ChevronLeft className="h-4.5 w-4.5" />
+                    <ChevronLeft className="h-4 w-4 shrink-0" />
+                    <span>Back</span>
                   </button>
 
                   <Avatar
@@ -697,8 +698,18 @@ export default function SmsChatDashboard() {
                   </button>
                 </div>
 
-                {/* Templates drop-down */}
-                <div className="relative flex gap-2">
+                {/* Templates drop-down & Mobile Quick Back */}
+                <div className="relative flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActivePhone(null)}
+                    className="lg:hidden text-xs text-cyan-400 hover:text-cyan-300 font-semibold py-1.5 px-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl flex items-center gap-1 shrink-0 active:scale-95 transition-all"
+                    title="Back to Conversation List"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span>Back</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setShowTemplatesDropdown(!showTemplatesDropdown)}
@@ -997,7 +1008,8 @@ export default function SmsChatDashboard() {
           <button
             type="button"
             onClick={() => setLightboxUrl(null)}
-            className="absolute top-4 right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shadow-lg backdrop-blur-md border border-white/10 cursor-pointer"
+            className="absolute right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shadow-lg backdrop-blur-md border border-white/10 cursor-pointer z-50"
+            style={{ top: "max(3.5rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
           >
             <X className="h-6 w-6" />
           </button>

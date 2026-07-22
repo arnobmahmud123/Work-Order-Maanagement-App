@@ -249,6 +249,23 @@ function PhotoBucket({
                       </div>
                     )}
 
+                    {/* Mobile Touch Quick Action Badge */}
+                    <div className="absolute top-1.5 right-1.5 flex md:hidden items-center gap-1 z-10">
+                      {onEdit && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(photo);
+                          }}
+                          className="p-1.5 rounded-lg bg-violet-950/90 text-violet-200 border border-violet-500/50 shadow-md backdrop-blur-md active:scale-95"
+                          title="Edit Photo"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
                     <div className="absolute inset-0 bg-black/0 md:group-hover:bg-black/40 transition-colors hidden md:flex items-center justify-center gap-1 opacity-0 md:group-hover:opacity-100">
                       <button
                         onClick={(e) => {
@@ -259,6 +276,18 @@ function PhotoBucket({
                       >
                         <ZoomIn className="h-3 w-3" />
                       </button>
+                      {onEdit && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(photo);
+                          }}
+                          className="p-1.5 rounded-lg bg-violet-600/80 text-white hover:bg-violet-600 transition-colors"
+                          title="Edit photo"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -763,8 +792,26 @@ function PhotoLightboxNav({
           </button>
         )}
 
-        {/* Top toolbar buttons */}
-        <div className="absolute top-4 right-4 flex gap-2 z-30">
+        {/* Top toolbar buttons (Positioned Below Device Notch) */}
+        <div 
+          className="absolute right-4 flex items-center gap-2 z-30"
+          style={{ top: "max(3.5rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
+        >
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(photo);
+                onClose();
+              }}
+              className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white border border-violet-400/40 shadow-lg shadow-violet-950/60 backdrop-blur-md transition-all flex items-center gap-1.5 text-xs font-bold active:scale-95 cursor-pointer"
+              title="Edit photo (Draw, Crop, Text, Filters)"
+            >
+              <Pencil className="h-4 w-4 text-violet-200" />
+              <span className="uppercase tracking-wider">Edit</span>
+            </button>
+          )}
+
           <button
             onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
             className={cn(

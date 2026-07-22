@@ -29,6 +29,7 @@ import {
   Download,
 } from "lucide-react";
 import { downloadSingleBid, downloadSingleTask } from "@/lib/download-helper";
+import { printTasksReport, printBidsReport } from "@/lib/print-reports";
 
 // ─── Unit Options ────────────────────────────────────────────────────────────
 
@@ -612,12 +613,24 @@ export function TaskEntryList({
               <p className="text-[10px] font-bold text-text-muted">{completedCount} of {totalCount} requirements met</p>
             </div>
           </div>
-          {totalCount > 0 && (
-            <div className="text-right">
-              <span className="text-lg font-black text-cyan-400 leading-none">{Math.round(progressPct)}%</span>
-              <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Completion</p>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => printTasksReport(tasks)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer"
+              title="Print / PDF Task Report"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Print Tasks Report</span>
+              <span className="sm:hidden">Print</span>
+            </button>
+
+            {totalCount > 0 && (
+              <div className="text-right">
+                <span className="text-lg font-black text-cyan-400 leading-none">{Math.round(progressPct)}%</span>
+                <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Completion</p>
+              </div>
+            )}
+          </div>
         </div>
         
         {totalCount > 0 && (
@@ -663,103 +676,108 @@ export function TaskEntryList({
                   : "bg-surface/60 backdrop-blur-md border-border-subtle hover:border-border-subtle hover:bg-surface-hover"
               )}
             >
-              {/* Task row */}
-              <div className="flex items-center gap-4 px-5 py-4">
-                <div className="text-[10px] font-black text-text-dim w-4 flex-shrink-0">
-                  {(idx + 1).toString().padStart(2, "0")}
-                </div>
+              {/* Mobile-Friendly Responsive Task Row */}
+              <div className="p-4 md:px-5 md:py-4 flex flex-col gap-3">
+                {/* Header Line (Number, Checkbox, Title, Badges, Expand Arrow) */}
+                <div className="flex items-center gap-3">
+                  <div className="text-[10px] font-black text-text-dim w-4 flex-shrink-0">
+                    {(idx + 1).toString().padStart(2, "0")}
+                  </div>
 
-                <button
-                  onClick={() => toggleComplete(task.id)}
-                  className="relative flex-shrink-0 group/check"
-                >
-                  {task.completed ? (
-                    <div className="h-6 w-6 rounded-lg bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 transition-transform group-active/check:scale-90">
-                      <CheckCircle2 className="h-4 w-4 text-white" />
-                    </div>
-                  ) : (
-                    <div className="h-6 w-6 rounded-lg border-2 border-border-medium group-hover/check:border-cyan-500/50 flex items-center justify-center transition-all group-active/check:scale-90">
-                      <div className="h-2 w-2 rounded-sm bg-surface-hover opacity-0 group-hover/check:opacity-100 transition-opacity" />
-                    </div>
-                  )}
-                </button>
+                  <button
+                    onClick={() => toggleComplete(task.id)}
+                    className="relative flex-shrink-0 group/check"
+                  >
+                    {task.completed ? (
+                      <div className="h-6 w-6 rounded-lg bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 transition-transform group-active/check:scale-90">
+                        <CheckCircle2 className="h-4 w-4 text-white" />
+                      </div>
+                    ) : (
+                      <div className="h-6 w-6 rounded-lg border-2 border-border-medium group-hover/check:border-cyan-500/50 flex items-center justify-center transition-all group-active/check:scale-90">
+                        <div className="h-2 w-2 rounded-sm bg-surface-hover opacity-0 group-hover/check:opacity-100 transition-opacity" />
+                      </div>
+                    )}
+                  </button>
 
-                <div className="flex-1 min-w-0">
-                  {editingId === task.id ? (
-                    <div className="space-y-3 py-1">
-                      <TaskNameSelector
-                        value={editTitle}
-                        onChange={(val) => {
-                          setEditTitle(val);
-                          const matched = EXCEL_TASKS.find((t) => t.name === val);
-                          if (matched && matched.description) {
-                            setEditDesc(matched.description);
-                          }
-                        }}
-                        placeholder="Search task names..."
-                      />
-                      <textarea
-                        value={editDesc}
-                        onChange={(e) => setEditDesc(e.target.value)}
-                        placeholder="Add directions or description..."
-                        rows={2}
-                        className="w-full px-3 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-secondary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 resize-none"
-                      />
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit</label>
-                          <UnitSelector value={editUnit} onChange={setEditUnit} />
+                  {/* Title & Badges Header */}
+                  <div 
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => toggleExpand(task.id)}
+                  >
+                    {editingId === task.id ? (
+                      <div className="space-y-3 py-1" onClick={(e) => e.stopPropagation()}>
+                        <TaskNameSelector
+                          value={editTitle}
+                          onChange={(val) => {
+                            setEditTitle(val);
+                            const matched = EXCEL_TASKS.find((t) => t.name === val);
+                            if (matched && matched.description) {
+                              setEditDesc(matched.description);
+                            }
+                          }}
+                          placeholder="Search task names..."
+                        />
+                        <textarea
+                          value={editDesc}
+                          onChange={(e) => setEditDesc(e.target.value)}
+                          placeholder="Add directions or description..."
+                          rows={2}
+                          className="w-full px-3 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-secondary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 resize-none"
+                        />
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit</label>
+                            <UnitSelector value={editUnit} onChange={setEditUnit} />
+                          </div>
+                          <div>
+                            <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Quantity</label>
+                            <input
+                              type="number"
+                              value={editQty}
+                              onChange={(e) => setEditQty(e.target.value)}
+                              min={0}
+                              step={0.01}
+                              placeholder="0"
+                              className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-text-primary text-right outline-none focus:border-cyan-500/50"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit Price ($)</label>
+                            <input
+                              type="number"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              min={0}
+                              step={0.01}
+                              placeholder="0.00"
+                              className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-emerald-400 text-right outline-none focus:border-emerald-500/50"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Quantity</label>
-                          <input
-                            type="number"
-                            value={editQty}
-                            onChange={(e) => setEditQty(e.target.value)}
-                            min={0}
-                            step={0.01}
-                            placeholder="0"
-                            className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-text-primary text-right outline-none focus:border-cyan-500/50"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit Price ($)</label>
-                          <input
-                            type="number"
-                            value={editPrice}
-                            onChange={(e) => setEditPrice(e.target.value)}
-                            min={0}
-                            step={0.01}
-                            placeholder="0.00"
-                            className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-emerald-400 text-right outline-none focus:border-emerald-500/50"
-                          />
+                        {autoEditTaskTotal !== null && (
+                          <div className="flex items-center gap-2 px-1">
+                            <span className="text-[9px] font-bold text-text-dim uppercase tracking-wider">Total:</span>
+                            <span className="text-xs font-black text-emerald-400">${autoEditTaskTotal.toFixed(2)}</span>
+                            <span className="text-[8px] text-emerald-400/50">({editQty} × ${parseFloat(editPrice).toFixed(2)})</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => saveEdit(task.id)}
+                            className="px-4 py-1.5 rounded-lg bg-cyan-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-cyan-400 transition-colors"
+                          >
+                            Save Changes
+                          </button>
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className="px-4 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-black uppercase tracking-widest hover:bg-surface-hover transition-colors"
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </div>
-                      {autoEditTaskTotal !== null && (
-                        <div className="flex items-center gap-2 px-1">
-                          <span className="text-[9px] font-bold text-text-dim uppercase tracking-wider">Total:</span>
-                          <span className="text-xs font-black text-emerald-400">${autoEditTaskTotal.toFixed(2)}</span>
-                          <span className="text-[8px] text-emerald-400/50">({editQty} × ${parseFloat(editPrice).toFixed(2)})</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => saveEdit(task.id)}
-                          className="px-4 py-1.5 rounded-lg bg-cyan-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-cyan-400 transition-colors"
-                        >
-                          Save Changes
-                        </button>
-                        <button
-                          onClick={() => setEditingId(null)}
-                          className="px-4 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-black uppercase tracking-widest hover:bg-surface-hover transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
                         <h4
                           className={cn(
                             "text-sm font-bold transition-colors",
@@ -791,57 +809,88 @@ export function TaskEntryList({
                           </span>
                         )}
                       </div>
-                      {task.description && (
-                        <p className="text-xs text-text-secondary mt-1 whitespace-pre-wrap leading-relaxed">
-                          {task.description}
-                        </p>
-                      )}
-                      {(task.unit || task.quantity != null || task.price != null) && (
-                        <div className="flex items-center gap-2 mt-1.5">
-                          {task.unit && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-wider">
-                              {task.unit}
-                            </span>
-                          )}
-                          {task.quantity != null && (
-                            <span className="text-[9px] font-bold text-text-muted">
-                              Qty: {task.quantity}
-                            </span>
-                          )}
-                          {task.price != null && (
-                            <span className="text-[9px] font-bold text-emerald-400">
-                              ${task.price.toFixed(2)}/{task.unit || "ea"}
-                            </span>
-                          )}
-                          {task.quantity != null && task.price != null && (
-                            <span className="text-[9px] font-black text-amber-400 ml-auto">
-                              {task.quantity} × ${task.price.toFixed(2)} = ${(task.quantity * task.price).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <div className="flex -space-x-2 mr-2">
-                    {task.photos.slice(0, 3).map((p, i) => (
-                      <div key={p.id} className="h-7 w-7 rounded-lg border-2 border-border-subtle overflow-hidden bg-surface shadow-lg">
-                        <img src={p.url} className="h-full w-full object-cover" />
-                      </div>
-                    ))}
-                    {task.photos.length > 3 && (
-                      <div className="h-7 w-7 rounded-lg border-2 border-border-subtle bg-surface-hover flex items-center justify-center text-[8px] font-black text-text-secondary shadow-lg">
-                        +{task.photos.length - 3}
-                      </div>
                     )}
                   </div>
 
-                  <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1">
+                  {/* Expand Chevron Button (Always Prominent & Easy to Click on Mobile!) */}
+                  <button
+                    onClick={() => toggleExpand(task.id)}
+                    className="p-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all border border-cyan-500/30 shrink-0 ml-auto flex items-center justify-center"
+                    title="Toggle Task Photos & Details"
+                  >
+                    {task.expanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Task Details & Description (Un-squashed, full width!) */}
+                {editingId !== task.id && (
+                  <div className="pl-7 md:pl-9 space-y-1">
+                    {task.description && (
+                      <p className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed">
+                        {task.description}
+                      </p>
+                    )}
+                    {(task.unit || task.quantity != null || task.price != null) && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {task.unit && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-wider">
+                            {task.unit}
+                          </span>
+                        )}
+                        {task.quantity != null && (
+                          <span className="text-[9px] font-bold text-text-muted">
+                            Qty: {task.quantity}
+                          </span>
+                        )}
+                        {task.price != null && (
+                          <span className="text-[9px] font-bold text-emerald-400">
+                            ${task.price.toFixed(2)}/{task.unit || "ea"}
+                          </span>
+                        )}
+                        {task.quantity != null && task.price != null && (
+                          <span className="text-[9px] font-black text-amber-400">
+                            ({task.quantity} × ${task.price.toFixed(2)} = ${(task.quantity * task.price).toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Bottom Row: Photo Thumbnails & Action Icons Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border-subtle/50 pl-7 md:pl-9">
+                  {/* Photo Thumbnails Preview */}
+                  {task.photos && task.photos.length > 0 ? (
+                    <div 
+                      className="flex items-center -space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => toggleExpand(task.id)}
+                    >
+                      {task.photos.slice(0, 3).map((p) => (
+                        <div key={p.id} className="h-8 w-8 rounded-lg border-2 border-border-subtle overflow-hidden bg-surface shadow-md">
+                          <img src={p.url} className="h-full w-full object-cover" />
+                        </div>
+                      ))}
+                      {task.photos.length > 3 && (
+                        <div className="h-8 w-8 rounded-lg border-2 border-border-subtle bg-surface-hover flex items-center justify-center text-[9px] font-black text-cyan-400 shadow-md">
+                          +{task.photos.length - 3}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-text-dim flex items-center gap-1">
+                      <Camera className="h-3 w-3" /> No photos attached
+                    </span>
+                  )}
+
+                  {/* Task Actions Toolbar */}
+                  <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1 ml-auto">
                     <button
                       onClick={() => downloadSingleTask(task)}
-                      className="p-2 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
+                      className="p-1.5 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
                       title="Download Task Details"
                     >
                       <Download className="h-3.5 w-3.5" />
@@ -850,10 +899,10 @@ export function TaskEntryList({
                     <button
                       onClick={() => toggleExpand(task.id)}
                       className={cn(
-                        "p-2 rounded-lg transition-all",
+                        "p-1.5 rounded-lg transition-all",
                         task.expanded ? "bg-cyan-500 text-white shadow-lg" : "text-text-muted hover:text-text-secondary hover:bg-surface-hover"
                       )}
-                      title="Documentation"
+                      title="Documentation / Photos"
                     >
                       <Camera className="h-3.5 w-3.5" />
                     </button>
@@ -861,7 +910,7 @@ export function TaskEntryList({
                     <button
                       onClick={() => toggleChat(task.id)}
                       className={cn(
-                        "p-2 rounded-lg transition-all relative",
+                        "p-1.5 rounded-lg transition-all relative",
                         task.chatOpen ? "bg-violet-500 text-white shadow-lg" : "text-text-muted hover:text-text-secondary hover:bg-surface-hover"
                       )}
                       title="Task Communication"
@@ -878,7 +927,7 @@ export function TaskEntryList({
 
                     <button
                       onClick={() => startEdit(task)}
-                      className="p-2 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-all"
+                      className="p-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-all"
                       title="Edit Protocol"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
@@ -892,7 +941,7 @@ export function TaskEntryList({
                             updateTaskStatus(task.id, "REJECTED", note || "Not needed");
                           }
                         }}
-                        className="p-2 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                        className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
                         title="Mark Unnecessary"
                       >
                         <XCircle className="h-3.5 w-3.5" />
@@ -901,23 +950,12 @@ export function TaskEntryList({
 
                     <button
                       onClick={() => removeTask(task.id)}
-                      className="p-2 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
                       title="Delete Entry"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  
-                  <button
-                    onClick={() => toggleExpand(task.id)}
-                    className="p-2 rounded-xl text-text-dim hover:text-text-secondary transition-all ml-1"
-                  >
-                    {task.expanded ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </button>
                 </div>
               </div>
 
@@ -2591,11 +2629,23 @@ export function BidEntryList({
             <p className="text-[10px] font-bold text-text-muted">{bids.length} proposed bid{bids.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
-        <div className="text-right">
-          <span className="text-lg font-black text-emerald-400 leading-none">
-            ${totalAmount.toLocaleString()}
-          </span>
-          <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Projected Value</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => printBidsReport(bids)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer"
+            title="Print / PDF Bid Proposal"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Print Bids Proposal</span>
+            <span className="sm:hidden">Print</span>
+          </button>
+
+          <div className="text-right">
+            <span className="text-lg font-black text-emerald-400 leading-none">
+              ${totalAmount.toLocaleString()}
+            </span>
+            <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Projected Value</p>
+          </div>
         </div>
       </div>
 
@@ -2616,145 +2666,192 @@ export function BidEntryList({
                   : "bg-surface/60 backdrop-blur-md border-border-subtle hover:border-border-subtle hover:bg-surface-hover"
               )}
             >
-              <div className="flex items-center gap-4 px-5 py-4">
-                <div className="h-10 w-10 rounded-xl bg-surface-hover flex items-center justify-center border border-border-subtle group-hover:scale-110 transition-transform">
-                  <DollarSign className="h-5 w-5 text-emerald-400" />
+              {/* Mobile-Friendly Responsive Bid Row */}
+              <div className="p-4 md:px-5 md:py-4 flex flex-col gap-3">
+                {/* Top Row: Dollar Icon, Title, Status, Amount & Expand Chevron Arrow */}
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-surface-hover flex items-center justify-center border border-border-subtle shrink-0">
+                    <DollarSign className="h-5 w-5 text-emerald-400" />
+                  </div>
+
+                  <div 
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => toggleExpand(bid.id)}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-bold text-text-primary">{bid.title}</h4>
+                      <span className={cn(
+                        "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border",
+                        statusColors[bid.status]
+                      )}>
+                        {bid.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-sm font-black text-emerald-400">${bid.amount.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Expand Chevron Button (Always Prominent & Easy to Click on Mobile!) */}
+                  <button
+                    onClick={() => toggleExpand(bid.id)}
+                    className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all border border-emerald-500/30 shrink-0 ml-auto flex items-center justify-center"
+                    title="Toggle Bid Details & Documentation"
+                  >
+                    {bid.expanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  {editingId === bid.id ? (
-                    <div className="space-y-3 py-1">
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="col-span-2">
-                          <BidItemSelector
-                            value={editTitle}
-                            onChange={(val) => {
-                              setEditTitle(val);
-                              const matched = EXCEL_TASKS.find((t) => t.name === val);
-                              if (matched && matched.description) {
-                                setEditDesc(matched.description);
-                              }
-                            }}
-                            placeholder="Search bid items..."
-                          />
-                        </div>
-                        <div>
-                          <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-dim" />
-                            <input
-                              type="number"
-                              value={editAmount}
-                              readOnly
-                              tabIndex={-1}
-                              className={cn(
-                                "w-full pl-8 pr-4 py-2 bg-surface-hover border rounded-xl text-sm font-black outline-none cursor-default",
-                                autoEditAmount !== null
-                                  ? "border-emerald-500/30 text-emerald-400"
-                                  : "border-border-medium text-emerald-400"
-                              )}
-                            />
-                          </div>
-                          {autoEditAmount !== null && (
-                            <p className="text-[8px] font-bold text-emerald-400/60 mt-0.5 px-1">
-                              {editBidQty} × ${parseFloat(editBidPrice).toFixed(2)} = ${autoEditAmount.toFixed(2)}
-                            </p>
-                          )}
-                        </div>
+                {/* Edit Form or Un-squashed Description */}
+                {editingId === bid.id ? (
+                  <div className="space-y-3 py-1">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <BidItemSelector
+                          value={editTitle}
+                          onChange={(val) => {
+                            setEditTitle(val);
+                            const matched = EXCEL_TASKS.find((t) => t.name === val);
+                            if (matched && matched.description) {
+                              setEditDesc(matched.description);
+                            }
+                          }}
+                          placeholder="Search bid items..."
+                        />
                       </div>
-                      <textarea
-                        value={editDesc}
-                        onChange={(e) => setEditDesc(e.target.value)}
-                        placeholder="Provide justification..."
-                        className="w-full px-4 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-secondary focus:border-emerald-500/50 focus:outline-none resize-none"
-                        rows={2}
-                      />
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit</label>
-                          <UnitSelector value={editBidUnit} onChange={setEditBidUnit} />
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Quantity</label>
+                      <div>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-dim" />
                           <input
                             type="number"
-                            value={editBidQty}
-                            onChange={(e) => setEditBidQty(e.target.value)}
-                            min={0}
-                            step={0.01}
-                            placeholder="0"
-                            className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-text-primary text-right outline-none focus:border-cyan-500/50"
+                            value={editAmount}
+                            readOnly
+                            tabIndex={-1}
+                            className={cn(
+                              "w-full pl-8 pr-4 py-2 bg-surface-hover border rounded-xl text-sm font-black outline-none cursor-default",
+                              autoEditAmount !== null
+                                ? "border-emerald-500/30 text-emerald-400"
+                                : "border-border-medium text-emerald-400"
+                            )}
                           />
                         </div>
-                        <div>
-                          <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit Price ($)</label>
-                          <input
-                            type="number"
-                            value={editBidPrice}
-                            onChange={(e) => setEditBidPrice(e.target.value)}
-                            min={0}
-                            step={0.01}
-                            placeholder="0.00"
-                            className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-emerald-400 text-right outline-none focus:border-emerald-500/50"
-                          />
+                        {autoEditAmount !== null && (
+                          <p className="text-[8px] font-bold text-emerald-400/60 mt-0.5 px-1">
+                            {editBidQty} × ${parseFloat(editBidPrice).toFixed(2)} = ${autoEditAmount.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <textarea
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      placeholder="Provide justification..."
+                      className="w-full px-4 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-secondary focus:border-emerald-500/50 focus:outline-none resize-none"
+                      rows={2}
+                    />
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit</label>
+                        <UnitSelector value={editBidUnit} onChange={setEditBidUnit} />
+                      </div>
+                      <div>
+                        <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Quantity</label>
+                        <input
+                          type="number"
+                          value={editBidQty}
+                          onChange={(e) => setEditBidQty(e.target.value)}
+                          min={0}
+                          step={0.01}
+                          placeholder="0"
+                          className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-text-primary text-right outline-none focus:border-cyan-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider mb-1 block">Unit Price ($)</label>
+                        <input
+                          type="number"
+                          value={editBidPrice}
+                          onChange={(e) => setEditBidPrice(e.target.value)}
+                          min={0}
+                          step={0.01}
+                          placeholder="0.00"
+                          className="w-full bg-surface-hover border border-border-medium rounded-lg px-2 py-1.5 text-xs text-emerald-400 text-right outline-none focus:border-emerald-500/50"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => saveEdit(bid.id)} className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-colors">Update Bid</button>
+                      <button onClick={() => setEditingId(null)} className="px-4 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-black uppercase tracking-widest">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {bid.description && (
+                      <p className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed">
+                        {bid.description}
+                      </p>
+                    )}
+                    {(bid.unit || bid.quantity != null || bid.price != null) && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {bid.unit && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                            {bid.unit}
+                          </span>
+                        )}
+                        {bid.quantity != null && (
+                          <span className="text-[9px] font-bold text-text-muted">
+                            Qty: {bid.quantity}
+                          </span>
+                        )}
+                        {bid.price != null && (
+                          <span className="text-[9px] font-bold text-emerald-400">
+                            ${bid.price.toFixed(2)}/{bid.unit || "ea"}
+                          </span>
+                        )}
+                        {bid.quantity != null && bid.price != null && (
+                          <span className="text-[9px] font-black text-amber-400">
+                            ({bid.quantity} × ${bid.price.toFixed(2)} = ${(bid.quantity * bid.price).toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Bottom Row: Photo Thumbnails & Action Icons Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border-subtle/50">
+                  {/* Photo Thumbnails Preview */}
+                  {bid.photos && bid.photos.length > 0 ? (
+                    <div 
+                      className="flex items-center -space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => toggleExpand(bid.id)}
+                    >
+                      {bid.photos.slice(0, 3).map((p) => (
+                        <div key={p.id} className="h-8 w-8 rounded-lg border-2 border-border-subtle overflow-hidden bg-surface shadow-md">
+                          <img src={p.url} className="h-full w-full object-cover" />
                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => saveEdit(bid.id)} className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-colors">Update Bid</button>
-                        <button onClick={() => setEditingId(null)} className="px-4 py-1.5 rounded-lg bg-surface-hover text-text-secondary text-[10px] font-black uppercase tracking-widest">Cancel</button>
-                      </div>
+                      ))}
+                      {bid.photos.length > 3 && (
+                        <div className="h-8 w-8 rounded-lg border-2 border-border-subtle bg-surface-hover flex items-center justify-center text-[9px] font-black text-emerald-400 shadow-md">
+                          +{bid.photos.length - 3}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h4 className="text-sm font-bold text-text-primary">{bid.title}</h4>
-                        <span className={cn(
-                          "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border",
-                          statusColors[bid.status]
-                        )}>
-                          {bid.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-sm font-black text-emerald-400">${bid.amount.toLocaleString()}</span>
-                      </div>
-                      {bid.description && (
-                        <p className="text-xs text-text-secondary mt-1 whitespace-pre-wrap leading-relaxed">
-                          {bid.description}
-                        </p>
-                      )}
-                      {(bid.unit || bid.quantity != null || bid.price != null) && (
-                        <div className="flex items-center gap-2 mt-1.5">
-                          {bid.unit && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
-                              {bid.unit}
-                            </span>
-                          )}
-                          {bid.quantity != null && (
-                            <span className="text-[9px] font-bold text-text-muted">
-                              Qty: {bid.quantity}
-                            </span>
-                          )}
-                          {bid.price != null && (
-                            <span className="text-[9px] font-bold text-emerald-400">
-                              ${bid.price.toFixed(2)}/{bid.unit || "ea"}
-                            </span>
-                          )}
-                          {bid.quantity != null && bid.price != null && (
-                            <span className="text-[9px] font-black text-amber-400 ml-auto">
-                              {bid.quantity} × ${bid.price.toFixed(2)} = ${(bid.quantity * bid.price).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <span className="text-[10px] text-text-dim flex items-center gap-1">
+                      <Camera className="h-3 w-3" /> No photos attached
+                    </span>
                   )}
-                </div>
 
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1">
+                  {/* Bid Action Toolbar */}
+                  <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1 ml-auto">
                     <button
                       onClick={() => downloadSingleBid(bid)}
-                      className="p-2 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
+                      className="p-1.5 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
                       title="Download Bid Proposal"
                     >
                       <Download className="h-3.5 w-3.5" />
@@ -2762,10 +2859,10 @@ export function BidEntryList({
                     <button
                       onClick={() => toggleExpand(bid.id)}
                       className={cn(
-                        "p-2 rounded-lg transition-all",
+                        "p-1.5 rounded-lg transition-all",
                         bid.expanded ? "bg-emerald-500 text-white shadow-lg" : "text-text-muted hover:text-text-secondary hover:bg-surface-hover"
                       )}
-                      title="Documentation"
+                      title="Documentation / Photos"
                     >
                       <Camera className="h-3.5 w-3.5" />
                     </button>
@@ -2777,7 +2874,8 @@ export function BidEntryList({
                         setEditAmount(String(bid.amount));
                         setEditDesc(bid.description || "");
                       }}
-                      className="p-2 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-all"
+                      className="p-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-all"
+                      title="Edit Bid"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
                     </button>
@@ -2786,13 +2884,15 @@ export function BidEntryList({
                       <>
                         <button
                           onClick={() => updateStatus(bid.id, "APPROVED")}
-                          className="p-2 rounded-lg text-text-muted hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                          className="p-1.5 rounded-lg text-text-muted hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                          title="Approve Bid"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => updateStatus(bid.id, "REJECTED")}
-                          className="p-2 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                          className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                          title="Reject Bid"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -2801,18 +2901,12 @@ export function BidEntryList({
 
                     <button
                       onClick={() => removeBid(bid.id)}
-                      className="p-2 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      title="Delete Bid"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-
-                  <button
-                    onClick={() => toggleExpand(bid.id)}
-                    className="p-2 rounded-xl text-text-dim hover:text-text-secondary transition-all ml-1"
-                  >
-                    {bid.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
                 </div>
               </div>
 
