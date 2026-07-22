@@ -615,7 +615,7 @@ export function TaskEntryList({
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => printTasksReport(tasks)}
+              onClick={() => toast.promise(printTasksReport(tasks), { loading: "Preparing PDF...", success: "PDF Ready", error: "Failed to generate PDF" })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer"
               title="Print / PDF Task Report"
             >
@@ -2631,7 +2631,7 @@ export function BidEntryList({
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => printBidsReport(bids)}
+            onClick={() => toast.promise(printBidsReport(bids), { loading: "Preparing PDF...", success: "PDF Ready", error: "Failed to generate PDF" })}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer"
             title="Print / PDF Bid Proposal"
           >

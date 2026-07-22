@@ -44,6 +44,28 @@ export function getAbsolutePhotoUrl(photo: any): string {
 }
 
 /**
+ * Helper to convert any image URL (including local blob: URLs) to a base64 data URI.
+ * This ensures images appear correctly when the HTML is passed to the iOS Share Sheet / native PDF generator,
+ * which does not have access to the browser's blob object space or session cookies.
+ */
+export async function imageToBase64(url: string): Promise<string> {
+  if (!url || url.startsWith("data:")) return url;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn("Could not convert image to base64 for PDF export:", url, err);
+    return url; // Fallback to original URL
+  }
+}
+
+/**
  * Universal print trigger optimized for Desktop, iOS Safari, Android Chrome, PWAs, and WebViews.
  * Respects Mobile Safe Areas (iPhone Notch/Dynamic Island), strips duplicate inner toolbars, 
  * and provides robust native AirPrint, PDF Save, and Web Share actions.
@@ -211,7 +233,7 @@ export function executePrint(html: string, titleName: string = "Property Preserv
 /**
  * Generates and prints a colorful, professional PDF/Print report for Tasks with embedded Before, During & After photos.
  */
-export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: string = "WO-SUMMARY") {
+export async function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: string = "WO-SUMMARY") {
   if (!tasks || tasks.length === 0) return;
 
   // Deduplicate tasks to ensure no single task is rendered twice
@@ -222,7 +244,23 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
       uniqueTasksMap.set(key, t);
     }
   });
-  const uniqueTasks = Array.from(uniqueTasksMap.values());
+  
+  // Pre-process tasks: convert all photos to Base64 so they render reliably in iOS Share Sheet / PDF
+  let uniqueTasks = Array.from(uniqueTasksMap.values());
+  uniqueTasks = await Promise.all(
+    uniqueTasks.map(async (t) => {
+      if (!t.photos || t.photos.length === 0) return t;
+      const processedPhotos = await Promise.all(
+        t.photos.map(async (p) => {
+          const absUrl = getAbsolutePhotoUrl(p);
+          const b64 = await imageToBase64(absUrl);
+          return { ...p, base64Data: b64 };
+        })
+      );
+      return { ...t, photos: processedPhotos };
+    })
+  );
+
   const isSingleItem = uniqueTasks.length === 1;
 
   const totalCost = uniqueTasks.reduce((sum, t) => {
@@ -408,7 +446,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${beforePhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
+                  <img src="${p.base64Data || getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "Before Photo"}</div>
                 </div>
               `).join("")}
@@ -420,7 +458,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${duringPhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
+                  <img src="${p.base64Data || getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "During Photo"}</div>
                 </div>
               `).join("")}
@@ -432,7 +470,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${afterPhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
+                  <img src="${p.base64Data || getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "After Photo"}</div>
                 </div>
               `).join("")}
@@ -444,7 +482,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${generalPhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
+                  <img src="${p.base64Data || getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "Photo"}</div>
                 </div>
               `).join("")}
@@ -464,7 +502,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
 /**
  * Generates and prints a colorful, professional PDF/Print financial bid proposal report with bid documentation photos.
  */
-export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string = "WO-SUMMARY") {
+export async function printBidsReport(bids: ReportBidItem[], workOrderNumber: string = "WO-SUMMARY") {
   if (!bids || bids.length === 0) return;
 
   // Deduplicate bids to ensure no single bid item is printed twice
@@ -475,7 +513,23 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
       uniqueBidsMap.set(key, b);
     }
   });
-  const uniqueBids = Array.from(uniqueBidsMap.values());
+
+  // Pre-process bids: convert all photos to Base64 so they render reliably in iOS Share Sheet / PDF
+  let uniqueBids = Array.from(uniqueBidsMap.values());
+  uniqueBids = await Promise.all(
+    uniqueBids.map(async (b) => {
+      if (!b.photos || b.photos.length === 0) return b;
+      const processedPhotos = await Promise.all(
+        b.photos.map(async (p) => {
+          const absUrl = getAbsolutePhotoUrl(p);
+          const b64 = await imageToBase64(absUrl);
+          return { ...p, base64Data: b64 };
+        })
+      );
+      return { ...b, photos: processedPhotos };
+    })
+  );
+
   const isSingleItem = uniqueBids.length === 1;
 
   const totalAmount = uniqueBids.reduce((sum, b) => sum + (b.amount || 0), 0);
@@ -644,7 +698,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
           <div class="photo-grid">
             ${b.photos.map(p => `
               <div class="photo-item">
-                <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
+                <img src="${p.base64Data || getAbsolutePhotoUrl(p)}" class="photo-img" />
                 <div class="photo-tag">${p.name || "Bid Photo"}</div>
               </div>
             `).join("")}
