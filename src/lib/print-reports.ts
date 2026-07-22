@@ -13,13 +13,7 @@ export interface ReportTaskItem {
   unit?: string;
   quantity?: number;
   price?: number;
-  photos?: {
-    id?: string;
-    url: string;
-    name?: string;
-    category?: string;
-    timestamp?: string;
-  }[];
+  photos?: any[];
 }
 
 export interface ReportBidItem {
@@ -31,23 +25,79 @@ export interface ReportBidItem {
   unit?: string;
   quantity?: number;
   price?: number;
-  photos?: {
-    id?: string;
-    url: string;
-    name?: string;
-    category?: string;
-    timestamp?: string;
-  }[];
+  photos?: any[];
 }
 
 /**
- * Universal print trigger that works reliably on desktop and mobile browsers/WebViews.
- * On mobile devices where window.open() popup windows are blocked, it injects a hidden iframe.
+ * Normalizes relative API/file URLs into absolute HTTPS URLs so print windows & hidden iframes load photos properly.
+ */
+export function getAbsolutePhotoUrl(photo: any): string {
+  const url = photo?.url || photo?.rawUrl || photo?.path || (typeof photo === "string" ? photo : "");
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
+    return url;
+  }
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}${url.startsWith("/") ? "" : "/"}${url}`;
+  }
+  return url;
+}
+
+/**
+ * Universal print trigger that waits for all images to finish downloading before triggering native print preview.
  */
 function executePrint(html: string) {
   if (typeof window === "undefined") return;
 
-  // Attempt window.open first (desktop preference)
+  // Function to wait for images to load before calling print()
+  const triggerPrintWhenImagesLoaded = (win: Window, doc: Document) => {
+    const imgs = Array.from(doc.querySelectorAll("img"));
+    if (imgs.length === 0) {
+      setTimeout(() => {
+        try {
+          win.focus();
+          win.print();
+        } catch (e) {}
+      }, 300);
+      return;
+    }
+
+    let loadedCount = 0;
+    const totalImgs = imgs.length;
+
+    const checkComplete = () => {
+      loadedCount++;
+      if (loadedCount >= totalImgs) {
+        setTimeout(() => {
+          try {
+            win.focus();
+            win.print();
+          } catch (e) {}
+        }, 300);
+      }
+    };
+
+    imgs.forEach((img) => {
+      if (img.complete && img.naturalHeight !== 0) {
+        checkComplete();
+      } else {
+        img.addEventListener("load", checkComplete);
+        img.addEventListener("error", checkComplete);
+      }
+    });
+
+    // Safety timeout after 2.5 seconds
+    setTimeout(() => {
+      if (loadedCount < totalImgs) {
+        try {
+          win.focus();
+          win.print();
+        } catch (e) {}
+      }
+    }, 2500);
+  };
+
+  // 1. Try window.open first (Desktop default)
   let printWindow: Window | null = null;
   try {
     printWindow = window.open("", "_blank");
@@ -55,7 +105,7 @@ function executePrint(html: string) {
     printWindow = null;
   }
 
-  // If window.open was blocked (common on iOS Safari / Android Chrome / PWAs / WebViews), use hidden iframe
+  // 2. If window.open was blocked (iOS Safari / Android Chrome / Mobile PWAs), use hidden iframe
   if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
     let iframe = document.getElementById("mobile-print-frame") as HTMLIFrameElement;
     if (!iframe) {
@@ -71,35 +121,23 @@ function executePrint(html: string) {
       document.body.appendChild(iframe);
     }
 
-    const doc = iframe.contentWindow?.document || iframe.contentDocument;
-    if (doc) {
+    const iframeWin = iframe.contentWindow;
+    const doc = iframeWin?.document || iframe.contentDocument;
+    if (doc && iframeWin) {
       doc.open();
       doc.write(html);
       doc.close();
-
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (err) {
-          console.error("Mobile iframe print failed:", err);
-        }
-      }, 500);
+      triggerPrintWhenImagesLoaded(iframeWin, doc);
     }
     return;
   }
 
-  // If popup window opened successfully:
+  // 3. Desktop Popup Window
   try {
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
-    setTimeout(() => {
-      try {
-        printWindow?.focus();
-        printWindow?.print();
-      } catch (e) {}
-    }, 500);
+    triggerPrintWhenImagesLoaded(printWindow, printWindow.document);
   } catch (err) {
     console.error("Popup document write error:", err);
   }
@@ -127,10 +165,13 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     day: "numeric",
   });
 
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <base href="${origin}/" />
   <title>Task Report - #${workOrderNumber}</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -172,8 +213,8 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     .photo-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
     .photo-stage-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 6px 0; color: #0284c7; }
     .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
-    .photo-item { border-radius: 8px; overflow: hidden; border: 1px solid #cbd5e1; background: #000; position: relative; height: 110px; }
-    .photo-img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-item { border-radius: 8px; overflow: hidden; border: 1px solid #cbd5e1; background: #f1f5f9; position: relative; height: 110px; }
+    .photo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .photo-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.75); color: #fff; font-size: 8px; padding: 2px 4px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
   </style>
 </head>
@@ -293,7 +334,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${beforePhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${p.url}" class="photo-img" loading="lazy" />
+                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "Before Photo"}</div>
                 </div>
               `).join("")}
@@ -305,7 +346,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${duringPhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${p.url}" class="photo-img" loading="lazy" />
+                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "During Photo"}</div>
                 </div>
               `).join("")}
@@ -317,7 +358,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${afterPhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${p.url}" class="photo-img" loading="lazy" />
+                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "After Photo"}</div>
                 </div>
               `).join("")}
@@ -329,7 +370,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
             <div class="photo-grid">
               ${generalPhotos.map(p => `
                 <div class="photo-item">
-                  <img src="${p.url}" class="photo-img" loading="lazy" />
+                  <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
                   <div class="photo-tag">${p.name || "Photo"}</div>
                 </div>
               `).join("")}
@@ -365,10 +406,13 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     day: "numeric",
   });
 
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <base href="${origin}/" />
   <title>Financial Bid Proposal - #${workOrderNumber}</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -410,8 +454,8 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
 
     .photo-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
     .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 8px; }
-    .photo-item { border-radius: 8px; overflow: hidden; border: 1px solid #cbd5e1; background: #000; position: relative; height: 110px; }
-    .photo-img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-item { border-radius: 8px; overflow: hidden; border: 1px solid #cbd5e1; background: #f1f5f9; position: relative; height: 110px; }
+    .photo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .photo-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.75); color: #fff; font-size: 8px; padding: 2px 4px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
   </style>
 </head>
@@ -517,7 +561,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
           <div class="photo-grid">
             ${b.photos.map(p => `
               <div class="photo-item">
-                <img src="${p.url}" class="photo-img" loading="lazy" />
+                <img src="${getAbsolutePhotoUrl(p)}" class="photo-img" />
                 <div class="photo-tag">${p.name || "Bid Photo"}</div>
               </div>
             `).join("")}
