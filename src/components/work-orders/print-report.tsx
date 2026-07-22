@@ -6,6 +6,7 @@ import {
   SERVICE_TYPE_LABELS,
   STATUS_LABELS,
 } from "@/lib/utils";
+import { executePrint } from "@/lib/print-reports";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1084,51 +1085,7 @@ export function printWorkOrder(data: PrintData) {
 </body>
 </html>`;
 
-  // Open in new window or use hidden iframe for mobile printing
-  const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  let printWindow: Window | null = null;
-  if (!isMobile) {
-    try {
-      printWindow = window.open("", "_blank", "width=1000,height=800");
-    } catch {
-      printWindow = null;
-    }
-  }
-
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
-  } else {
-    // Hidden iframe print for Mobile Web & Capacitor (bypasses popup blockers)
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow?.document || iframe.contentDocument;
-    if (doc) {
-      doc.open();
-      doc.write(html);
-      doc.close();
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (e) {
-          console.error("Iframe print failed:", e);
-        }
-        setTimeout(() => {
-          if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-          }
-        }, 3000);
-      }, 500);
-    }
-  }
+  executePrint(html, `Work Order Report - #${woNumber}`);
 }
 
 // ─── Render Photo Section Helper ─────────────────────────────────────────────

@@ -44,12 +44,17 @@ export function getAbsolutePhotoUrl(photo: any): string {
 }
 
 /**
- * Universal print trigger that waits for all images to finish downloading before triggering native print preview.
+ * Universal print trigger optimized for Desktop, iOS Safari, Android Chrome, PWAs, and WebViews.
+ * On mobile/PWA devices, if window.open is blocked or fails, it displays a responsive full-screen 
+ * in-app Print & PDF Viewer Modal with direct AirPrint, PDF Save, and Web Share actions.
  */
-function executePrint(html: string) {
+export function executePrint(html: string, titleName: string = "Property Preservation Report") {
   if (typeof window === "undefined") return;
 
-  // Function to wait for images to load before calling print()
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  // Function to wait for images in a window/doc to finish loading
   const triggerPrintWhenImagesLoaded = (win: Window, doc: Document) => {
     const imgs = Array.from(doc.querySelectorAll("img"));
     if (imgs.length === 0) {
@@ -86,7 +91,7 @@ function executePrint(html: string) {
       }
     });
 
-    // Safety timeout after 2.5 seconds
+    // Safety fallback timeout
     setTimeout(() => {
       if (loadedCount < totalImgs) {
         try {
@@ -97,50 +102,105 @@ function executePrint(html: string) {
     }, 2500);
   };
 
-  // 1. Try window.open first (Desktop default)
+  // 1. Try opening Blob URL in a new window/tab first for Desktop & Mobile browsers
   let printWindow: Window | null = null;
   try {
-    printWindow = window.open("", "_blank");
+    printWindow = window.open(blobUrl, "_blank");
   } catch (e) {
     printWindow = null;
   }
 
-  // 2. If window.open was blocked (iOS Safari / Android Chrome / Mobile PWAs), use hidden iframe
-  if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
-    let iframe = document.getElementById("mobile-print-frame") as HTMLIFrameElement;
-    if (!iframe) {
-      iframe = document.createElement("iframe");
-      iframe.id = "mobile-print-frame";
-      iframe.style.position = "fixed";
-      iframe.style.right = "0";
-      iframe.style.bottom = "0";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      iframe.style.border = "0";
-      iframe.style.zIndex = "-9999";
-      document.body.appendChild(iframe);
-    }
+  // 2. If opened successfully in desktop browser, attach load trigger and focus
+  const isMobile =
+    typeof navigator !== "undefined" &&
+    (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as any).standalone === true);
 
-    const iframeWin = iframe.contentWindow;
-    const doc = iframeWin?.document || iframe.contentDocument;
-    if (doc && iframeWin) {
-      doc.open();
-      doc.write(html);
-      doc.close();
-      triggerPrintWhenImagesLoaded(iframeWin, doc);
+  if (!isMobile && printWindow && !printWindow.closed && typeof printWindow.closed !== "undefined") {
+    try {
+      printWindow.focus();
+      triggerPrintWhenImagesLoaded(printWindow, printWindow.document);
+      return;
+    } catch (err) {
+      console.warn("Popup focus warning:", err);
     }
-    return;
   }
 
-  // 3. Desktop Popup Window
-  try {
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    triggerPrintWhenImagesLoaded(printWindow, printWindow.document);
-  } catch (err) {
-    console.error("Popup document write error:", err);
-  }
+  // 3. Mobile / PWA / Blocked Popup Fallback: Render full-screen Mobile Print Preview Modal inside app
+  const existingModal = document.getElementById("mobile-print-preview-modal");
+  if (existingModal) existingModal.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "mobile-print-preview-modal";
+  overlay.style.cssText =
+    "position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;display:flex;flex-direction:column;background:rgba(15,23,42,0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);font-family:-apple-system,BlinkMacSystemFont,sans-serif;";
+
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f172a;border-bottom:1px solid #334155;color:#fff;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">📄</span>
+        <div>
+          <div style="font-size:14px;font-weight:900;color:#f8fafc;letter-spacing:0.3px;">${titleName}</div>
+          <div style="font-size:10px;color:#38bdf8;font-weight:700;">Mobile PWA Print & PDF Viewer</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="mobile-print-action-btn" style="background:linear-gradient(135deg,#06b6d4,#0284c7);color:#ffffff;border:none;font-weight:800;padding:8px 14px;border-radius:10px;font-size:12px;cursor:pointer;box-shadow:0 4px 12px rgba(6,182,212,0.3);">
+          🖨️ Print / PDF
+        </button>
+        <button id="mobile-share-action-btn" style="background:#334155;color:#fff;border:none;font-weight:700;padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;">
+          📲 Share
+        </button>
+        <button id="mobile-close-action-btn" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;">
+          ✕
+        </button>
+      </div>
+    </div>
+    <div style="flex:1;width:100%;height:100%;overflow:hidden;background:#f8fafc;-webkit-overflow-scrolling:touch;">
+      <iframe id="mobile-print-iframe-element" src="${blobUrl}" style="width:100%;height:100%;border:none;" />
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const iframeEl = document.getElementById("mobile-print-iframe-element") as HTMLIFrameElement;
+  const printBtn = document.getElementById("mobile-print-action-btn");
+  const shareBtn = document.getElementById("mobile-share-action-btn");
+  const closeBtn = document.getElementById("mobile-close-action-btn");
+
+  closeBtn?.addEventListener("click", () => overlay.remove());
+
+  printBtn?.addEventListener("click", () => {
+    try {
+      if (iframeEl.contentWindow) {
+        iframeEl.contentWindow.focus();
+        iframeEl.contentWindow.print();
+      }
+    } catch (e) {
+      window.open(blobUrl, "_blank");
+    }
+  });
+
+  shareBtn?.addEventListener("click", async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.share && navigator.canShare) {
+        const file = new File([blob], `${titleName.replace(/\s+/g, "_")}.html`, { type: "text/html" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: titleName });
+          return;
+        }
+      }
+    } catch (err) {}
+    window.open(blobUrl, "_blank");
+  });
+
+  // Auto trigger image check & print after iframe loads
+  iframeEl.onload = () => {
+    if (iframeEl.contentWindow && iframeEl.contentDocument) {
+      triggerPrintWhenImagesLoaded(iframeEl.contentWindow, iframeEl.contentDocument);
+    }
+  };
 }
 
 /**
