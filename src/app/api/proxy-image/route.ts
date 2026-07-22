@@ -8,7 +8,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const response = await fetch(url);
+    // Forward cookies so that if the URL is an authenticated internal API route, it will succeed
+    const cookieHeader = req.headers.get("cookie");
+    const headers: Record<string, string> = {};
+    if (cookieHeader) headers["cookie"] = cookieHeader;
+
+    const response = await fetch(url, { headers });
     if (!response.ok) {
       return new NextResponse(`Failed to fetch image: ${response.statusText}`, { status: response.status });
     }

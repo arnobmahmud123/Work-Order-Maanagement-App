@@ -52,9 +52,10 @@ export async function imageToBase64(url: string): Promise<string> {
   if (!url || url.startsWith("data:")) return url;
   try {
     let fetchUrl = url;
-    // Proxy cross-origin image requests to bypass browser CORS constraints,
-    // ensuring we can always convert remote bucket images to Base64 for the iOS Share Sheet.
-    if (url.startsWith("http") && typeof window !== "undefined" && !url.startsWith(window.location.origin)) {
+    // Proxy ALL HTTP image requests to bypass browser CORS constraints.
+    // This is required because even same-origin API URLs might redirect to cross-origin R2 buckets,
+    // which the browser will block due to CORS. By fetching via the server proxy, we bypass CORS completely.
+    if (url.startsWith("http") && typeof window !== "undefined") {
       fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
     }
 
