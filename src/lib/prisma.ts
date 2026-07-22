@@ -96,8 +96,12 @@ function createPrismaClient(): PrismaClient {
     const { PrismaD1 } = require("@prisma/adapter-d1");
     
     const { env } = getCloudflareContext();
-    const adapter = new PrismaD1(env.DB);
-    client = new PrismaClient({ adapter });
+    if (env?.DB) {
+      const adapter = new PrismaD1(env.DB);
+      client = new PrismaClient({ adapter });
+    } else {
+      client = new PrismaClient();
+    }
   } else {
     client = new PrismaClient();
   }

@@ -5,7 +5,7 @@ let activeSession: any = null;
 
 // Overwrite Node's require cache to mock the auth helper dynamically
 const authPath = require.resolve("../src/lib/auth");
-require.cache[authPath] = {
+(require.cache as any)[authPath] = {
   id: authPath,
   filename: authPath,
   loaded: true,

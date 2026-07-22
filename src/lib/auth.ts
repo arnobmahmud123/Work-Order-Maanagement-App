@@ -19,13 +19,13 @@ export const {
   auth,
 } = NextAuth(() => {
   const { env } = getCloudflareContext();
-  const db = env.DB;
+  const db = env?.DB;
 
   return {
-    adapter: D1Adapter(db),
+    ...(db ? { adapter: D1Adapter(db) } : {}),
     session: { strategy: "jwt" },
     trustHost: true,
-    secret: env.AUTH_SECRET || env.NEXTAUTH_SECRET,
+    secret: env?.AUTH_SECRET || env?.NEXTAUTH_SECRET,
     pages: {
       signIn: "/auth/signin",
     },
@@ -48,6 +48,10 @@ export const {
           if (!email || !password) return null;
 
           try {
+            if (!db) {
+              console.warn("[Auth] D1 Database binding is undefined");
+              return null;
+            }
             console.log("[Auth] Querying D1 database...");
             const user = await db.prepare(
               `SELECT id, email, name, image, role, hashedPassword, isActive, company_id as companyId FROM users WHERE email = ? LIMIT 1`
@@ -125,13 +129,13 @@ export const {
           const tokenEmail =
             typeof token.email === "string" ? token.email.trim().toLowerCase() : "";
 
-          const dbUser = tokenId
+          const dbUser = (tokenId && db)
             ? await db.prepare(
                 `SELECT id, email, name, image, role, isActive, company_id as companyId FROM users WHERE id = ? LIMIT 1`
               )
                 .bind(tokenId)
                 .first<any>()
-            : tokenEmail
+            : (tokenEmail && db)
               ? await db.prepare(
                   `SELECT id, email, name, image, role, isActive, company_id as companyId FROM users WHERE email = ? LIMIT 1`
                 )
