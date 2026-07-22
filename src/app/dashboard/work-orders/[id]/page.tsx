@@ -2975,20 +2975,30 @@ export default function WorkOrderDetailPage({
                 <Shield className="h-5 w-5 text-violet-700 dark:text-violet-400" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Compliance Protocol</h3>
+                <h3 className="text-sm font-black text-text-primary uppercase tracking-widest">Property Inspection</h3>
                 <p className="text-[10px] font-bold text-text-muted">
-                  {complianceItems.filter(c => c.completed).length} of {complianceItems.length} safety checks passed
+                  {complianceItems.filter(c => c.completed).length + customInspectionItems.filter(c => c.completed).length} of {complianceItems.length + customInspectionItems.length} inspection items verified
                 </p>
               </div>
             </div>
-            {complianceItems.length > 0 && (
-              <div className="text-right">
-                <span className="text-lg font-black text-violet-700 dark:text-violet-400 leading-none">
-                  {Math.round((complianceItems.filter(c => c.completed).length / complianceItems.length) * 100)}%
-                </span>
-                <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Safety Score</p>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowAddInspection(true)}
+                className="px-3 py-1.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-700 dark:text-violet-400 border border-violet-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Inspection Item</span>
+              </button>
+
+              {(complianceItems.length > 0 || customInspectionItems.length > 0) && (
+                <div className="text-right">
+                  <span className="text-lg font-black text-violet-700 dark:text-violet-400 leading-none">
+                    {Math.round(((complianceItems.filter(c => c.completed).length + customInspectionItems.filter(c => c.completed).length) / (complianceItems.length + customInspectionItems.length || 1)) * 100)}%
+                  </span>
+                  <p className="text-[9px] font-black text-text-dim uppercase tracking-tighter">Inspection Score</p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
