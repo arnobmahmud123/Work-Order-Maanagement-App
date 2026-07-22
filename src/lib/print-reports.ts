@@ -149,15 +149,24 @@ function executePrint(html: string) {
 export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: string = "WO-SUMMARY") {
   if (!tasks || tasks.length === 0) return;
 
-  const isSingleItem = tasks.length === 1;
+  // Deduplicate tasks to ensure no single task is rendered twice
+  const uniqueTasksMap = new Map<string, ReportTaskItem>();
+  tasks.forEach((t, i) => {
+    const key = t.id ? String(t.id) : `${t.title}-${t.price || 0}-${i}`;
+    if (!uniqueTasksMap.has(key)) {
+      uniqueTasksMap.set(key, t);
+    }
+  });
+  const uniqueTasks = Array.from(uniqueTasksMap.values());
+  const isSingleItem = uniqueTasks.length === 1;
 
-  const totalCost = tasks.reduce((sum, t) => {
+  const totalCost = uniqueTasks.reduce((sum, t) => {
     const qty = t.quantity ?? 1;
     const price = t.price ?? 0;
     return sum + (t.price != null ? qty * price : 0);
   }, 0);
 
-  const completedCount = tasks.filter((t) => t.completed || t.status === "COMPLETED").length;
+  const completedCount = uniqueTasks.filter((t) => t.completed || t.status === "COMPLETED").length;
   const dateStr = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -393,11 +402,20 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
 export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string = "WO-SUMMARY") {
   if (!bids || bids.length === 0) return;
 
-  const isSingleItem = bids.length === 1;
+  // Deduplicate bids to ensure no single bid item is printed twice
+  const uniqueBidsMap = new Map<string, ReportBidItem>();
+  bids.forEach((b, i) => {
+    const key = b.id ? String(b.id) : `${b.title}-${b.amount || 0}-${i}`;
+    if (!uniqueBidsMap.has(key)) {
+      uniqueBidsMap.set(key, b);
+    }
+  });
+  const uniqueBids = Array.from(uniqueBidsMap.values());
+  const isSingleItem = uniqueBids.length === 1;
 
-  const totalAmount = bids.reduce((sum, b) => sum + (b.amount || 0), 0);
-  const approvedCount = bids.filter((b) => b.status === "APPROVED").length;
-  const pendingCount = bids.filter((b) => b.status === "PENDING" || !b.status).length;
+  const totalAmount = uniqueBids.reduce((sum, b) => sum + (b.amount || 0), 0);
+  const approvedCount = uniqueBids.filter((b) => b.status === "APPROVED").length;
+  const pendingCount = uniqueBids.filter((b) => b.status === "PENDING" || !b.status).length;
   
   const dateStr = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -476,7 +494,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     
     <div class="metrics-grid">
       <div class="metric-box">
-        <div class="metric-val">${bids.length}</div>
+        <div class="metric-val">${uniqueBids.length}</div>
         <div class="metric-lbl">Total Bid Items</div>
       </div>
       <div class="metric-box">
@@ -509,7 +527,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
         </tr>
       </thead>
       <tbody>
-        ${bids.map((b, idx) => {
+        ${uniqueBids.map((b, idx) => {
           const statusClass = b.status === "APPROVED" ? "badge-approved" : b.status === "REJECTED" ? "badge-rejected" : "badge-pending";
 
           return `<tr>
@@ -533,7 +551,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     ${isSingleItem ? "Bid Justification & Evidence Photos" : "Detailed Justification & Evidence Photos"}
   </h2>
 
-  ${bids.map((b, idx) => {
+  ${uniqueBids.map((b, idx) => {
     const statusClass = b.status === "APPROVED" ? "badge-approved" : b.status === "REJECTED" ? "badge-rejected" : "badge-pending";
 
     return `<div class="bid-card">

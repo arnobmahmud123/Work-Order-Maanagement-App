@@ -1606,8 +1606,17 @@ export default function WorkOrderDetailPage({
     if (workOrder && !bidsInitialized.current) {
       bidsInitialized.current = true;
       const rawBids = Array.isArray(workOrder.metadata?.bids) ? workOrder.metadata.bids : [];
+      const uniqueRawBidsMap = new Map<string, any>();
+      rawBids.forEach((b: any, idx: number) => {
+        const key = b.id ? String(b.id) : `${b.title}-${b.amount}-${idx}`;
+        if (!uniqueRawBidsMap.has(key)) {
+          uniqueRawBidsMap.set(key, b);
+        }
+      });
+      const uniqueRawBids = Array.from(uniqueRawBidsMap.values());
+
       setBids(
-        rawBids.map((b: any) => ({
+        uniqueRawBids.map((b: any) => ({
           id: b.id,
           title: b.title,
           amount: b.amount,
