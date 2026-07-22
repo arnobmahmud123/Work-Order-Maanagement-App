@@ -234,10 +234,7 @@ export function executePrint(html: string, titleName: string = "Property Preserv
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
         <button id="mobile-print-action-btn" style="background:linear-gradient(135deg,#06b6d4,#0284c7);color:#ffffff;border:none;font-weight:800;padding:8px 12px;border-radius:10px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 4px 12px rgba(6,182,212,0.3);">
-          🖨️ Print / PDF
-        </button>
-        <button id="mobile-share-action-btn" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;font-weight:800;padding:8px 10px;border-radius:10px;font-size:11px;cursor:pointer;">
-          📲 Share
+          🖨️ Print / Save PDF
         </button>
         <button id="mobile-close-action-btn" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;padding:8px 10px;border-radius:10px;font-size:11px;cursor:pointer;">
           ✕
@@ -253,42 +250,39 @@ export function executePrint(html: string, titleName: string = "Property Preserv
 
   const iframeEl = document.getElementById("mobile-print-iframe-element") as HTMLIFrameElement;
   const printBtn = document.getElementById("mobile-print-action-btn");
-  const shareBtn = document.getElementById("mobile-share-action-btn");
   const closeBtn = document.getElementById("mobile-close-action-btn");
 
   closeBtn?.addEventListener("click", () => overlay.remove());
 
   const handleMobilePrintOrShare = async () => {
-    // 1. Try Web Share API (native iOS / Android print & save PDF sheet)
+    // IMPORTANT: We MUST avoid `navigator.share` for HTML files on iOS!
+    // iOS QuickLook strictly blocks Base64 images and network requests in shared local HTML files.
+    // By triggering native `window.print()`, we force WebKit to render the live DOM (which allows Base64 images).
+    // Users can easily save as PDF from the native print dialog.
+
     try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        const file = new File([cleanHtml], `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.html`, { type: "text/html" });
-        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: titleName,
-          });
-          return;
-        }
+      if (iframeEl.contentWindow) {
+        iframeEl.contentWindow.focus();
+        iframeEl.contentWindow.print();
+        return;
       }
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
+    } catch (e) {
+      console.warn("Iframe print failed", e);
     }
 
-    // 2. Fallback: Open Blob URL directly in a top-level tab/window
+    // Fallback if iframe print fails
     const newWin = window.open(blobUrl, "_blank");
     if (!newWin || newWin.closed) {
-      try {
-        iframeEl.contentWindow?.focus();
-        iframeEl.contentWindow?.print();
-      } catch (e) {
-        window.location.href = blobUrl;
-      }
+      window.location.href = blobUrl;
+    } else {
+      setTimeout(() => {
+        newWin.focus();
+        newWin.print();
+      }, 500);
     }
   };
 
   printBtn?.addEventListener("click", handleMobilePrintOrShare);
-  shareBtn?.addEventListener("click", handleMobilePrintOrShare);
 }
 
 /**
