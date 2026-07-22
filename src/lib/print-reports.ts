@@ -255,19 +255,59 @@ export function executePrint(html: string, titleName: string = "Property Preserv
   closeBtn?.addEventListener("click", () => overlay.remove());
 
   const handleMobilePrintOrShare = async () => {
-    // iOS Safari completely ignores `iframe.contentWindow.print()` without throwing an error.
-    // The most robust way to print/save on iOS (especially in PWAs) is to open the Blob URL
-    // in a new Safari tab. From there, the native Safari toolbar provides Print and Save to PDF.
+    // In iOS PWAs (Standalone mode), `window.open` is often blocked and `blob:` navigation fails.
+    // The ultimate robust fallback for iOS Safari/PWAs is to inject the print HTML into the current DOM,
+    // use @media print to hide everything else, call window.print(), and then clean up!
     
-    try {
-      const newWin = window.open(blobUrl, "_blank");
-      if (!newWin || newWin.closed) {
-        // Fallback if popup blocked: navigate current window
-        window.location.href = blobUrl;
+    // 1. Create a temporary container for the print content
+    const printContainer = document.createElement("div");
+    printContainer.id = "pwa-print-container";
+    
+    // Extract the styles and body content from the HTML string (since we can't inject a full HTML doc easily)
+    // Browsers will naturally strip <html> tags when assigned to innerHTML, but it's safer to just inject it directly.
+    printContainer.innerHTML = cleanHtml;
+    
+    // 2. Create a style tag to hide the rest of the app during printing
+    const printStyle = document.createElement("style");
+    printStyle.id = "pwa-print-style";
+    printStyle.innerHTML = `
+      @media print {
+        body > *:not(#pwa-print-container) {
+          display: none !important;
+        }
+        #pwa-print-container {
+          display: block !important;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+        }
+        @page { margin: 0; }
       }
-    } catch (e) {
-      window.location.href = blobUrl;
-    }
+      @media screen {
+        #pwa-print-container {
+          display: none !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(printStyle);
+    document.body.appendChild(printContainer);
+
+    // 3. Trigger native print dialog
+    setTimeout(() => {
+      window.print();
+      
+      // 4. Cleanup after the print dialog is closed (or immediately after it opens, since print is blocking/sync on many browsers)
+      // We give it a generous timeout to ensure the print spooler grabs the DOM before we destroy it.
+      setTimeout(() => {
+        if (document.getElementById("pwa-print-container")) {
+          document.body.removeChild(printContainer);
+        }
+        if (document.getElementById("pwa-print-style")) {
+          document.head.removeChild(printStyle);
+        }
+      }, 2000);
+    }, 100);
   };
 
   printBtn?.addEventListener("click", handleMobilePrintOrShare);
