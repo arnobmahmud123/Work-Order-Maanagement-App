@@ -1,8 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import prisma from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user || (session.user as any).role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Forbidden: Super Admins only" }, { status: 403 });
+  }
+
   const { env } = getCloudflareContext();
   const diagnostics: Record<string, any> = {
     timestamp: new Date().toISOString(),

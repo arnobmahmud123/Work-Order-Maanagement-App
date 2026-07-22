@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -12,6 +13,31 @@ export async function POST(req: NextRequest) {
 
   if (!file) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  }
+
+  // Enforce Subscription Storage limits
+  const companyId = (session.user as any).companyId;
+  const role = (session.user as any).role;
+
+  if (role !== "SUPER_ADMIN" && companyId) {
+    const activeCompany = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (activeCompany) {
+      const aggregations = await prisma.fileUpload.aggregate({
+        where: { companyId },
+        _sum: { size: true },
+      });
+      const currentBytes = aggregations._sum.size || 0;
+      const currentMB = currentBytes / (1024 * 1024);
+
+      if (currentMB + (file.size / (1024 * 1024)) > activeCompany.maxStorage) {
+        return NextResponse.json(
+          { error: `Storage limit reached (${activeCompany.maxStorage} MB). Please upgrade your subscription plan.` },
+          { status: 403 }
+        );
+      }
+    }
   }
 
   // Max 5MB for general uploads

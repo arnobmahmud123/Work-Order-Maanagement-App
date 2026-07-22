@@ -77,12 +77,14 @@ async function findOrCreateProperty({
   city,
   state,
   zipCode,
+  companyId,
 }: {
   propertyId?: string | null;
   address: string;
   city?: string | null;
   state?: string | null;
   zipCode?: string | null;
+  companyId?: string | null;
 }) {
   if (propertyId) {
     const property = await prisma.property.findUnique({ where: { id: propertyId } }).catch(() => null);
@@ -94,18 +96,18 @@ async function findOrCreateProperty({
   const normalizedState = cleanString(state);
   const normalizedZip = cleanString(zipCode);
 
-  // D1-compatible: use direct value comparison instead of { equals: ... } filter
   const where: any = { address: normalizedAddress };
   if (normalizedCity) where.city = normalizedCity;
   if (normalizedState) where.state = normalizedState;
   if (normalizedZip) where.zipCode = normalizedZip;
+  if (companyId) where.companyId = companyId;
 
   const existing = await prisma.property.findFirst({ where }).catch(() => null);
   if (existing) return existing.id;
 
-  // Fallback: match by address only
+  // Fallback: match by address and company only
   const existingByAddress = await prisma.property
-    .findFirst({ where: { address: normalizedAddress } })
+    .findFirst({ where: { address: normalizedAddress, companyId: companyId || undefined } })
     .catch(() => null);
   if (existingByAddress) return existingByAddress.id;
 
@@ -115,6 +117,7 @@ async function findOrCreateProperty({
       city: normalizedCity,
       state: normalizedState,
       zipCode: normalizedZip,
+      companyId: companyId || null,
     },
   });
 
@@ -147,12 +150,27 @@ export async function GET(req: NextRequest) {
 
   const role = currentUser.role;
   const userId = currentUser.id;
+  const companyId = (session.user as any).companyId;
 
-  console.log(`[GET WorkOrders] Email: ${session?.user?.email} | Role: ${role} | ID: ${userId}`);
+  console.log(`[GET WorkOrders] Email: ${session?.user?.email} | Role: ${role} | ID: ${userId} | CompanyId: ${companyId}`);
 
   const where: any = {};
 
   applyWorkOrderVisibility(where, role, userId);
+
+  // Enforce company scoping
+  if (role !== "SUPER_ADMIN") {
+    if (!companyId) {
+      return NextResponse.json({ error: "Forbidden: User has no assigned company tenant context" }, { status: 403 });
+    }
+    where.companyId = companyId;
+  } else {
+    // Super admins can optionally filter by companyId via query string
+    const filterCompanyId = searchParams.get("companyId");
+    if (filterCompanyId) {
+      where.companyId = filterCompanyId;
+    }
+  }
 
   // Support multiple statuses (comma-separated: "NEW,ASSIGNED,IN_PROGRESS")
   if (statusParam) {
@@ -215,6 +233,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const companyId = (session.user as any).companyId;
+  if (role !== "SUPER_ADMIN" && !companyId) {
+    return NextResponse.json({ error: "Forbidden: User has no assigned company tenant context" }, { status: 403 });
+  }
+
   const body = await req.json();
   const {
     title,
@@ -248,12 +271,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Verify Subscription Work Order limits
+  if (role !== "SUPER_ADMIN" && companyId) {
+    const activeCompany = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (activeCompany) {
+      const activeWOCount = await prisma.workOrder.count({
+        where: { companyId },
+      });
+      if (activeWOCount >= activeCompany.maxWorkOrders) {
+        return NextResponse.json(
+          { error: `Work order limit reached (${activeCompany.maxWorkOrders}). Please upgrade your subscription plan.` },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
+  // Determine target companyId
+  const targetCompanyId = role === "SUPER_ADMIN" ? (body.companyId || null) : companyId;
+
   const resolvedPropertyId = await findOrCreateProperty({
     propertyId,
     address,
     city,
     state,
     zipCode,
+    companyId: targetCompanyId,
   });
 
   const workOrder = await prisma.workOrder.create({
@@ -281,6 +326,7 @@ export async function POST(req: NextRequest) {
       processorId,
       propertyId: resolvedPropertyId,
       createdById: currentUser.id,
+      companyId: targetCompanyId,
       status: contractorId ? "ASSIGNED" : "NEW",
     },
     include: {
@@ -297,6 +343,7 @@ export async function POST(req: NextRequest) {
       details: `Work order "${title}" created`,
       userId: currentUser.id,
       workOrderId: workOrder.id,
+      companyId: targetCompanyId,
     },
   });
 
@@ -310,6 +357,7 @@ export async function POST(req: NextRequest) {
           message: `You have been assigned to "${title}" at ${address}`,
           userId: contractorId,
           workOrderId: workOrder.id,
+          companyId: targetCompanyId,
         },
       });
     } catch {}

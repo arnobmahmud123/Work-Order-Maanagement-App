@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -84,6 +85,29 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
   const { data: unreadCounts } = useUnreadCounts();
   const role = (session?.user as any)?.role;
   const { sidebarCollapsed, toggleSidebar } = useAppStore();
+  const [branding, setBranding] = useState<{ name: string; logo: string | null } | null>(null);
+
+  useEffect(() => {
+    async function loadBranding() {
+      try {
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user?.companyRef) {
+            setBranding({
+              name: data.user.companyRef.name,
+              logo: data.user.companyRef.logo,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load branding:", err);
+      }
+    }
+    if (session) {
+      loadBranding();
+    }
+  }, [session]);
 
   const isAdmin = role === "ADMIN";
   const isAccountant = role === "ACCOUNTANT";
@@ -101,6 +125,14 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     if (item.href === "/dashboard/accounting" && !isAdmin && !isAccountant) return false;
     return true;
   });
+
+  if (role === "SUPER_ADMIN") {
+    visibleNavItems.unshift({
+      label: "Super Admin",
+      href: "/dashboard/super-admin",
+      icon: Shield,
+    });
+  }
 
   const visibleNetworkItems = networkItems.filter((item) => {
     if (isContractor && item.href === "/dashboard/network/map") return false;
@@ -126,17 +158,21 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
       )}>
         {!collapsed ? (
           <>
-            <Link href="/dashboard" className="flex items-center gap-3 group">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25 group-hover:shadow-cyan-500/40 group-hover:scale-105 transition-all">
-                <Shield className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-base font-bold text-text-primary tracking-tight">
-                Prop<span className="text-gradient brand-accent">Preserve</span>
+            <Link href="/dashboard" className="flex items-center gap-3 group min-w-0">
+              {branding?.logo ? (
+                <img src={branding.logo} alt={branding.name} className="h-9 w-9 rounded-xl object-contain" />
+              ) : (
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25 group-hover:shadow-cyan-500/40 group-hover:scale-105 transition-all flex-shrink-0">
+                  <Shield className="h-5 w-5 text-white" />
+                </div>
+              )}
+              <span className="text-[13px] font-bold text-text-primary tracking-tight truncate">
+                {branding?.name || "PropPreserve"}
               </span>
             </Link>
             <button 
               onClick={toggleSidebar}
-              className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-cyan-400 transition-all group/toggle"
+              className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-cyan-400 transition-all group/toggle flex-shrink-0"
               title="Collapse Sidebar"
             >
               <PanelLeftClose className="h-4.5 w-4.5 group-hover/toggle:scale-110 transition-transform" />
@@ -145,7 +181,7 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
         ) : (
           <button 
             onClick={toggleSidebar}
-            className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500/15 to-blue-500/8 border border-cyan-500/25 flex items-center justify-center text-cyan-400 hover:scale-110 transition-all shadow-lg shadow-cyan-500/10"
+            className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500/15 to-blue-500/8 border border-cyan-500/25 flex items-center justify-center text-cyan-400 hover:scale-110 transition-all shadow-lg shadow-cyan-500/10 flex-shrink-0"
             title="Expand Sidebar"
           >
             <PanelLeftOpen className="h-5 w-5" />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { hashSync } from "bcrypt-edge";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -109,4 +110,91 @@ export async function DELETE(req: NextRequest) {
   await prisma.user.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const currentUserRole = (session.user as any).role;
+    if (!["ADMIN", "SUPER_ADMIN"].includes(currentUserRole)) {
+      return NextResponse.json({ error: "Forbidden: Admins only" }, { status: 403 });
+    }
+
+    const companyId = (session.user as any).companyId;
+    const body = await req.json();
+    const { name, email, password, role, phone, company } = body;
+
+    if (!name || !email || !password) {
+      return NextResponse.json(
+        { error: "Name, email, and password are required" },
+        { status: 400 }
+      );
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check if email already in use (bypass tenant block for global uniqueness check)
+    const existing = await prisma.user.findFirst({
+      where: { email: normalizedEmail, bypassTenant: true } as any,
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: "An account with this email already exists" },
+        { status: 409 }
+      );
+    }
+
+    // Verify Subscription Limits
+    if (currentUserRole !== "SUPER_ADMIN" && companyId) {
+      const activeCompany = await prisma.company.findUnique({
+        where: { id: companyId },
+      });
+      if (activeCompany) {
+        const activeUserCount = await prisma.user.count({
+          where: { companyId },
+        });
+        if (activeUserCount >= activeCompany.maxUsers) {
+          return NextResponse.json(
+            { error: `User limit reached (${activeCompany.maxUsers}). Please upgrade your subscription plan.` },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
+    const targetCompanyId = currentUserRole === "SUPER_ADMIN" ? (body.companyId || null) : companyId;
+    const hashedPassword = hashSync(password, 8);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email: normalizedEmail,
+        hashedPassword,
+        role: role || "CLIENT",
+        phone: phone || null,
+        company: company || null,
+        companyId: targetCompanyId,
+        isActive: true,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        companyId: newUser.companyId,
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error("Error creating user:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

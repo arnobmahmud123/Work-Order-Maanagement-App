@@ -635,12 +635,23 @@ const ORDER_STATUSES = ["PENDING", "ORDERED", "IN_TRANSIT", "DELIVERED", "CANCEL
 // ─── Main Seed Function ──────────────────────────────────────────────────────
 
 export async function seedInspectorsAndLogistics() {
+  const companies = await prisma.company.findMany();
+  if (companies.length === 0) {
+    console.warn("  ⚠️ No companies found to seed inspectors and logistics.");
+    return;
+  }
+  const getCompanyId = (i: number) => companies[i % companies.length].id;
+
   console.log("  📋 Seeding inspectors...");
 
   // Create inspectors
+  let idx = 0;
   for (const data of INSPECTORS) {
     const existing = await prisma.inspector.findFirst({ where: { email: data.email } });
-    if (existing) continue;
+    if (existing) {
+      idx++;
+      continue;
+    }
 
     await prisma.inspector.create({
       data: {
@@ -658,6 +669,7 @@ export async function seedInspectorsAndLogistics() {
         rating: data.rating,
         reviewCount: data.reviewCount,
         hourlyRate: data.hourlyRate,
+        companyId: getCompanyId(idx),
         specialties: {
           create: data.specialties.map((s) => ({
             specialty: s.specialty as any,
@@ -667,6 +679,7 @@ export async function seedInspectorsAndLogistics() {
         },
       },
     });
+    idx++;
   }
 
   const inspectorCount = await prisma.inspector.count();
@@ -676,11 +689,16 @@ export async function seedInspectorsAndLogistics() {
   console.log("  📋 Seeding suppliers...");
 
   const supplierMap: Record<string, string> = {}; // name -> id
+  const supplierCompanyMap: Record<string, string> = {}; // name -> companyId
 
+  let sIdx = 0;
   for (const data of SUPPLIERS) {
+    const compId = getCompanyId(sIdx);
     const existing = await prisma.supplier.findFirst({ where: { name: data.name } });
     if (existing) {
       supplierMap[data.name] = existing.id;
+      supplierCompanyMap[data.name] = existing.companyId || compId;
+      sIdx++;
       continue;
     }
 
@@ -695,9 +713,12 @@ export async function seedInspectorsAndLogistics() {
         rating: data.rating,
         leadTime: data.leadTime,
         notes: data.notes,
+        companyId: compId,
       },
     });
     supplierMap[data.name] = supplier.id;
+    supplierCompanyMap[data.name] = compId;
+    sIdx++;
   }
 
   const supplierCount = await prisma.supplier.count();
@@ -708,12 +729,17 @@ export async function seedInspectorsAndLogistics() {
 
   const materialMap: Record<string, string> = {}; // name -> id
 
+  let mIdx = 0;
   for (const data of MATERIALS) {
     const existing = await prisma.material.findFirst({ where: { name: data.name } });
     if (existing) {
       materialMap[data.name] = existing.id;
+      mIdx++;
       continue;
     }
+
+    const supplierId = supplierMap[data.supplierName] || null;
+    const compId = supplierId ? supplierCompanyMap[data.supplierName] : getCompanyId(mIdx);
 
     const material = await prisma.material.create({
       data: {
@@ -724,10 +750,12 @@ export async function seedInspectorsAndLogistics() {
         quantity: data.quantity,
         minStock: data.minStock,
         location: data.location,
-        supplierId: supplierMap[data.supplierName] || null,
+        supplierId,
+        companyId: compId,
       },
     });
     materialMap[data.name] = material.id;
+    mIdx++;
   }
 
   const materialCount = await prisma.material.count();
@@ -765,6 +793,7 @@ export async function seedInspectorsAndLogistics() {
   for (const def of orderDefs) {
     const supName = pick(supplierNames);
     const supplierId = supplierMap[supName];
+    const compId = supplierCompanyMap[supName];
     const items: { materialName: string; quantity: number; unitCost: number; total: number; materialId: string | null }[] = [];
     let subtotal = 0;
 
@@ -797,6 +826,7 @@ export async function seedInspectorsAndLogistics() {
         subtotal,
         tax,
         total,
+        companyId: compId,
         notes: pick([
           "Rush order - needed for upcoming jobs",
           "Standard reorder for low stock items",

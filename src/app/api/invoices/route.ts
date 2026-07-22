@@ -11,11 +11,25 @@ export async function GET(req: NextRequest) {
 
   const role = (session.user as any).role;
   const userId = (session.user as any).id;
+  const companyId = (session.user as any).companyId;
 
   const where: any = {};
 
   if (role === "CLIENT") {
     where.clientId = userId;
+  }
+
+  if (role !== "SUPER_ADMIN") {
+    if (!companyId) {
+      return NextResponse.json({ error: "Forbidden: User has no assigned company tenant context" }, { status: 403 });
+    }
+    where.companyId = companyId;
+  } else {
+    const { searchParams } = new URL(req.url);
+    const filterCompanyId = searchParams.get("companyId");
+    if (filterCompanyId) {
+      where.companyId = filterCompanyId;
+    }
   }
 
   const invoices = await prisma.invoice.findMany({
@@ -40,6 +54,11 @@ export async function POST(req: NextRequest) {
   const role = (session.user as any).role;
   if (!["ADMIN", "COORDINATOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const companyId = (session.user as any).companyId;
+  if (role !== "SUPER_ADMIN" && !companyId) {
+    return NextResponse.json({ error: "Forbidden: User has no assigned company tenant context" }, { status: 403 });
   }
 
   const body = await req.json();
@@ -69,6 +88,8 @@ export async function POST(req: NextRequest) {
   const count = await prisma.invoice.count();
   const invoiceNumber = `INV-${String(count + 1).padStart(6, "0")}`;
 
+  const targetCompanyId = role === "SUPER_ADMIN" ? (body.companyId || null) : companyId;
+
   const invoice = await prisma.$transaction(async (tx) => {
     const created = await tx.invoice.create({
       data: {
@@ -82,6 +103,7 @@ export async function POST(req: NextRequest) {
         noCharge: noCharge || false,
         notes,
         dueDate: dueDate ? new Date(dueDate) : null,
+        companyId: targetCompanyId,
         items: {
           create: items.map((item: any) => ({
             taskName: item.taskName,
@@ -119,6 +141,7 @@ export async function POST(req: NextRequest) {
         title: "New Invoice",
         message: `Invoice ${invoiceNumber} has been created for $${(noCharge ? 0 : total).toFixed(2)}`,
         userId: clientId,
+        companyId: targetCompanyId,
       },
     });
   } catch {}

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getR2Url } from "@/lib/r2";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import prisma from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
@@ -13,41 +12,36 @@ export async function GET(
   }
 
   const { id } = await params;
-  const { env } = getCloudflareContext();
 
   try {
-    const { results } = await env.DB.prepare(
-      `SELECT f.id, f.original_name as originalName, f.mime_type as mimeType, f.size, f.category, f.work_order_id as workOrderId, f.uploader_id as uploaderId, f.created_at as createdAt, u.name as uploaderName 
-       FROM work_order_files f 
-       LEFT JOIN users u ON f.uploader_id = u.id 
-       WHERE f.work_order_id = ? 
-       ORDER BY f.created_at DESC`
-    )
-      .bind(id)
-      .all();
+    const files = await prisma.fileUpload.findMany({
+      where: { workOrderId: id },
+      include: {
+        uploader: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-    const resolvedFiles = await Promise.all(
-      (results || []).map(async (file: any) => {
-        const pathUrl = `/api/work-orders/${id}/files/${file.id}/content`;
-        return {
-          id: file.id,
-          filename: file.originalName,
-          originalName: file.originalName,
-          mimeType: file.mimeType,
-          size: file.size,
-          path: pathUrl,
-          category: file.category,
-          workOrderId: file.workOrderId,
-          uploaderId: file.uploaderId,
-          createdAt: file.createdAt,
-          uploader: file.uploaderName ? { id: file.uploaderId, name: file.uploaderName } : null,
-        };
-      })
-    );
+    const resolvedFiles = files.map((file) => {
+      const pathUrl = `/api/work-orders/${id}/files/${file.id}/content`;
+      return {
+        id: file.id,
+        filename: file.originalName,
+        originalName: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+        path: pathUrl,
+        category: file.category,
+        workOrderId: file.workOrderId,
+        uploaderId: file.uploaderId,
+        createdAt: file.createdAt.toISOString(),
+        uploader: file.uploader,
+      };
+    });
 
     return NextResponse.json({ files: resolvedFiles });
   } catch (error: any) {
-    console.error("D1 GET files error:", error.message);
+    console.error("Prisma GET files error:", error.message);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -62,7 +56,8 @@ export async function POST(
   }
 
   const { id: workOrderId } = await params;
-  const { env } = getCloudflareContext();
+  const companyId = (session.user as any).companyId;
+  const role = (session.user as any).role;
 
   const isJson = req.headers.get("content-type")?.includes("application/json");
   let originalName: string;
@@ -71,97 +66,113 @@ export async function POST(
   let categoryInput: string;
   let pathUrl: string;
 
-  if (isJson) {
-    const body = await req.json();
-    originalName = body.originalName;
-    mimeType = body.mimeType;
-    size = Number(body.size) || 0;
-    categoryInput = body.category || "DOCS";
-    pathUrl = body.publicUrl;
+  try {
+    if (isJson) {
+      const body = await req.json();
+      originalName = body.originalName;
+      mimeType = body.mimeType;
+      size = Number(body.size) || 0;
+      categoryInput = body.category || "DOCS";
+      pathUrl = body.publicUrl;
 
-    if (!originalName || !mimeType || !pathUrl) {
-      return NextResponse.json({ error: "originalName, mimeType, and publicUrl are required" }, { status: 400 });
-    }
-  } else {
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
-    categoryInput = (formData.get("category") as string) || "DOCS";
+      if (!originalName || !mimeType || !pathUrl) {
+        return NextResponse.json({ error: "originalName, mimeType, and publicUrl are required" }, { status: 400 });
+      }
+    } else {
+      const formData = await req.formData();
+      const file = formData.get("file") as File;
+      categoryInput = (formData.get("category") as string) || "DOCS";
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
+      if (!file) {
+        return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      }
 
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 });
-    }
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 });
+      }
 
-    originalName = file.name;
-    mimeType = file.type;
-    size = file.size;
+      originalName = file.name;
+      mimeType = file.type;
+      size = file.size;
 
-    const bytes = await file.arrayBuffer();
-    let base64Str = "";
-    try {
+      const bytes = await file.arrayBuffer();
+      let base64Str = "";
       const bytesArray = new Uint8Array(bytes);
       const len = bytesArray.byteLength;
       for (let i = 0; i < len; i++) {
         base64Str += String.fromCharCode(bytesArray[i]);
       }
       base64Str = btoa(base64Str);
-    } catch (e: any) {
-      return NextResponse.json({ error: "Failed to process image buffer: " + e.message }, { status: 500 });
+      const base64 = `data:${file.type};base64,${base64Str}`;
+      pathUrl = base64;
     }
-    const base64 = `data:${file.type};base64,${base64Str}`;
-    pathUrl = base64;
-  }
 
-  // Validate category
-  const validCategories = ["BEFORE", "DURING", "AFTER", "BID", "INSPECTION", "DOCS"];
-  const fileCategory = validCategories.includes(categoryInput) ? categoryInput : "DOCS";
+    // Enforce Subscription Storage limits
+    if (role !== "SUPER_ADMIN" && companyId) {
+      const activeCompany = await prisma.company.findUnique({
+        where: { id: companyId },
+      });
+      if (activeCompany) {
+        const aggregations = await prisma.fileUpload.aggregate({
+          where: { companyId },
+          _sum: { size: true },
+        });
+        const currentBytes = aggregations._sum.size || 0;
+        const currentMB = currentBytes / (1024 * 1024);
 
-  const fileId = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
-
-  try {
-    // Debug foreign key constraints
-    const woExists = await env.DB.prepare(`SELECT id FROM "WorkOrder" WHERE id = ?`).bind(workOrderId).first();
-    const uploaderId = (session.user as any)?.id;
-    let validUploaderId = (uploaderId && uploaderId.trim() !== "") ? uploaderId : null;
-    
-    let userExists = true;
-    if (validUploaderId) {
-      const dbUser = await env.DB.prepare(`SELECT id FROM users WHERE id = ?`).bind(validUploaderId).first();
-      if (!dbUser) userExists = false;
+        if (currentMB + (size / (1024 * 1024)) > activeCompany.maxStorage) {
+          return NextResponse.json(
+            { error: `Storage limit reached (${activeCompany.maxStorage} MB). Please upgrade your subscription plan.` },
+            { status: 403 }
+          );
+        }
+      }
     }
+
+    // Validate category
+    const validCategories = ["BEFORE", "DURING", "AFTER", "BID", "INSPECTION", "DOCS"];
+    const fileCategory = validCategories.includes(categoryInput) ? categoryInput : "DOCS";
+
+    const fileId = crypto.randomUUID();
+
+    // Verify work order ownership
+    const woExists = await prisma.workOrder.findFirst({
+      where: { id: workOrderId },
+    });
 
     if (!woExists) {
-      console.error(`D1 POST file error: WorkOrder ${workOrderId} not found in DB`);
-      return NextResponse.json({ error: `Work order not found in DB: ${workOrderId}` }, { status: 404 });
-    }
-    
-    if (!userExists && validUploaderId) {
-      console.warn(`D1 POST file warning: User ${validUploaderId} not found in DB. Falling back to null uploader_id.`);
-      validUploaderId = null; // Prevent foreign key constraint failure for stale session cookies
+      return NextResponse.json({ error: `Work order not found: ${workOrderId}` }, { status: 404 });
     }
 
-    // Save to Cloudflare D1
-    await env.DB.prepare(
-      `INSERT INTO work_order_files (id, work_order_id, public_url, original_name, filename, category, mime_type, size, uploader_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(fileId, workOrderId, pathUrl, originalName, originalName, fileCategory, mimeType, size, validUploaderId, createdAt)
-      .run();
-    try {
-      await env.DB.prepare(
-        `INSERT INTO activity_logs (id, action, details, userId, workOrderId, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(crypto.randomUUID(), "FILE_UPLOADED", `Uploaded "${originalName}" (${fileCategory}) to Cloudflare R2`, (session.user as any).id, workOrderId, createdAt)
-        .run();
-    } catch (e) {
-      // Ignore if activity table doesn't exist
-      console.log("Activity logging skipped or failed:", e);
-    }
+    // Save using Prisma Client
+    const fileUpload = await prisma.fileUpload.create({
+      data: {
+        id: fileId,
+        filename: originalName,
+        originalName,
+        mimeType,
+        size,
+        path: pathUrl,
+        category: fileCategory,
+        workOrderId,
+        uploaderId: session.user.id,
+        companyId,
+      },
+      include: {
+        uploader: { select: { id: true, name: true } },
+      },
+    });
+
+    // Log Activity safely
+    await prisma.activityLog.create({
+      data: {
+        action: "FILE_UPLOADED",
+        details: `Uploaded "${originalName}" (${fileCategory})`,
+        userId: session.user.id,
+        workOrderId,
+        companyId,
+      },
+    });
 
     const signedPath = `/api/work-orders/${workOrderId}/files/${fileId}/content`;
 
@@ -174,13 +185,13 @@ export async function POST(
       path: signedPath,
       category: fileCategory,
       workOrderId,
-      uploaderId: (session.user as any).id,
-      createdAt,
-      uploader: { id: (session.user as any).id, name: session.user.name || "" }
+      uploaderId: session.user.id,
+      createdAt: fileUpload.createdAt.toISOString(),
+      uploader: fileUpload.uploader,
     }, { status: 201 });
 
   } catch (error: any) {
-    console.error("D1 POST file error:", error.message);
+    console.error("Prisma POST file error:", error.message);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
@@ -195,48 +206,40 @@ export async function DELETE(
   }
 
   const { id: workOrderId } = await params;
-  const { env } = getCloudflareContext();
   const { searchParams } = new URL(req.url);
   const fileId = searchParams.get("fileId");
+  const companyId = (session.user as any).companyId;
 
   if (!fileId) {
     return NextResponse.json({ error: "fileId required" }, { status: 400 });
   }
 
   try {
-    // Get file info first for logging
-    const file = await env.DB.prepare(
-      `SELECT original_name FROM work_order_files WHERE id = ? AND work_order_id = ?`
-    )
-      .bind(fileId, workOrderId)
-      .first<any>();
+    const file = await prisma.fileUpload.findFirst({
+      where: { id: fileId, workOrderId },
+    });
 
     if (!file) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
-    // Delete from D1
-    await env.DB.prepare(
-      `DELETE FROM work_order_files WHERE id = ? AND work_order_id = ?`
-    )
-      .bind(fileId, workOrderId)
-      .run();
+    await prisma.fileUpload.delete({
+      where: { id: fileId },
+    });
 
-    // Safely attempt to log activity
-    try {
-      await env.DB.prepare(
-        `INSERT INTO activity_logs (id, action, details, userId, workOrderId, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(crypto.randomUUID(), "FILE_DELETED", `Deleted "${file.original_name}"`, (session.user as any).id, workOrderId, new Date().toISOString())
-        .run();
-    } catch (e) {
-      console.log("Activity logging skipped or failed:", e);
-    }
+    await prisma.activityLog.create({
+      data: {
+        action: "FILE_DELETED",
+        details: `Deleted "${file.originalName}"`,
+        userId: session.user.id,
+        workOrderId,
+        companyId,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("D1 DELETE file error:", error.message);
+    console.error("Prisma DELETE file error:", error.message);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

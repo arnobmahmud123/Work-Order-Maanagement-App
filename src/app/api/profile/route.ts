@@ -16,6 +16,17 @@ export async function GET() {
       email: true,
       phone: true,
       company: true,
+      companyId: true,
+      companyRef: {
+        select: {
+          id: true,
+          name: true,
+          logo: true,
+          branding: true,
+          theme: true,
+          workOrderNumbering: true,
+        },
+      },
       image: true,
       role: true,
       isActive: true,

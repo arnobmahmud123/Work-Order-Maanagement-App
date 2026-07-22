@@ -19,10 +19,62 @@ export default function AdminUsersPage() {
   const { data: users, isLoading, refetch } = useUsers();
   const [roleFilter, setRoleFilter] = useState("");
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "CLIENT",
+    phone: "",
+    company: "",
+  });
+  const [addingUser, setAddingUser] = useState(false);
 
   const filtered = roleFilter
     ? users?.filter((u: any) => u.role === roleFilter)
     : users;
+
+  async function handleAddSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addForm.name.trim() || !addForm.email.trim() || !addForm.password.trim()) {
+      toast.error("Name, email, and password are required");
+      return;
+    }
+    setAddingUser(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: addForm.name.trim(),
+          email: addForm.email.trim(),
+          password: addForm.password.trim(),
+          role: addForm.role,
+          phone: addForm.phone.trim() || null,
+          company: addForm.company.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed");
+      }
+      toast.success("User created successfully");
+      setIsAddModalOpen(false);
+      setAddForm({
+        name: "",
+        email: "",
+        password: "",
+        role: "CLIENT",
+        phone: "",
+        company: "",
+      });
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create user");
+    } finally {
+      setAddingUser(false);
+    }
+  }
 
   async function handleRoleChange(userId: string, newRole: string) {
     try {
@@ -77,6 +129,9 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-bold text-text-primary">Users</h1>
           <p className="text-text-muted mt-1">Manage platform users and roles</p>
         </div>
+        <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-1.5 h-9 bg-gradient-to-r from-cyan-500 to-blue-600">
+          <Plus className="h-4 w-4" /> Add User
+        </Button>
       </div>
 
       <Card padding={false}>
@@ -209,7 +264,108 @@ export default function AdminUsersPage() {
           }}
         />
       )}
+
+      {/* Add User Modal */}
+      {isAddModalOpen && (
+        <AddUserModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          form={addForm}
+          setForm={setAddForm}
+          onSubmit={handleAddSubmit}
+          loading={addingUser}
+        />
+      )}
     </div>
+  );
+}
+
+function AddUserModal({
+  isOpen,
+  onClose,
+  form,
+  setForm,
+  onSubmit,
+  loading,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  form: any;
+  setForm: (f: any) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  loading: boolean;
+}) {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add New User" size="md">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Input
+          label="Full Name *"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Jane Doe"
+          required
+        />
+        <Input
+          label="Email Address *"
+          type="email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          placeholder="jane@company.com"
+          required
+        />
+        <Input
+          label="Password *"
+          type="password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          placeholder="••••••••"
+          required
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Phone"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder="(555) 000-0000"
+          />
+          <Input
+            label="Company"
+            value={form.company}
+            onChange={(e) => setForm({ ...form, company: e.target.value })}
+            placeholder="Acme Preservation"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-text-secondary uppercase mb-1.5">
+            Role
+          </label>
+          <select
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+            className="block w-full rounded-lg border border-border-medium bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-cyan-500 focus:outline-none"
+          >
+            <option value="CLIENT">Client</option>
+            <option value="CONTRACTOR">Contractor</option>
+            <option value="COORDINATOR">Coordinator</option>
+            <option value="PROCESSOR">Processor</option>
+            <option value="ADMIN">Admin</option>
+          </select>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle mt-6">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            loading={loading}
+            className="bg-gradient-to-r from-cyan-500 to-blue-600"
+          >
+            Add User
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

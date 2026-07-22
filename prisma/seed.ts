@@ -177,32 +177,81 @@ async function main() {
 
   console.log("  Creating users...");
 
-  // Admin
+  console.log("  Creating companies (tenants)...");
+  const company1 = await prisma.company.create({
+    data: {
+      name: "Apex Preservation",
+      branding: JSON.stringify({ logo: null, primaryColor: "#06b6d4", secondaryColor: "#3b82f6", name: "Apex Preservation" }),
+      theme: JSON.stringify({ mode: "dark", colors: { background: "#090d16", card: "#0f172a" } }),
+      workOrderNumbering: JSON.stringify({ prefix: "APX-", counter: 1001 }),
+      plan: "ENTERPRISE",
+      maxUsers: 50,
+      maxVendors: 100,
+      maxWorkOrders: 1000,
+    }
+  });
+
+  const company2 = await prisma.company.create({
+    data: {
+      name: "Horizon Field Services",
+      branding: JSON.stringify({ logo: null, primaryColor: "#10b981", secondaryColor: "#059669", name: "Horizon Field Services" }),
+      theme: JSON.stringify({ mode: "light", colors: { background: "#ffffff", card: "#f3f4f6" } }),
+      workOrderNumbering: JSON.stringify({ prefix: "HZN-", counter: 1001 }),
+      plan: "PROFESSIONAL",
+      maxUsers: 20,
+      maxVendors: 50,
+      maxWorkOrders: 500,
+    }
+  });
+
+  const companies = [company1, company2];
+  const getCompanyId = (i: number) => companies[i % companies.length].id;
+  const getCompanyName = (i: number) => companies[i % companies.length].name;
+
+  // Admin (SUPER_ADMIN)
   const admin = await prisma.user.upsert({
     where: { email: "admin@proppreserve.com" },
     update: {},
     create: {
-      name: "Admin User",
+      name: "Super Admin",
       email: "admin@proppreserve.com",
       hashedPassword,
-      role: "ADMIN",
-      company: "PropPreserve Inc.",
+      role: "SUPER_ADMIN",
+      company: "PropPreserve Platform",
       phone: "(555) 100-0001",
       image: `https://i.pravatar.cc/150?u=admin@proppreserve.com`,
     },
   });
 
+  // Admin for Company 1
   const admin2 = await prisma.user.upsert({
     where: { email: "admin2@example.com" },
     update: {},
     create: {
-      name: "Admin User 2",
+      name: "Apex Admin",
       email: "admin2@example.com",
       hashedPassword,
       role: "ADMIN",
-      company: "PropPreserve Inc.",
+      companyId: company1.id,
+      company: "Apex Preservation",
       phone: "(555) 100-0002",
       image: `https://i.pravatar.cc/150?u=admin2@example.com`,
+    },
+  });
+
+  // Admin for Company 2
+  const admin3 = await prisma.user.upsert({
+    where: { email: "admin3@example.com" },
+    update: {},
+    create: {
+      name: "Horizon Admin",
+      email: "admin3@example.com",
+      hashedPassword,
+      role: "ADMIN",
+      companyId: company2.id,
+      company: "Horizon Field Services",
+      phone: "(555) 100-0003",
+      image: `https://i.pravatar.cc/150?u=admin3@example.com`,
     },
   });
 
@@ -220,7 +269,8 @@ async function main() {
         email,
         hashedPassword,
         role: "CONTRACTOR",
-        company: pick(COMPANY_NAMES),
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) ${String(200 + Math.floor(i / 10)).padStart(3, "0")}-${String(i % 100).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -242,7 +292,8 @@ async function main() {
         email,
         hashedPassword,
         role: "PROCESSOR",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 300-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -264,7 +315,8 @@ async function main() {
         email,
         hashedPassword,
         role: "COORDINATOR",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 400-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -286,7 +338,8 @@ async function main() {
         email,
         hashedPassword,
         role: "ACCOUNTANT",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 500-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -308,7 +361,8 @@ async function main() {
         email,
         hashedPassword,
         role: "CLIENT_MANAGER",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 600-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -330,7 +384,8 @@ async function main() {
         email,
         hashedPassword,
         role: "PROCESSOR_INCHARGE",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 700-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -352,7 +407,8 @@ async function main() {
         email,
         hashedPassword,
         role: "INCHARGE_CLIENT_MANAGER",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 800-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -374,7 +430,8 @@ async function main() {
         email,
         hashedPassword,
         role: "INCHARGE_COORDINATOR",
-        company: "PropPreserve Inc.",
+        companyId: getCompanyId(i),
+        company: getCompanyName(i),
         phone: `(555) 900-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
       },
@@ -397,6 +454,7 @@ async function main() {
         email,
         hashedPassword,
         role: "CLIENT",
+        companyId: getCompanyId(i),
         company: clientCompanies[i - 1],
         phone: `(555) 110-${String(i).padStart(4, "0")}`,
         image: `https://i.pravatar.cc/150?u=${email}`,
@@ -405,26 +463,27 @@ async function main() {
     clients.push(cl);
   }
 
-  const allUsers = [admin, ...contractors, ...processors, ...coordinators, ...accountants, ...clientManagers, ...processorIncharges, ...inchargeCMs, ...inchargeCoords, ...clients];
-  console.log(`  ✅ ${allUsers.length} users created`);
+  const allUsers = [admin, admin2, admin3, ...contractors, ...processors, ...coordinators, ...accountants, ...clientManagers, ...processorIncharges, ...inchargeCMs, ...inchargeCoords, ...clients];
+  console.log(`  ... ${allUsers.length} users created`);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PROPERTIES & WORK ORDERS
   // ═══════════════════════════════════════════════════════════════════════════
-
-  console.log("  Creating properties and work orders...");
 
   const properties: any[] = [];
   const workOrders: any[] = [];
 
   for (let i = 0; i < 20; i++) {
     const loc = randomAddress();
+    const currentCompanyId = getCompanyId(i);
+
     const prop = await prisma.property.create({
       data: {
         address: loc.address,
         city: loc.city,
         state: loc.state,
         zipCode: loc.zipCode,
+        companyId: currentCompanyId,
       },
     });
     properties.push(prop);
@@ -433,10 +492,17 @@ async function main() {
     const status = pick([...STATUSES]);
     const priority = pick([0, 1, 2]);
     const dueDays = randInt(-30, 45);
-    const client = pick(clients);
-    const coordinator = pick(coordinators);
-    const processor = pick(processors);
-    const contractor = pick(contractors);
+
+    // Get company-scoped users to maintain data consistency
+    const companyContractors = contractors.filter(c => c.companyId === currentCompanyId);
+    const companyCoordinators = coordinators.filter(c => c.companyId === currentCompanyId);
+    const companyProcessors = processors.filter(p => p.companyId === currentCompanyId);
+    const companyClients = clients.filter(c => c.companyId === currentCompanyId);
+
+    const contractor = pick(companyContractors) || contractors[0];
+    const coordinator = pick(companyCoordinators) || coordinators[0];
+    const processor = pick(companyProcessors) || processors[0];
+    const client = pick(companyClients) || clients[0];
 
     const title = `${serviceType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (l: string) => l.toUpperCase())} - ${loc.address}`;
 
@@ -454,8 +520,9 @@ async function main() {
       contractorId: contractor.id,
       coordinatorId: coordinator.id,
       processorId: processor.id,
-      createdById: pick([admin.id, client.id, coordinator.id]),
+      createdById: pick([admin2.id, client.id, coordinator.id]),
       propertyId: prop.id,
+      companyId: currentCompanyId,
       tasks: JSON.stringify(makeTasks(serviceType)),
     };
 
@@ -544,6 +611,7 @@ async function main() {
         name: `${u1.name} & ${u2.name}`,
         type: "DIRECT_MESSAGE",
         createdById: u1.id,
+        companyId: u1.companyId || u2.companyId || company1.id,
         members: {
           create: [
             { userId: u1.id, role: "ADMIN" },
@@ -808,6 +876,7 @@ async function main() {
         subtotal,
         tax,
         total,
+        companyId: wo.companyId,
         dueDate: daysFromNow(randInt(-15, 30)),
         paidAt: status === "PAID" ? daysFromNow(-randInt(1, 10)) : null,
         items: {
@@ -831,7 +900,7 @@ async function main() {
     invoices.push(inv);
   }
 
-  console.log(`  ✅ ${invoices.length} invoices created`);
+  console.log(`  ... ${invoices.length} invoices created`);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SUPPORT TICKETS
@@ -863,7 +932,8 @@ async function main() {
         status: pick([...TICKET_STATUSES]) as any,
         category: td.category,
         creatorId: creator.id,
-        assigneeId: admin.id,
+        assigneeId: admin2.id, // Assign to company admin
+        companyId: creator.companyId,
       },
     });
 
@@ -917,6 +987,7 @@ async function main() {
       details: `${action.replace(/_/g, " ").toLowerCase()} - ${wo.title}`,
       userId: user.id,
       workOrderId: Math.random() > 0.3 ? wo.id : null,
+      companyId: wo.companyId,
       createdAt: daysFromNow(-daysAgo),
     });
   }
@@ -930,21 +1001,24 @@ async function main() {
 
   console.log("  Creating threads and messages...");
 
-  const threadParticipants = [admin, ...staffUsers, ...contractors.slice(0, 10)];
   const threads: any[] = [];
 
-  // Create 5 general threads
-  for (let i = 0; i < 5; i++) {
-    const thread = await prisma.thread.create({
-      data: {
-        title: pick(["Team Sync", "General Logistics", "Announcements", "Safety Protocol", "Platform Feedback"]),
-        isGeneral: true,
-        participants: {
-          create: staffUsers.slice(0, 5).map(u => ({ userId: u.id, role: "MEMBER" })),
+  // Create 5 general threads for each company
+  for (const company of companies) {
+    const companyStaff = staffUsers.filter(u => u.companyId === company.id);
+    for (let i = 0; i < 5; i++) {
+      const thread = await prisma.thread.create({
+        data: {
+          title: pick(["Team Sync", "General Logistics", "Announcements", "Safety Protocol", "Platform Feedback"]),
+          isGeneral: true,
+          companyId: company.id,
+          participants: {
+            create: companyStaff.slice(0, 5).map(u => ({ userId: u.id, role: "MEMBER" })),
+          },
         },
-      },
-    });
-    threads.push(thread);
+      });
+      threads.push(thread);
+    }
   }
 
   // Create threads for some work orders
@@ -955,9 +1029,10 @@ async function main() {
         title: `Discussion for ${wo.title}`,
         isGeneral: false,
         workOrderId: wo.id,
+        companyId: wo.companyId,
         participants: {
           create: [
-            { userId: admin.id, role: "ADMIN" },
+            { userId: admin2.id, role: "ADMIN" },
             { userId: wo.contractorId || contractors[0].id, role: "MEMBER" },
             { userId: wo.coordinatorId || coordinators[0].id, role: "MEMBER" },
           ],
@@ -971,7 +1046,8 @@ async function main() {
   for (const thread of threads) {
     const messageCount = randInt(2, 8);
     for (let j = 0; j < messageCount; j++) {
-      const author = pick(threadParticipants);
+      const threadParticipants = allUsers.filter(u => u.companyId === thread.companyId);
+      const author = pick(threadParticipants) || allUsers[0];
       await prisma.message.create({
         data: {
           content: pick([
@@ -1040,7 +1116,7 @@ async function main() {
       messages: [
         { from: "+15550100004", to: systemPhone, direction: "INBOUND", body: "Found squatter signs at 202 Elm Blvd. Front door was unlocked." },
         { from: systemPhone, to: "+15550100004", direction: "OUTBOUND", body: "Do not enter. Stay safe. We are dispatching local authorities." },
-        { from: systemPhone, to: "+15550100004", direction: "INTERNAL", type: "NOTE", authorName: "Admin User", body: "Flagged Detroit property for safety review. Police notified." }
+        { from: systemPhone, to: "+15550100004", direction: "INTERNAL", type: "NOTE", authorName: "Apex Admin", body: "Flagged Detroit property for safety review. Police notified." }
       ]
     },
     {
@@ -1089,7 +1165,9 @@ async function main() {
     }
   ];
 
+  let smsIdx = 0;
   for (const thread of demoSmsThreads) {
+    const compId = getCompanyId(smsIdx);
     for (const msg of thread.messages) {
       await prisma.smsMessage.create({
         data: {
@@ -1100,10 +1178,12 @@ async function main() {
           type: msg.type || "SMS",
           authorName: msg.authorName || null,
           mediaUrl: msg.mediaUrl || null,
+          companyId: compId,
           createdAt: new Date(Date.now() - randInt(1, 10) * 3600 * 1000),
         }
       });
     }
+    smsIdx++;
   }
   console.log(`  ✅ 10 SMS conversations with messages created`);
 

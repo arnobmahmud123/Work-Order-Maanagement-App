@@ -28,6 +28,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
+    // Enforce Subscription Storage limits
+    const companyId = (session.user as any).companyId;
+    const role = (session.user as any).role;
+
+    if (role !== "SUPER_ADMIN" && companyId) {
+      const activeCompany = await prisma.company.findUnique({
+        where: { id: companyId },
+      });
+      if (activeCompany) {
+        const aggregations = await prisma.fileUpload.aggregate({
+          where: { companyId },
+          _sum: { size: true },
+        });
+        const currentBytes = aggregations._sum.size || 0;
+        const currentMB = currentBytes / (1024 * 1024);
+
+        if (currentMB + (file.size / (1024 * 1024)) > activeCompany.maxStorage) {
+          return NextResponse.json(
+            { error: `Storage limit reached (${activeCompany.maxStorage} MB). Please upgrade your subscription plan.` },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // Max 20MB for GPS photos
     if (file.size > 20 * 1024 * 1024) {
       return NextResponse.json(
@@ -75,6 +100,7 @@ export async function POST(req: NextRequest) {
         category: category as any,
         workOrderId: workOrderId || null,
         uploaderId: (session.user as any).id,
+        companyId,
       },
     });
 
@@ -86,6 +112,7 @@ export async function POST(req: NextRequest) {
           details: `GPS photo uploaded${metadata.gps ? ` at (${metadata.gps.latitude.toFixed(6)}, ${metadata.gps.longitude.toFixed(6)})` : ""}${address ? ` — ${address}` : ""}`,
           userId: (session.user as any).id,
           workOrderId,
+          companyId,
         },
       });
     }

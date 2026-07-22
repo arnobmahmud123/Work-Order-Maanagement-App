@@ -50,7 +50,7 @@ export const {
           try {
             console.log("[Auth] Querying D1 database...");
             const user = await db.prepare(
-              `SELECT id, email, name, image, role, hashedPassword, isActive FROM users WHERE email = ? LIMIT 1`
+              `SELECT id, email, name, image, role, hashedPassword, isActive, company_id as companyId FROM users WHERE email = ? LIMIT 1`
             )
               .bind(email)
               .first<any>();
@@ -79,6 +79,7 @@ export const {
               name: user.name,
               image: user.image,
               role: user.role,
+              companyId: user.companyId,
             };
           } catch (error: any) {
             console.error("[Auth] D1 error:", error.message);
@@ -111,6 +112,7 @@ export const {
         if (user) {
           token.role = normalizeRole((user as any).role);
           token.id = user.id;
+          token.companyId = (user as any).companyId || null;
         }
 
         try {
@@ -125,13 +127,13 @@ export const {
 
           const dbUser = tokenId
             ? await db.prepare(
-                `SELECT id, email, name, image, role, isActive FROM users WHERE id = ? LIMIT 1`
+                `SELECT id, email, name, image, role, isActive, company_id as companyId FROM users WHERE id = ? LIMIT 1`
               )
                 .bind(tokenId)
                 .first<any>()
             : tokenEmail
               ? await db.prepare(
-                  `SELECT id, email, name, image, role, isActive FROM users WHERE email = ? LIMIT 1`
+                  `SELECT id, email, name, image, role, isActive, company_id as companyId FROM users WHERE email = ? LIMIT 1`
                 )
                   .bind(tokenEmail)
                   .first<any>()
@@ -143,6 +145,7 @@ export const {
             if (dbUser?.email) token.email = dbUser.email;
             if (dbUser?.name) token.name = dbUser.name;
             if (dbUser?.image) token.picture = dbUser.image;
+            token.companyId = dbUser.companyId || null;
           }
         } catch (error: any) {
           console.warn("[Auth] Failed to refresh token role:", error?.message || error);
@@ -159,6 +162,7 @@ export const {
               : typeof token.sub === "string"
                 ? token.sub
                 : "";
+          (session.user as any).companyId = token.companyId || null;
         }
         return session;
       },

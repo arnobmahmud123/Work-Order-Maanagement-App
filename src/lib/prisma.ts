@@ -102,11 +102,118 @@ function createPrismaClient(): PrismaClient {
     client = new PrismaClient();
   }
 
-  // Auto-serialization middleware for SQLite D1 compatibility
+  const partitionedModels = [
+    "User", "WorkOrder", "Property", "FileUpload", "Thread", "Invoice", 
+    "SupportTicket", "Notification", "ActivityLog", "Channel", "ContractorBalance", 
+    "Dispute", "Withdrawal", "Post", "JobRequest", "JobOffer", "ContractorProfile", 
+    "Inspector", "Supplier", "Material", "PurchaseOrder", "SmsMessage", "Lead"
+  ];
+
+  // Auto-serialization and multi-tenant isolation middleware for SQLite D1 compatibility
   client.$use(async (params, next) => {
+    // 1. JSON serialization for SQLite compatibility
     if (params.args && params.args.data) {
       serializeData(params.args.data);
     }
+
+    const model = params.model;
+    const action = params.action;
+
+    // Check if query explicitly requested tenant bypass
+    const bypassTenant = params.args?.bypassTenant === true;
+    if (params.args && "bypassTenant" in params.args) {
+      delete params.args.bypassTenant;
+    }
+    if (params.args?.where && "bypassTenant" in params.args.where) {
+      delete params.args.where.bypassTenant;
+    }
+
+    if (model && partitionedModels.includes(model) && !bypassTenant) {
+      let session: any = null;
+      try {
+        const { auth } = require("./auth");
+        session = await auth();
+      } catch (e) {
+        // Safe to ignore: occurs when running builds or seeds outside of HTTP contexts
+      }
+
+      const companyId = session?.user?.companyId;
+      const role = session?.user?.role;
+
+      // Enforce companyId matches session companyId for normal users
+      if (session && role !== "SUPER_ADMIN") {
+        if (!companyId) {
+          throw new Error(`Unauthorized: No active tenant company ID found in session for action on ${model}`);
+        }
+
+        // Auto-inject filters into read/list operations
+        if (["findFirst", "findMany", "count", "updateMany", "deleteMany"].includes(action)) {
+          params.args = params.args || {};
+          params.args.where = params.args.where || {};
+          params.args.where.companyId = companyId;
+        }
+
+        // Convert findUnique to findFirst to allow appending non-unique filters (companyId)
+        if (action === "findUnique") {
+          params.action = "findFirst";
+          params.args = params.args || {};
+          params.args.where = params.args.where || {};
+          params.args.where.companyId = companyId;
+        }
+
+        // Verify record ownership before modifying specific items
+        if (action === "update" || action === "delete") {
+          params.args = params.args || {};
+          params.args.where = params.args.where || {};
+          
+          const lookupWhere = { ...params.args.where, companyId, bypassTenant: true };
+          const count = await (client as any)[model].count({ where: lookupWhere });
+          if (count === 0) {
+            throw new Error(`Unauthorized: Record in ${model} does not exist or does not belong to your company tenant.`);
+          }
+        }
+
+        // Handle upsert queries by verifying ownership and tagging create/update structures
+        if (action === "upsert") {
+          params.args = params.args || {};
+          
+          params.args.create = params.args.create || {};
+          params.args.create.companyId = companyId;
+          
+          params.args.update = params.args.update || {};
+          params.args.update.companyId = companyId;
+
+          params.args.where = params.args.where || {};
+          const lookupWhere = { ...params.args.where, companyId, bypassTenant: true };
+          const count = await (client as any)[model].count({ where: lookupWhere });
+          if (count === 0) {
+            const globalCount = await (client as any)[model].count({ where: { ...params.args.where, bypassTenant: true } });
+            if (globalCount > 0) {
+              throw new Error(`Unauthorized: Record in ${model} belongs to a different company tenant.`);
+            }
+          }
+        }
+
+        // Automatically assign companyId on item creations
+        if (action === "create") {
+          params.args = params.args || {};
+          params.args.data = params.args.data || {};
+          params.args.data.companyId = companyId;
+        }
+
+        if (action === "createMany") {
+          params.args = params.args || {};
+          if (Array.isArray(params.args.data)) {
+            params.args.data.forEach((item: any) => {
+              item.companyId = companyId;
+            });
+          } else if (params.args.data) {
+            params.args.data.companyId = companyId;
+          }
+        }
+      }
+    }
+
     const result = await next(params);
     deserializeData(result);
     return result;

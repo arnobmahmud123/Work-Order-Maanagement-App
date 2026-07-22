@@ -13,6 +13,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const companyId = (session.user as any).companyId;
+  const userRole = (session.user as any).role;
+
+  if (userRole !== "SUPER_ADMIN" && !companyId) {
+    return NextResponse.json({ error: "Forbidden: User has no assigned company tenant context" }, { status: 403 });
+  }
+
   const body = await req.json();
   const { workOrderIds, status } = body;
 
@@ -20,10 +27,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "workOrderIds and status are required" }, { status: 400 });
   }
 
+  const whereClause: any = { id: { in: workOrderIds } };
+  if (userRole !== "SUPER_ADMIN") {
+    whereClause.companyId = companyId;
+  }
+
   const result = await prisma.workOrder.updateMany({
-    where: { id: { in: workOrderIds } },
+    where: whereClause,
     data: { status },
   });
+
+  const targetCompanyId = userRole === "SUPER_ADMIN" ? (body.companyId || null) : companyId;
 
   await prisma.activityLog.createMany({
     data: workOrderIds.map((id: string) => ({
@@ -31,6 +45,7 @@ export async function POST(req: NextRequest) {
       details: `Status changed to ${status}`,
       userId: (session.user as any).id,
       workOrderId: id,
+      companyId: targetCompanyId,
     })),
   });
 

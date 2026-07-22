@@ -13,3 +13,6 @@ download.tar.gz
 .env*.local
 src/generated/
 tsconfig.tsbuildinfo
+.wrangler/
+seed_custom.sql
+schema.sql
