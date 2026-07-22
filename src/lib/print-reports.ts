@@ -241,8 +241,11 @@ export function executePrint(html: string, titleName: string = "Property Preserv
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button id="mobile-download-action-btn" style="background:#22c55e;color:#fff;border:none;font-weight:800;padding:8px 12px;border-radius:10px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 4px 12px rgba(34,197,94,0.3);">
+          📥 Download PDF
+        </button>
         <button id="mobile-print-action-btn" style="background:linear-gradient(135deg,#06b6d4,#0284c7);color:#ffffff;border:none;font-weight:800;padding:8px 12px;border-radius:10px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 4px 12px rgba(6,182,212,0.3);">
-          🖨️ Print / Save PDF
+          🖨️ Print
         </button>
         <button id="mobile-close-action-btn" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;padding:8px 10px;border-radius:10px;font-size:11px;cursor:pointer;">
           ✕
@@ -259,10 +262,64 @@ export function executePrint(html: string, titleName: string = "Property Preserv
 
   const iframeEl = document.getElementById("mobile-print-iframe-element") as HTMLIFrameElement;
   const printBtn = document.getElementById("mobile-print-action-btn");
+  const downloadBtn = document.getElementById("mobile-download-action-btn");
   const closeBtn = document.getElementById("mobile-close-action-btn");
 
   closeBtn?.addEventListener("click", () => overlay.remove());
 
+  // 1. Direct PDF Download via html2pdf.js
+  downloadBtn?.addEventListener("click", async () => {
+    downloadBtn.innerHTML = "⏳ Generating...";
+    downloadBtn.style.opacity = "0.7";
+    downloadBtn.style.pointerEvents = "none";
+    
+    try {
+      // Dynamically load html2pdf.js
+      if (!(window as any).html2pdf) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+
+      // Create a temporary container
+      const container = document.createElement("div");
+      container.innerHTML = cleanHtml;
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      container.style.width = "1000px"; // Fixed width for consistent PDF rendering
+      container.style.background = "#ffffff";
+      document.body.appendChild(container);
+
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
+      };
+
+      await (window as any).html2pdf().set(opt).from(container).save();
+      
+      document.body.removeChild(container);
+      downloadBtn.innerHTML = "✅ Downloaded!";
+    } catch (e) {
+      console.error("PDF generation failed:", e);
+      downloadBtn.innerHTML = "❌ Failed";
+    } finally {
+      setTimeout(() => {
+        downloadBtn.innerHTML = "📥 Download PDF";
+        downloadBtn.style.opacity = "1";
+        downloadBtn.style.pointerEvents = "auto";
+      }, 3000);
+    }
+  });
+
+  // 2. Native Print Dialog
   const handleMobilePrintOrShare = async () => {
     // In iOS PWAs (Standalone mode), `window.open` is often blocked and `blob:` navigation fails.
     // The ultimate robust fallback for iOS Safari/PWAs is to inject the print HTML into the current DOM,
