@@ -26,7 +26,9 @@ import {
   AlertTriangle,
   Sparkles,
   Search,
+  Download,
 } from "lucide-react";
+import { downloadSingleBid, downloadSingleTask } from "@/lib/download-helper";
 
 // ─── Unit Options ────────────────────────────────────────────────────────────
 
@@ -790,7 +792,7 @@ export function TaskEntryList({
                         )}
                       </div>
                       {task.description && (
-                        <p className="text-[11px] text-text-muted mt-1 line-clamp-1 group-hover:line-clamp-none transition-all leading-relaxed italic">
+                        <p className="text-xs text-text-secondary mt-1 whitespace-pre-wrap leading-relaxed">
                           {task.description}
                         </p>
                       )}
@@ -837,6 +839,14 @@ export function TaskEntryList({
                   </div>
 
                   <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1">
+                    <button
+                      onClick={() => downloadSingleTask(task)}
+                      className="p-2 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
+                      title="Download Task Details"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
+
                     <button
                       onClick={() => toggleExpand(task.id)}
                       className={cn(
@@ -2706,8 +2716,12 @@ export function BidEntryList({
                       </div>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-sm font-black text-emerald-400">${bid.amount.toLocaleString()}</span>
-                        {bid.description && <span className="text-[11px] text-text-muted italic line-clamp-1 group-hover:line-clamp-none group-hover:text-text-secondary transition-all max-w-[300px]">&ldquo;{bid.description}&rdquo;</span>}
                       </div>
+                      {bid.description && (
+                        <p className="text-xs text-text-secondary mt-1 whitespace-pre-wrap leading-relaxed">
+                          {bid.description}
+                        </p>
+                      )}
                       {(bid.unit || bid.quantity != null || bid.price != null) && (
                         <div className="flex items-center gap-2 mt-1.5">
                           {bid.unit && (
@@ -2738,6 +2752,13 @@ export function BidEntryList({
 
                 <div className="flex items-center gap-1.5">
                   <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1">
+                    <button
+                      onClick={() => downloadSingleBid(bid)}
+                      className="p-2 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
+                      title="Download Bid Proposal"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       onClick={() => toggleExpand(bid.id)}
                       className={cn(

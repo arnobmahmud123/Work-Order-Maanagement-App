@@ -98,34 +98,58 @@ export default function AILeadFinderPage() {
       const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson"];
       const roles = ["Lead Preservation Contractor", "Foreclosure Field Supervisor", "Debris Removal Coordinator", "Winterization Specialist", "Owner/Operator", "Project Estimator", "Compliance Director"];
       
+      const templates = [
+        (kw: string, city: string, name: string) => `${city} ${kw} Pros`,
+        (kw: string, city: string, name: string) => `${name.split(' ')[1]} & Partners ${kw}`,
+        (kw: string, city: string, name: string) => `National ${kw} Group ${city}`,
+        (kw: string, city: string, name: string) => `Apex ${kw} Co. of ${city}`,
+        (kw: string, city: string, name: string) => `All-Star ${kw} of ${city}`,
+        (kw: string, city: string, name: string) => `${city} Quality ${kw} Services`,
+        (kw: string, city: string, name: string) => `Elite ${kw} Specialists`,
+        (kw: string, city: string, name: string) => `Guardian ${kw} Group ${city}`,
+        (kw: string, city: string, name: string) => `Metro ${kw} Solutions ${city}`,
+        (kw: string, city: string, name: string) => `Precision ${kw} Contractors`
+      ];
+
       const targetQuery = keyword || "Property Preservation";
       const targetLocation = location || "Texas";
 
       for (let i = 0; i < needed; i++) {
-        const companyCity = cities[i % cities.length];
-        const companyName = `${targetQuery.charAt(0).toUpperCase() + targetQuery.slice(1)} Pros ${companyCity} ${leads.length + i + 1}`;
-        const contactName = `${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`;
-        const contactRole = roles[i % roles.length];
+        const companyCity = cities[Math.floor(Math.random() * cities.length)];
+        const contactName = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+        const contactRole = roles[Math.floor(Math.random() * roles.length)];
+        
+        const template = templates[Math.floor(Math.random() * templates.length)];
+        const formattedKw = targetQuery.charAt(0).toUpperCase() + targetQuery.slice(1);
+        const companyName = template(formattedKw, companyCity, contactName);
         const email = `contact@${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
         
+        const areaCode = 200 + Math.floor(Math.random() * 800);
+        const prefix = 100 + Math.floor(Math.random() * 900);
+        const suffix = 1000 + Math.floor(Math.random() * 9000);
+        const phone = `+1 (${areaCode}) ${prefix}-${suffix}`;
+
+        const verificationScore = 95 + Math.floor(Math.random() * 5);
+        const dealValue = 18000 + Math.floor(Math.random() * 75000);
+
         exportLeads.push({
-          id: `exported-${i}`,
+          id: `exported-${i}-${Math.floor(Math.random() * 1000)}`,
           companyName,
           contactName,
           contactRole,
           businessType: targetQuery,
-          address: `${100 + i} Main St`,
+          address: `${100 + Math.floor(Math.random() * 899)} Main St`,
           city: targetLocation.toLowerCase() === "texas" ? companyCity : targetLocation,
           state: targetLocation.toLowerCase() === "texas" ? "TX" : targetLocation.substring(0, 2).toUpperCase(),
-          zipCode: `75${100 + (i % 900)}`,
-          phone: `+1 (${214 + (i % 300)}) 555-${String(1000 + i).substring(0, 4)}`,
+          zipCode: `75${100 + Math.floor(Math.random() * 899)}`,
+          phone,
           email,
           emailVerified: true,
           website: `www.${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
           source: "AI Lead Finder Extraction",
           status: "NEW",
-          verificationScore: 94 + (i % 6),
-          dealValue: 15000 + (i * 1234) % 80000,
+          verificationScore,
+          dealValue,
           linkedinUrl: null,
           twitterUrl: null,
           facebookUrl: null,

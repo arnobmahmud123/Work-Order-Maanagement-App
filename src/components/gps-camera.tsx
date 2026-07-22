@@ -435,9 +435,14 @@ export function GPSCamera({
       onCapture(capturedPhoto);
       setCapturedCount((c) => c + 1);
       setCapturedPhoto(null);
-      // In multi-capture mode, go straight back to camera
-      // In single mode, onCapture callback typically closes the camera
     }
+  }
+
+  function handleDoneAndClose() {
+    if (capturedPhoto) {
+      confirmPhoto();
+    }
+    onClose();
   }
 
   // ─── Preview (after capture) ──────────────────────────────────────────
@@ -500,15 +505,20 @@ export function GPSCamera({
             <span className="text-sm font-medium">Retake</span>
           </button>
           <button
-            onClick={confirmPhoto}
+            onClick={() => {
+              confirmPhoto();
+              if (!multiCapture) {
+                onClose();
+              }
+            }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-400 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20"
           >
             <Check className="h-4 w-4" />
-            <span className="text-sm font-medium">{multiCapture ? "Add & Continue" : "Use Photo"}</span>
+            <span className="text-sm font-medium">{multiCapture ? "Add & Continue" : "Done / Save Photo"}</span>
           </button>
           {multiCapture && (
             <button
-              onClick={onClose}
+              onClick={handleDoneAndClose}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 backdrop-blur-sm transition-all border border-emerald-500/30"
             >
               <Check className="h-4 w-4" />
