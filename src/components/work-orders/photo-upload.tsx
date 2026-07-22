@@ -645,7 +645,7 @@ function PhotoLightboxNav({
     photos.findIndex((p) => p.id === currentPhoto.id)
   );
   const [isZoomed, setIsZoomed] = useState(false);
-  const [showInfo, setShowInfo] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
   const [exifData, setExifData] = useState<EXIFInfo | null>(null);
 
   const photo = photos[currentIndex] || currentPhoto;
@@ -684,14 +684,19 @@ function PhotoLightboxNav({
     }
   }, [currentIndex, photos.length]);
 
-  const handleDownload = (e: React.MouseEvent) => {
+  const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const a = document.createElement("a");
-    a.href = photo.url;
-    a.download = photo.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const { triggerFileDownload } = await import("@/lib/download-helper");
+      await triggerFileDownload(photo.url, photo.name);
+    } catch {
+      const a = document.createElement("a");
+      a.href = photo.url;
+      a.download = photo.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   // Keyboard navigation
@@ -707,81 +712,21 @@ function PhotoLightboxNav({
 
   return (
     <div
-      className="fixed inset-0 flex flex-col md:flex-row bg-black/90 backdrop-blur-md overflow-hidden"
-      style={{ zIndex: 2147483647 }}
+      className="fixed inset-0 flex flex-col md:flex-row bg-black/95 backdrop-blur-md overflow-hidden"
+      style={{
+        zIndex: 2147483647,
+        paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+        paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+      }}
       onClick={onClose}
     >
-      {/* SIDEBAR (EXIF / INFO) */}
-      <div 
-        className={cn(
-          "flex-shrink-0 bg-[#111111] border-t md:border-t-0 md:border-r border-white/10 flex flex-col transition-all duration-300 overflow-y-auto text-white",
-          showInfo ? "h-1/2 md:h-full w-full md:w-80 translate-y-0 md:translate-x-0" : "h-0 md:h-full w-full md:w-0 translate-y-full md:translate-y-0 md:-translate-x-full"
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {showInfo && (
-          <div className="w-full md:w-80 flex flex-col p-4 space-y-6">
-
-            {/* PHOTO INFO SECTION */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-semibold text-white/50 tracking-wider">PHOTO INFO</p>
-              
-              <div className="space-y-3 text-xs">
-                <div>
-                  <p className="text-white/50 mb-0.5">File Name</p>
-                  <p className="text-white break-all font-medium leading-relaxed">{photo.name}</p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">Uploaded By</p>
-                  <p className="text-white font-medium">System User</p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">Upload Time</p>
-                  <p className="text-white font-medium">{photo.timestamp ? new Date(photo.timestamp).toLocaleString() : "Unknown"}</p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">Upload Source</p>
-                  <p className="text-white font-medium">Web</p>
-                </div>
-                
-                {/* EXIF Data */}
-                <div>
-                  <p className="text-white/50 mb-0.5">Date Taken</p>
-                  <p className="text-white font-medium">
-                    {exifData?.dateTime ? parseEXIFDate(exifData.dateTime).toLocaleString() : (photo.timestamp ? new Date(photo.timestamp).toLocaleString() : "Unknown")}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">GPS Latitude</p>
-                  <p className="text-white font-medium">{exifData?.gps?.latitude?.toFixed(6) || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">GPS Longitude</p>
-                  <p className="text-white font-medium">{exifData?.gps?.longitude?.toFixed(6) || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">Camera Make</p>
-                  <p className="text-white font-medium">{exifData?.make || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-white/50 mb-0.5">Camera Model</p>
-                  <p className="text-white font-medium">{exifData?.model || "—"}</p>
-                </div>
-              </div>
-            </div>
-
-
-          </div>
-        )}
-      </div>
-
       {/* MAIN IMAGE VIEWER AREA */}
-      <div className="relative flex-1 flex h-full items-center justify-center min-w-0">
+      <div className="relative flex-1 flex h-full items-center justify-center min-w-0 min-h-0">
         {/* Prev button */}
         {hasPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
-            className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/75 text-white hover:bg-slate-950/90 border border-white/15 shadow-lg shadow-black/40 backdrop-blur-md transition-colors z-10"
+            className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/75 text-white hover:bg-slate-950/90 border border-white/15 shadow-lg shadow-black/40 backdrop-blur-md transition-colors z-20"
             title="Previous (←)"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -802,7 +747,7 @@ function PhotoLightboxNav({
               "rounded-xl transition-all duration-300",
               isZoomed 
                 ? "max-w-none scale-150" 
-                : "max-w-[calc(100vw-64px)] max-h-[calc(100vh-64px)] object-contain"
+                : "max-w-[calc(100vw-32px)] max-h-[calc(100vh-80px)] object-contain"
             )}
           />
         </div>
@@ -811,7 +756,7 @@ function PhotoLightboxNav({
         {hasNext && (
           <button
             onClick={(e) => { e.stopPropagation(); goNext(); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/75 text-white hover:bg-slate-950/90 border border-white/15 shadow-lg shadow-black/40 backdrop-blur-md transition-colors z-10"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/75 text-white hover:bg-slate-950/90 border border-white/15 shadow-lg shadow-black/40 backdrop-blur-md transition-colors z-20"
             title="Next (→)"
           >
             <ChevronRight className="h-6 w-6" />
@@ -819,7 +764,7 @@ function PhotoLightboxNav({
         )}
 
         {/* Top toolbar buttons */}
-        <div className="absolute top-4 right-4 flex gap-2">
+        <div className="absolute top-4 right-4 flex gap-2 z-30">
           <button
             onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
             className={cn(
@@ -870,12 +815,65 @@ function PhotoLightboxNav({
         </div>
 
         {/* Bottom index counter */}
-        <div className="absolute bottom-4 right-4 flex items-end justify-between pointer-events-none">
+        <div className="absolute bottom-4 right-4 flex items-end justify-between pointer-events-none z-20">
           <span className="text-xs font-medium text-white/90 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
-            {currentIndex + 1} / {photos.length}
+            {currentIndex + 1} of {photos.length}
           </span>
         </div>
       </div>
+
+      {/* EXIF / INFO PANEL (Bottom sheet on Mobile, Right sidebar on Desktop) */}
+      {showInfo && (
+        <div 
+          className="fixed bottom-4 left-3 right-3 max-h-[35vh] md:static md:w-80 md:h-full md:max-h-none flex-shrink-0 bg-zinc-950/95 border border-white/20 md:border-t-0 md:border-l rounded-2xl md:rounded-none p-4 space-y-4 overflow-y-auto text-white z-50 shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Photo Metadata & EXIF</p>
+            <button
+              onClick={() => setShowInfo(false)}
+              className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-3 text-xs">
+            <div className="col-span-2 md:col-span-1">
+              <p className="text-white/50 text-[10px] uppercase">File Name</p>
+              <p className="text-white break-all font-mono font-medium mt-0.5">{photo.name}</p>
+            </div>
+            <div>
+              <p className="text-white/50 text-[10px] uppercase">Uploaded By</p>
+              <p className="text-white font-medium mt-0.5">System User</p>
+            </div>
+            <div>
+              <p className="text-white/50 text-[10px] uppercase">Upload Time</p>
+              <p className="text-white font-medium mt-0.5">{photo.timestamp ? new Date(photo.timestamp).toLocaleString() : "Unknown"}</p>
+            </div>
+            <div>
+              <p className="text-white/50 text-[10px] uppercase">Date Taken</p>
+              <p className="text-cyan-300 font-mono font-medium mt-0.5">
+                {exifData?.dateTime ? parseEXIFDate(exifData.dateTime).toLocaleString() : (photo.timestamp ? new Date(photo.timestamp).toLocaleString() : "Unknown")}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/50 text-[10px] uppercase">GPS Lat / Long</p>
+              <p className="text-emerald-400 font-mono font-medium mt-0.5">
+                {exifData?.gps?.latitude ? `${exifData.gps.latitude.toFixed(6)}, ${exifData.gps.longitude?.toFixed(6)}` : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/50 text-[10px] uppercase">Camera Make</p>
+              <p className="text-white font-medium mt-0.5">{exifData?.make || "—"}</p>
+            </div>
+            <div>
+              <p className="text-white/50 text-[10px] uppercase">Camera Model</p>
+              <p className="text-white font-medium mt-0.5">{exifData?.model || "—"}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
