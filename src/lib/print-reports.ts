@@ -44,38 +44,85 @@ export function getAbsolutePhotoUrl(photo: any): string {
 }
 
 /**
- * Helper to convert any image URL (including local blob: URLs) to a base64 data URI.
- * This ensures images appear correctly when the HTML is passed to the iOS Share Sheet / native PDF generator,
- * which does not have access to the browser's blob object space or session cookies.
+ * Helper to compress and resize a base64 image data URL to prevent
+ * iOS Share Sheet PDF generator from crashing due to memory limits with massive HTML strings.
+ */
+function resizeBase64Image(dataUrl: string, maxWidth = 800): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof document === "undefined") return resolve(dataUrl);
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(dataUrl);
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7)); // compress to 70% quality
+    };
+    img.onerror = () => resolve(dataUrl); // fallback if image fails to load in canvas
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Helper to convert any image URL (including local blob: URLs) to a base64 data URI,
+ * and aggressively resize it for PDF export.
  */
 export async function imageToBase64(url: string): Promise<string> {
-  if (!url || url.startsWith("data:")) return url;
+  if (!url) return "";
   try {
-    let fetchUrl = url;
-    // Proxy ALL HTTP image requests to bypass browser CORS constraints.
-    // This is required because even same-origin API URLs might redirect to cross-origin R2 buckets,
-    // which the browser will block due to CORS. By fetching via the server proxy, we bypass CORS completely.
-    if (url.startsWith("http") && typeof window !== "undefined") {
-      fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
+    let base64Data = url;
+    
+    // If it's not already a data URI, we need to fetch it first
+    if (!url.startsWith("data:")) {
+      let fetchUrl = url;
+      // Proxy ALL HTTP image requests to bypass browser CORS constraints.
+      if (url.startsWith("http") && typeof window !== "undefined") {
+        fetchUrl = `${window.location.origin}/api/proxy-image?url=${encodeURIComponent(url)}`;
+      }
+
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status} from image fetch`);
+
+      const blob = await res.blob();
+      if (!blob.type.startsWith("image/")) {
+         throw new Error(`Invalid content type: ${blob.type}`);
+      }
+
+      base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
     }
 
-    const res = await fetch(fetchUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status} from image fetch`);
-
-    const blob = await res.blob();
-    if (!blob.type.startsWith("image/")) {
-       throw new Error(`Invalid content type: ${blob.type}`);
+    // Always resize and compress the image before embedding it in the HTML
+    // to prevent memory crashes on iOS PDF generator.
+    if (typeof document !== "undefined") {
+      base64Data = await resizeBase64Image(base64Data, 800);
     }
-
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (err) {
+    
+    return base64Data;
+  } catch (err: any) {
     console.warn("Could not convert image to base64 for PDF export:", url, err);
-    return url; // Fallback to original URL
+    // Generate an SVG error image so we can see the error directly in the PDF
+    const safeUrl = url.substring(0, 40).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeErr = (err.message || "Unknown error").substring(0, 60).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150">
+      <rect width="100%" height="100%" fill="#fee2e2"/>
+      <text x="10" y="30" font-size="12" fill="#991b1b" font-family="monospace" font-weight="bold">Image Error</text>
+      <text x="10" y="55" font-size="10" fill="#991b1b" font-family="monospace">${safeErr}</text>
+      <text x="10" y="80" font-size="10" fill="#991b1b" font-family="monospace">${safeUrl}</text>
+    </svg>`;
+    return `data:image/svg+xml;base64,${typeof btoa !== "undefined" ? btoa(svg) : Buffer.from(svg).toString("base64")}`;
   }
 }
 
