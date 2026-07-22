@@ -1,5 +1,6 @@
 /**
  * Professional Print & PDF Report Generator for Property Preservation Tasks and Bids
+ * Optimized for Mobile (iOS Safari, Android Chrome, PWAs, WebViews) and Desktop
  */
 
 export interface ReportTaskItem {
@@ -40,10 +41,77 @@ export interface ReportBidItem {
 }
 
 /**
+ * Universal print trigger that works reliably on desktop and mobile browsers/WebViews.
+ * On mobile devices where window.open() popup windows are blocked, it injects a hidden iframe.
+ */
+function executePrint(html: string) {
+  if (typeof window === "undefined") return;
+
+  // Attempt window.open first (desktop preference)
+  let printWindow: Window | null = null;
+  try {
+    printWindow = window.open("", "_blank");
+  } catch (e) {
+    printWindow = null;
+  }
+
+  // If window.open was blocked (common on iOS Safari / Android Chrome / PWAs / WebViews), use hidden iframe
+  if (!printWindow || printWindow.closed || typeof printWindow.closed === "undefined") {
+    let iframe = document.getElementById("mobile-print-frame") as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = "mobile-print-frame";
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.style.zIndex = "-9999";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (err) {
+          console.error("Mobile iframe print failed:", err);
+        }
+      }, 500);
+    }
+    return;
+  }
+
+  // If popup window opened successfully:
+  try {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => {
+      try {
+        printWindow?.focus();
+        printWindow?.print();
+      } catch (e) {}
+    }, 500);
+  } catch (err) {
+    console.error("Popup document write error:", err);
+  }
+}
+
+/**
  * Generates and prints a colorful, professional PDF/Print report for Tasks with embedded Before, During & After photos.
  */
 export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: string = "WO-SUMMARY") {
   if (!tasks || tasks.length === 0) return;
+
+  const isSingleItem = tasks.length === 1;
 
   const totalCost = tasks.reduce((sum, t) => {
     const qty = t.quantity ?? 1;
@@ -59,14 +127,11 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     day: "numeric",
   });
 
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
-
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Tasks Summary Report - #${workOrderNumber}</title>
+  <title>Task Report - #${workOrderNumber}</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: #f8fafc; color: #0f172a; margin: 0; padding: 20px; line-height: 1.5; }
@@ -91,7 +156,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     .table-container { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; margin-bottom: 24px; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th { background: #0f172a; color: #cbd5e1; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 16px; }
-    td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: top; }
+    td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
 
     .badge { display: inline-block; padding: 3px 8px; border-radius: 9999px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -101,7 +166,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     .task-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 16px; page-break-inside: avoid; }
     .task-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
     .task-title { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; }
-    .task-meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .task-desc { font-size: 12px; color: #475569; margin-top: 6px; line-height: 1.5; }
     .task-price { font-size: 16px; font-weight: 800; color: #059669; }
 
     .photo-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
@@ -124,7 +189,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
   </div>
 
   <div class="header-card">
-    <h1 class="header-title">PROPERTY PRESERVATION TASKS REPORT</h1>
+    <h1 class="header-title">${isSingleItem ? "TASK DETAIL REPORT" : "PROPERTY PRESERVATION TASKS REPORT"}</h1>
     <p class="header-sub">Work Order #${workOrderNumber} • Generated on ${dateStr}</p>
     
     <div class="metrics-grid">
@@ -147,13 +212,14 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     </div>
   </div>
 
-  <!-- Detailed Tasks Table Summary -->
+  ${!isSingleItem ? `
+  <!-- Tasks Summary Table (Concise Titles & Quantities) -->
   <div class="table-container page-break">
     <table>
       <thead>
         <tr>
           <th style="width:40px;">#</th>
-          <th>Task Title & Scope</th>
+          <th>Task Title</th>
           <th>Status</th>
           <th style="text-align:right;">Qty / Unit</th>
           <th style="text-align:right;">Unit Price</th>
@@ -169,10 +235,7 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
 
           return `<tr>
             <td><strong>${idx + 1}</strong></td>
-            <td>
-              <div style="font-weight:700; color:#0f172a;">${t.title}</div>
-              ${t.description ? `<div style="font-size:11px; color:#475569; margin-top:2px;">${t.description}</div>` : ""}
-            </td>
+            <td><div style="font-weight:700; color:#0f172a;">${t.title}</div></td>
             <td>
               <span class="badge ${isDone ? "badge-completed" : "badge-pending"}">
                 ${isDone ? "COMPLETED" : "PENDING"}
@@ -186,9 +249,12 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
       </tbody>
     </table>
   </div>
+  ` : ""}
 
-  <!-- Individual Task Detail Cards with Before, During & After Photos -->
-  <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; letter-spacing:1px; margin:24px 0 12px 0; color:#0f172a;">Detailed Task Photo Documentation</h2>
+  <!-- Detailed Task Cards with Full Description & Photos -->
+  <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; letter-spacing:1px; margin:24px 0 12px 0; color:#0f172a;">
+    ${isSingleItem ? "Task Scope & Photo Documentation" : "Detailed Scope & Photo Documentation"}
+  </h2>
 
   ${tasks.map((t, idx) => {
     const beforePhotos = t.photos?.filter(p => p.category === "BEFORE") || [];
@@ -206,13 +272,19 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
         <div>
           <span style="font-size:11px; font-weight:800; color:#0284c7; text-transform:uppercase;">Task #${idx + 1}</span>
           <h3 class="task-title">${t.title}</h3>
-          ${t.description ? `<p class="task-meta">${t.description}</p>` : ""}
+          ${t.description ? `<p class="task-desc">${t.description}</p>` : ""}
         </div>
         <div style="text-align:right;">
           <span class="badge ${isDone ? "badge-completed" : "badge-pending"}">${isDone ? "COMPLETED" : "PENDING"}</span>
           ${t.price != null ? `<div class="task-price" style="margin-top:4px;">$${total.toFixed(2)}</div>` : ""}
         </div>
       </div>
+
+      ${t.unit || t.quantity != null || t.price != null ? `
+        <div style="font-size:11px; font-weight:700; color:#0e7490; background:#ecfeff; padding:6px 10px; border-radius:6px; margin-top:8px; display:inline-block;">
+          Unit Calculation: ${t.quantity || 1} ${t.unit || "ea"} × $${(t.price || 0).toFixed(2)} = $${total.toFixed(2)}
+        </div>
+      ` : ""}
 
       ${t.photos && t.photos.length > 0 ? `
         <div class="photo-section">
@@ -268,19 +340,10 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
     </div>`;
   }).join("")}
 
-  <script>
-    window.onload = function() {
-      // Small delay to allow images to render cleanly before triggering print preview
-      setTimeout(() => {
-        // window.print();
-      }, 500);
-    };
-  </script>
 </body>
 </html>`;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  executePrint(html);
 }
 
 /**
@@ -288,6 +351,8 @@ export function printTasksReport(tasks: ReportTaskItem[], workOrderNumber: strin
  */
 export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string = "WO-SUMMARY") {
   if (!bids || bids.length === 0) return;
+
+  const isSingleItem = bids.length === 1;
 
   const totalAmount = bids.reduce((sum, b) => sum + (b.amount || 0), 0);
   const approvedCount = bids.filter((b) => b.status === "APPROVED").length;
@@ -299,9 +364,6 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     month: "long",
     day: "numeric",
   });
-
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -332,7 +394,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     .table-container { background: #fff; border-radius: 14px; border: 1px solid #e2e8f0; overflow: hidden; margin-bottom: 24px; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th { background: #0f172a; color: #cbd5e1; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 16px; }
-    td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: top; }
+    td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
 
     .badge { display: inline-block; padding: 3px 8px; border-radius: 9999px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -343,7 +405,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     .bid-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 16px; page-break-inside: avoid; }
     .bid-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
     .bid-title { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; }
-    .bid-desc { font-size: 12px; color: #475569; margin-top: 4px; line-height: 1.5; }
+    .bid-desc { font-size: 12px; color: #475569; margin-top: 6px; line-height: 1.5; }
     .bid-price { font-size: 18px; font-weight: 900; color: #059669; }
 
     .photo-section { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
@@ -356,7 +418,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
 <body>
   <div class="toolbar no-print">
     <div>
-      <strong style="font-size:14px;">Financial Bids Proposal Report (#${workOrderNumber})</strong>
+      <strong style="font-size:14px;">Financial Bid Proposal Report (#${workOrderNumber})</strong>
     </div>
     <div>
       <button class="btn" onclick="window.print()">🖨️ Print / Export PDF</button>
@@ -365,7 +427,7 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
   </div>
 
   <div class="header-card">
-    <h1 class="header-title">FINANCIAL BIDS PROPOSAL</h1>
+    <h1 class="header-title">${isSingleItem ? "BID ITEM PROPOSAL REPORT" : "FINANCIAL BIDS PROPOSAL"}</h1>
     <p class="header-sub">Work Order #${workOrderNumber} • Generated on ${dateStr}</p>
     
     <div class="metrics-grid">
@@ -388,13 +450,14 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
     </div>
   </div>
 
-  <!-- Line Items Table Summary -->
+  ${!isSingleItem ? `
+  <!-- Line Items Table Summary (Concise Financial Line-Items) -->
   <div class="table-container page-break">
     <table>
       <thead>
         <tr>
           <th style="width:40px;">#</th>
-          <th>Bid Item & Justification</th>
+          <th>Bid Item Title</th>
           <th>Status</th>
           <th style="text-align:right;">Qty / Unit</th>
           <th style="text-align:right;">Unit Price</th>
@@ -403,16 +466,11 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
       </thead>
       <tbody>
         ${bids.map((b, idx) => {
-          const qty = b.quantity ?? 1;
-          const price = b.price ?? b.amount;
           const statusClass = b.status === "APPROVED" ? "badge-approved" : b.status === "REJECTED" ? "badge-rejected" : "badge-pending";
 
           return `<tr>
             <td><strong>${idx + 1}</strong></td>
-            <td>
-              <div style="font-weight:700; color:#0f172a;">${b.title}</div>
-              ${b.description ? `<div style="font-size:11px; color:#475569; margin-top:2px;">${b.description}</div>` : ""}
-            </td>
+            <td><div style="font-weight:700; color:#0f172a;">${b.title}</div></td>
             <td>
               <span class="badge ${statusClass}">${b.status || "PENDING"}</span>
             </td>
@@ -424,9 +482,12 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
       </tbody>
     </table>
   </div>
+  ` : ""}
 
-  <!-- Individual Bid Detail Cards with Photos -->
-  <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; letter-spacing:1px; margin:24px 0 12px 0; color:#0f172a;">Bid Item Justification & Evidence Photos</h2>
+  <!-- Individual Bid Detail Cards with Description & Photos -->
+  <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; letter-spacing:1px; margin:24px 0 12px 0; color:#0f172a;">
+    ${isSingleItem ? "Bid Justification & Evidence Photos" : "Detailed Justification & Evidence Photos"}
+  </h2>
 
   ${bids.map((b, idx) => {
     const statusClass = b.status === "APPROVED" ? "badge-approved" : b.status === "REJECTED" ? "badge-rejected" : "badge-pending";
@@ -469,6 +530,5 @@ export function printBidsReport(bids: ReportBidItem[], workOrderNumber: string =
 </body>
 </html>`;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  executePrint(html);
 }
