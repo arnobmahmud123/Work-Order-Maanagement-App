@@ -285,27 +285,17 @@ export function executePrint(html: string, titleName: string = "Property Preserv
         });
       }
 
-      // Create a temporary container
-      const container = document.createElement("div");
-      container.innerHTML = cleanHtml;
-      container.style.position = "absolute";
-      container.style.left = "-9999px";
-      container.style.top = "0";
-      container.style.width = "1000px"; // Fixed width for consistent PDF rendering
-      container.style.background = "#ffffff";
-      document.body.appendChild(container);
-
       const opt = {
         margin: [10, 10, 10, 10],
         filename: `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
         jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
       };
 
-      // Output as blob instead of direct save (since anchor downloads silently fail in iOS PWAs)
-      const pdfBlob = await (window as any).html2pdf().set(opt).from(container).outputPdf('blob');
-      document.body.removeChild(container);
+      // Output as blob instead of direct save. 
+      // Passing cleanHtml directly lets html2pdf create its own internal iframe and wait for parsing.
+      const pdfBlob = await (window as any).html2pdf().set(opt).from(cleanHtml).outputPdf('blob');
 
       const fileName = `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
       const file = new File([pdfBlob], fileName, { type: "application/pdf" });
