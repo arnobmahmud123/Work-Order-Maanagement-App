@@ -1,6 +1,8 @@
 "use client";
 
-import { use, useRef, useState } from "react";
+import { use, useRef, useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { PhotoLightbox } from "@/components/work-orders/photo-lightbox";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, Button } from "@/components/ui";
 import toast from "react-hot-toast";
@@ -102,6 +104,42 @@ export default function PropertyDetailPage({
   const [notes, setNotes] = useState("");
   const [uploadingFrontPhoto, setUploadingFrontPhoto] = useState(false);
   const frontPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // Lightbox state variables
+  const [lightboxPhoto, setLightboxPhoto] = useState<any>(null);
+  const [lightboxPhotosList, setLightboxPhotosList] = useState<any[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const goPrev = useCallback(() => {
+    if (lightboxIndex !== null && lightboxIndex > 0) {
+      const nextIndex = lightboxIndex - 1;
+      setLightboxIndex(nextIndex);
+      setLightboxPhoto(lightboxPhotosList[nextIndex]);
+    }
+  }, [lightboxIndex, lightboxPhotosList]);
+
+  const goNext = useCallback(() => {
+    if (lightboxIndex !== null && lightboxIndex < lightboxPhotosList.length - 1) {
+      const nextIndex = lightboxIndex + 1;
+      setLightboxIndex(nextIndex);
+      setLightboxPhoto(lightboxPhotosList[nextIndex]);
+    }
+  }, [lightboxIndex, lightboxPhotosList]);
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") goPrev();
+      else if (e.key === "ArrowRight") goNext();
+      else if (e.key === "Escape") {
+        setLightboxIndex(null);
+        setLightboxPhoto(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lightboxIndex, goPrev, goNext]);
 
   async function handlePropertyFrontUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -710,10 +748,20 @@ export default function PropertyDetailPage({
                     <span className="text-[10px] text-text-muted">{propertyPhotos.length}</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                    {propertyPhotos.map((photo: any) => (
+                    {propertyPhotos.map((photo: any, pIdx: number) => (
                       <div key={photo.id} className="relative group rounded-lg overflow-hidden aspect-square bg-surface-hover">
-                        <img src={photo.path} alt={photo.originalName || "Property front"} className="w-full h-full object-cover" />
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLightboxPhotosList(propertyPhotos);
+                            setLightboxPhoto(photo);
+                            setLightboxIndex(pIdx);
+                          }}
+                          className="w-full h-full text-left focus:outline-none"
+                        >
+                          <img src={photo.path} alt={photo.originalName || "Property front"} className="w-full h-full object-cover" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 pointer-events-none">
                           <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-sky-500/80 text-white">
                             PROPERTY FRONT
                           </span>
@@ -721,7 +769,7 @@ export default function PropertyDetailPage({
                         <button
                           type="button"
                           onClick={() => handleDeletePropertyFrontPhoto(photo.id)}
-                          className="absolute top-1.5 right-1.5 p-1 rounded-full bg-red-500/85 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                          className="absolute top-1.5 right-1.5 p-1 rounded-full bg-red-500/85 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 z-10"
                           title="Remove property front photo"
                         >
                           <X className="h-3 w-3" />
@@ -742,10 +790,20 @@ export default function PropertyDetailPage({
                     </span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                    {files.filter((f: any) => f.mimeType?.startsWith("image/")).map((f: any) => (
+                    {files.filter((f: any) => f.mimeType?.startsWith("image/")).map((f: any, fIdx: number, arr: any[]) => (
                       <div key={f.id} className="relative group rounded-lg overflow-hidden aspect-square bg-surface-hover">
-                        <img src={f.path} alt={f.originalName} className="w-full h-full object-cover" />
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLightboxPhotosList(arr);
+                            setLightboxPhoto(f);
+                            setLightboxIndex(fIdx);
+                          }}
+                          className="w-full h-full text-left focus:outline-none"
+                        >
+                          <img src={f.path} alt={f.originalName} className="w-full h-full object-cover" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 pointer-events-none">
                           <span className={cn(
                             "text-[9px] font-medium px-1 py-0.5 rounded",
                             f.category === "BEFORE" ? "bg-amber-500/20 text-amber-300" :
@@ -977,6 +1035,21 @@ export default function PropertyDetailPage({
             Notes are saved locally. Connect a backend endpoint to persist them.
           </p>
         </Card>
+      )}
+      {lightboxPhoto && createPortal(
+        <PhotoLightbox
+          photo={lightboxPhoto}
+          photos={lightboxPhotosList}
+          selectedIndex={lightboxIndex!}
+          onPrev={goPrev}
+          onNext={goNext}
+          onClose={() => {
+            setLightboxPhoto(null);
+            setLightboxIndex(null);
+          }}
+          onDeletePhoto={lightboxPhotosList === propertyPhotos ? handleDeletePropertyFrontPhoto : undefined}
+        />,
+        document.body
       )}
     </div>
   );
