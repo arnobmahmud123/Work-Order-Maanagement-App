@@ -239,7 +239,10 @@ export function PhotoLightbox({
 
         {/* Top Action Header (Positioned Safely Below Device Camera Notch) */}
         <div
-          className="absolute right-3 flex items-center gap-2 z-50"
+          className={cn(
+            "absolute flex items-center gap-2 z-50 transition-all duration-300",
+            showExif ? "right-3 md:right-[308px]" : "right-3"
+          )}
           style={{ top: "max(3.5rem, calc(env(safe-area-inset-top) + 0.75rem))" }}
         >
           <button
