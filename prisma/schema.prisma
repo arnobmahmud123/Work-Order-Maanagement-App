@@ -1367,6 +1367,11 @@ model Company {
   vendorNumbering      String? // JSON string
   clientNumbering      String? // JSON string
   isActive             Boolean @default(true)
+  twilioPhone          String?
+  twilioSid            String?
+  twilioToken          String?
+  elevenlabsAgentId    String?
+  elevenlabsPhoneId    String?
 
   // Subscription plans
   plan             String  @default("TRIAL") // TRIAL, BASIC, PROFESSIONAL, ENTERPRISE, CUSTOM

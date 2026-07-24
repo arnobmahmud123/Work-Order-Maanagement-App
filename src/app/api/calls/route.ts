@@ -57,10 +57,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Recipient phone is required" }, { status: 400 });
   }
 
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  const agentId = process.env.ELEVENLABS_AGENT_ID;
-  const phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
+  let apiKey = process.env.ELEVENLABS_API_KEY;
+  let agentId = process.env.ELEVENLABS_AGENT_ID;
+  let phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
   const enableSimulation = process.env.NEXT_PUBLIC_ENABLE_SIMULATION === "true" || false;
+
+  const companyId = (session?.user as any)?.companyId;
+  if (companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { elevenlabsAgentId: true, elevenlabsPhoneId: true }
+    });
+    if (company?.elevenlabsAgentId) {
+      agentId = company.elevenlabsAgentId;
+    }
+    if (company?.elevenlabsPhoneId) {
+      phoneNumberId = company.elevenlabsPhoneId;
+    }
+  }
 
   if (apiKey && agentId && phoneNumberId && !enableSimulation) {
     try {

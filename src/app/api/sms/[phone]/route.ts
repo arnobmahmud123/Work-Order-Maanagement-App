@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-async function getTwilioPhoneNumber(): Promise<string | null> {
-  const envNumber = process.env.TWILIO_PHONE_NUMBER;
-  if (envNumber) return envNumber;
-
+// Helper to dynamically fetch Twilio phone number for the active company
+async function getCompanyTwilioNumber(): Promise<string | null> {
   try {
-    const lastInbound = await prisma.smsMessage.findFirst({
-      where: { direction: "INBOUND" },
-      orderBy: { createdAt: "desc" }
-    });
-    if (lastInbound?.to) {
-      console.log("[SMS History API] Auto-discovered Twilio number from DB:", lastInbound.to);
-      return lastInbound.to;
+    const session = await auth();
+    const companyId = (session?.user as any)?.companyId;
+
+    if (companyId) {
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { twilioPhone: true }
+      });
+      if (company?.twilioPhone) {
+        return company.twilioPhone;
+      }
     }
   } catch (err) {
-    console.error("[SMS History API] Failed to auto-discover Twilio number:", err);
+    console.error("[SMS History API] Failed to fetch company Twilio number:", err);
   }
 
-  return null;
+  return process.env.TWILIO_PHONE_NUMBER || null;
 }
 
 export async function GET(
@@ -27,7 +30,7 @@ export async function GET(
 ) {
   try {
     const { phone } = await params;
-    const twilioNumber = await getTwilioPhoneNumber() || "";
+    const twilioNumber = await getCompanyTwilioNumber() || "";
 
     if (!phone) {
       return NextResponse.json({ error: "Missing phone parameter" }, { status: 400 });

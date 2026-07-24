@@ -1,34 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-// Helper to dynamically auto-discover or fetch Twilio phone number
-async function getTwilioPhoneNumber(): Promise<string | null> {
-  const envNumber = process.env.TWILIO_PHONE_NUMBER;
-  if (envNumber) return envNumber;
-
+// Helper to dynamically fetch Twilio settings for the active company
+async function getCompanyTwilioConfig(): Promise<{ twilioNumber: string; twilioSid: string; twilioToken: string } | null> {
   try {
-    const lastInbound = await prisma.smsMessage.findFirst({
-      where: { direction: "INBOUND" },
-      orderBy: { createdAt: "desc" }
+    const session = await auth();
+    const companyId = (session?.user as any)?.companyId;
+
+    if (!companyId) return null;
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { twilioPhone: true, twilioSid: true, twilioToken: true }
     });
-    if (lastInbound?.to) {
-      console.log("[SMS API] Auto-discovered Twilio number from DB:", lastInbound.to);
-      return lastInbound.to;
+
+    if (company?.twilioPhone) {
+      return {
+        twilioNumber: company.twilioPhone,
+        twilioSid: company.twilioSid || process.env.TWILIO_ACCOUNT_SID || "",
+        twilioToken: company.twilioToken || process.env.TWILIO_AUTH_TOKEN || ""
+      };
     }
   } catch (err) {
-    console.error("[SMS API] Failed to auto-discover Twilio number:", err);
+    console.error("[SMS API] Failed to fetch company Twilio credentials:", err);
   }
 
-  return null;
+  // Fallback to environment variables
+  return {
+    twilioNumber: process.env.TWILIO_PHONE_NUMBER || "",
+    twilioSid: process.env.TWILIO_ACCOUNT_SID || "",
+    twilioToken: process.env.TWILIO_AUTH_TOKEN || ""
+  };
 }
 
-// Helper to send outbound SMS via Twilio REST API (with optional MMS mediaUrl)
-async function sendTwilioSms(to: string, body: string, fromNumber: string, mediaUrl?: string): Promise<boolean> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-
+// Helper to send outbound SMS via Twilio REST API
+async function sendTwilioSms(
+  to: string, 
+  body: string, 
+  fromNumber: string, 
+  accountSid: string, 
+  authToken: string, 
+  mediaUrl?: string
+): Promise<boolean> {
   if (!accountSid || !authToken || !fromNumber) {
-    console.error("[SMS API] Missing Twilio credentials in environment");
+    console.error("[SMS API] Missing Twilio credentials");
     return false;
   }
 
@@ -70,9 +86,10 @@ async function sendTwilioSms(to: string, body: string, fromNumber: string, media
 // GET: Fetch all SMS conversation threads
 export async function GET(req: NextRequest) {
   try {
-    const twilioNumber = await getTwilioPhoneNumber() || "";
+    const config = await getCompanyTwilioConfig();
+    const twilioNumber = config?.twilioNumber || "";
 
-    // Fetch all SMS messages ordered by date descending
+    // Fetch all SMS messages (automatically isolated to the active company)
     const messages = await prisma.smsMessage.findMany({
       orderBy: {
         createdAt: "desc"
@@ -83,7 +100,6 @@ export async function GET(req: NextRequest) {
     const threadsMap = new Map<string, any>();
 
     for (const msg of messages) {
-      // The external number is whichever number is NOT our Twilio number
       const contactPhone = msg.from === twilioNumber ? msg.to : msg.from;
       
       if (!threadsMap.has(contactPhone)) {
@@ -102,7 +118,6 @@ export async function GET(req: NextRequest) {
 
     // Look up matching users/contractors in the database for each thread
     for (const thread of threads) {
-      // Find a user with this phone number (normalizing any formatting)
       const cleanedPhone = thread.phone.replace(/\D/g, "");
       
       const user = await prisma.user.findFirst({
@@ -151,13 +166,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: note });
     }
 
-    const twilioNumber = await getTwilioPhoneNumber();
-    if (!twilioNumber) {
-      return NextResponse.json({ error: "Twilio phone number not configured on the server. Please add TWILIO_PHONE_NUMBER to Cloudflare environment variables." }, { status: 500 });
+    const config = await getCompanyTwilioConfig();
+    if (!config || !config.twilioNumber) {
+      return NextResponse.json({ 
+        error: "Twilio phone number is not configured for your company. Please set your company twilio credentials." 
+      }, { status: 500 });
     }
 
-    // 1. Dispatch SMS via Twilio
-    const success = await sendTwilioSms(to, body, twilioNumber, mediaUrl);
+    // 1. Dispatch SMS via Twilio using company-scoped credentials
+    const success = await sendTwilioSms(
+      to, 
+      body, 
+      config.twilioNumber, 
+      config.twilioSid, 
+      config.twilioToken, 
+      mediaUrl
+    );
     if (!success) {
       return NextResponse.json({ error: "Failed to dispatch SMS via Twilio" }, { status: 502 });
     }
@@ -165,7 +189,7 @@ export async function POST(req: NextRequest) {
     // 2. Save outbound message to the database
     const sms = await prisma.smsMessage.create({
       data: {
-        from: twilioNumber,
+        from: config.twilioNumber,
         to: to,
         body: body,
         direction: "OUTBOUND",

@@ -13,14 +13,22 @@ async function syncToD1() {
   const properties = await localPrisma.property.findMany();
   const workOrders = await localPrisma.workOrder.findMany();
 
-  let sql = "";
+  let sql = "PRAGMA foreign_keys = OFF;\n\n";
 
   // Clear existing test data first to avoid primary key/unique constraint conflicts
   // Note: D1 database matches the model names exactly (or @@map values)
+  sql += "DELETE FROM \"MessageReaction\";\n";
+  sql += "DELETE FROM \"ChatMessage\";\n";
+  sql += "DELETE FROM \"ChannelMember\";\n";
+  sql += "DELETE FROM \"Channel\";\n";
+  sql += "DELETE FROM \"ActivityLog\";\n";
+  sql += "DELETE FROM \"work_order_files\";\n";
+  sql += "DELETE FROM \"Invoice\";\n";
+  sql += "DELETE FROM \"SupportTicket\";\n";
   sql += "DELETE FROM \"WorkOrder\";\n";
   sql += "DELETE FROM \"Property\";\n";
   sql += "DELETE FROM \"users\";\n";
-  sql += "DELETE FROM \"Company\";\n\n";
+  sql += "DELETE FROM \"companies\";\n\n";
 
   // Helper to escape SQL values
   const esc = (val) => {
@@ -35,7 +43,7 @@ async function syncToD1() {
 
   // Insert Company
   for (const c of companies) {
-    sql += `INSERT INTO "Company" ("id", "name", "logo", "branding", "theme", "colors", "timezone", "currency", "dateFormat", "phone", "address", "email", "taxSettings", "invoiceSettings", "notificationSettings", "emailTemplates", "smsTemplates", "workOrderNumbering", "vendorNumbering", "clientNumbering", "isActive", "plan", "maxUsers", "maxVendors", "maxWorkOrders", "maxStorage", "apiAccess", "crmAccess", "automationAccess", "aiAccess", "createdAt", "updatedAt") VALUES (${esc(c.id)}, ${esc(c.name)}, ${esc(c.logo)}, ${esc(c.branding)}, ${esc(c.theme)}, ${esc(c.colors)}, ${esc(c.timezone)}, ${esc(c.currency)}, ${esc(c.dateFormat)}, ${esc(c.phone)}, ${esc(c.address)}, ${esc(c.email)}, ${esc(c.taxSettings)}, ${esc(c.invoiceSettings)}, ${esc(c.notificationSettings)}, ${esc(c.emailTemplates)}, ${esc(c.smsTemplates)}, ${esc(c.workOrderNumbering)}, ${esc(c.vendorNumbering)}, ${esc(c.clientNumbering)}, ${esc(c.isActive)}, ${esc(c.plan)}, ${esc(c.maxUsers)}, ${esc(c.maxVendors)}, ${esc(c.maxWorkOrders)}, ${esc(c.maxStorage)}, ${esc(c.apiAccess)}, ${esc(c.crmAccess)}, ${esc(c.automationAccess)}, ${esc(c.aiAccess)}, ${esc(c.createdAt)}, ${esc(c.updatedAt)});\n`;
+    sql += `INSERT INTO "companies" ("id", "name", "logo", "branding", "theme", "colors", "timezone", "currency", "dateFormat", "phone", "address", "email", "taxSettings", "invoiceSettings", "notificationSettings", "emailTemplates", "smsTemplates", "workOrderNumbering", "vendorNumbering", "clientNumbering", "isActive", "plan", "maxUsers", "maxVendors", "maxWorkOrders", "maxStorage", "apiAccess", "crmAccess", "automationAccess", "aiAccess", "created_at", "updated_at", "twilioPhone", "twilioSid", "twilioToken", "elevenlabsAgentId", "elevenlabsPhoneId") VALUES (${esc(c.id)}, ${esc(c.name)}, ${esc(c.logo)}, ${esc(c.branding)}, ${esc(c.theme)}, ${esc(c.colors)}, ${esc(c.timezone)}, ${esc(c.currency)}, ${esc(c.dateFormat)}, ${esc(c.phone)}, ${esc(c.address)}, ${esc(c.email)}, ${esc(c.taxSettings)}, ${esc(c.invoiceSettings)}, ${esc(c.notificationSettings)}, ${esc(c.emailTemplates)}, ${esc(c.smsTemplates)}, ${esc(c.workOrderNumbering)}, ${esc(c.vendorNumbering)}, ${esc(c.clientNumbering)}, ${esc(c.isActive)}, ${esc(c.plan)}, ${esc(c.maxUsers)}, ${esc(c.maxVendors)}, ${esc(c.maxWorkOrders)}, ${esc(c.maxStorage)}, ${esc(c.apiAccess)}, ${esc(c.crmAccess)}, ${esc(c.automationAccess)}, ${esc(c.aiAccess)}, ${esc(c.createdAt)}, ${esc(c.updatedAt)}, ${esc(c.twilioPhone)}, ${esc(c.twilioSid)}, ${esc(c.twilioToken)}, ${esc(c.elevenlabsAgentId)}, ${esc(c.elevenlabsPhoneId)});\n`;
   }
 
   // Insert users
@@ -52,6 +60,8 @@ async function syncToD1() {
   for (const wo of workOrders) {
     sql += `INSERT INTO "WorkOrder" ("id", "title", "description", "address", "city", "state", "zipCode", "latitude", "longitude", "serviceType", "status", "priority", "dueDate", "completedAt", "lockCode", "lockboxLocation", "gateCode", "keyCode", "keycodeLocation", "lotSize", "lawnSize", "specialInstructions", "tasks", "metadata", "contractorId", "coordinatorId", "processorId", "createdById", "propertyId", "createdAt", "updatedAt", "company_id") VALUES (${esc(wo.id)}, ${esc(wo.title)}, ${esc(wo.description)}, ${esc(wo.address)}, ${esc(wo.city)}, ${esc(wo.state)}, ${esc(wo.zipCode)}, ${esc(wo.latitude)}, ${esc(wo.longitude)}, ${esc(wo.serviceType)}, ${esc(wo.status)}, ${esc(wo.priority)}, ${esc(wo.dueDate)}, ${esc(wo.completedAt)}, ${esc(wo.lockCode)}, ${esc(wo.lockboxLocation)}, ${esc(wo.gateCode)}, ${esc(wo.keyCode)}, ${esc(wo.keycodeLocation)}, ${esc(wo.lotSize)}, ${esc(wo.lawnSize)}, ${esc(wo.specialInstructions)}, ${esc(wo.tasks)}, ${esc(wo.metadata)}, ${esc(wo.contractorId)}, ${esc(wo.coordinatorId)}, ${esc(wo.processorId)}, ${esc(wo.createdById)}, ${esc(wo.propertyId)}, ${esc(wo.createdAt)}, ${esc(wo.updatedAt)}, ${esc(wo.companyId)});\n`;
   }
+
+  sql += "\nPRAGMA foreign_keys = ON;\n";
 
   const sqlFilePath = path.join(__dirname, 'seed_custom.sql');
   fs.writeFileSync(sqlFilePath, sql, 'utf8');
