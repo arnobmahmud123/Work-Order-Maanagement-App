@@ -7,7 +7,7 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    let { work_order_id, notes, phone, conversation_id } = body;
+    let { work_order_id, notes, phone, conversation_id, company_id } = body;
 
     if (!work_order_id) {
       return NextResponse.json({ error: "Missing required parameter work_order_id" }, { status: 400 });
@@ -23,9 +23,8 @@ export async function POST(req: NextRequest) {
       const suffix = targetWorkOrderId.slice(3).toLowerCase();
       const match = await prisma.workOrder.findFirst({
         where: {
-          id: {
-            endsWith: suffix
-          }
+          id: { endsWith: suffix },
+          ...(company_id ? { companyId: company_id } : {})
         },
         select: { id: true }
       });
@@ -38,8 +37,11 @@ export async function POST(req: NextRequest) {
     work_order_id = targetWorkOrderId;
 
     // Retrieve the work order to verify existence and get participants
-    const workOrder = await prisma.workOrder.findUnique({
-      where: { id: work_order_id },
+    const workOrder = await prisma.workOrder.findFirst({
+      where: {
+        id: work_order_id,
+        ...(company_id ? { companyId: company_id } : {})
+      },
       include: {
         contractor: { select: { id: true, name: true } },
       },

@@ -7,7 +7,7 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    let { phone, work_order_id, conversation_id } = body;
+    let { phone, work_order_id, conversation_id, company_id } = body;
 
     if (!phone && !work_order_id) {
       return NextResponse.json({ error: "Missing required parameters phone or work_order_id" }, { status: 400 });
@@ -20,9 +20,8 @@ export async function POST(req: NextRequest) {
       const suffix = targetWorkOrderId.slice(3).toLowerCase();
       const match = await prisma.workOrder.findFirst({
         where: {
-          id: {
-            endsWith: suffix
-          }
+          id: { endsWith: suffix },
+          ...(company_id ? { companyId: company_id } : {})
         },
         select: { id: true }
       });
@@ -35,16 +34,22 @@ export async function POST(req: NextRequest) {
     work_order_id = targetWorkOrderId;
 
     if (work_order_id) {
-      workOrder = await prisma.workOrder.findUnique({
-        where: { id: work_order_id },
+      workOrder = await prisma.workOrder.findFirst({
+        where: {
+          id: work_order_id,
+          ...(company_id ? { companyId: company_id } : {})
+        },
         include: {
           contractor: { select: { name: true, phone: true } },
         },
       });
     } else if (phone) {
-      // Find the contractor by phone matching
+      // Find the contractor by phone matching within the specified tenant
       const contractors = await prisma.user.findMany({
-        where: { role: "CONTRACTOR" },
+        where: {
+          role: "CONTRACTOR",
+          ...(company_id ? { companyId: company_id } : {})
+        },
         select: { id: true, name: true, phone: true },
       });
 
@@ -63,6 +68,7 @@ export async function POST(req: NextRequest) {
         workOrder = await prisma.workOrder.findFirst({
           where: {
             contractorId: contractor.id,
+            ...(company_id ? { companyId: company_id } : {}),
             status: {
               notIn: ["CLOSED", "CANCELLED"],
             },

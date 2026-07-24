@@ -63,16 +63,20 @@ export async function POST(req: NextRequest) {
   const enableSimulation = process.env.NEXT_PUBLIC_ENABLE_SIMULATION === "true" || false;
 
   const companyId = (session?.user as any)?.companyId;
+  let companyName = "";
   if (companyId) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { elevenlabsAgentId: true, elevenlabsPhoneId: true }
+      select: { name: true, elevenlabsAgentId: true, elevenlabsPhoneId: true }
     });
-    if (company?.elevenlabsAgentId) {
-      agentId = company.elevenlabsAgentId;
-    }
-    if (company?.elevenlabsPhoneId) {
-      phoneNumberId = company.elevenlabsPhoneId;
+    if (company) {
+      companyName = company.name;
+      if (company.elevenlabsAgentId) {
+        agentId = company.elevenlabsAgentId;
+      }
+      if (company.elevenlabsPhoneId) {
+        phoneNumberId = company.elevenlabsPhoneId;
+      }
     }
   }
 
@@ -91,6 +95,8 @@ export async function POST(req: NextRequest) {
           conversation_initiation_client_data: {
             dynamic_variables: {
               work_order_id: workOrderId || "",
+              company_id: companyId || "",
+              company_name: companyName,
             },
           },
         }),
