@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
  * Returns null if no paired invoice exists or if the invoice has no workOrderId.
  */
 export async function findPairedInvoice(
+  tx: any,
   invoiceId: string,
   type: "CLIENT" | "CONTRACTOR",
   workOrderId: string | null
@@ -14,7 +15,7 @@ export async function findPairedInvoice(
 
   const pairedType = type === "CLIENT" ? "CONTRACTOR" : "CLIENT";
 
-  return prisma.invoice.findFirst({
+  return tx.invoice.findFirst({
     where: {
       workOrderId,
       type: pairedType,

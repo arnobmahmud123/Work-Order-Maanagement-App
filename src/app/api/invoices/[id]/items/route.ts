@@ -14,11 +14,24 @@ export async function PATCH(
   }
 
   const role = (session.user as any).role;
-  if (!["ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR", "PROCESSOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { id } = await params;
+  const companyId = (session.user as any).companyId;
+
+  // Verify the invoice belongs to this company
+  const invoiceObj = await prisma.invoice.findUnique({
+    where: { id },
+  });
+  if (!invoiceObj) {
+    return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+  }
+  if (role !== "SUPER_ADMIN" && invoiceObj.companyId !== companyId) {
+    return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
+  }
+
   const body = await req.json();
   const { items } = body;
 
@@ -91,7 +104,7 @@ export async function PATCH(
 
     // Sync item structure to paired invoice (client ↔ contractor)
     if (inv?.workOrderId) {
-      const paired = await findPairedInvoice(id, inv.type as "CLIENT" | "CONTRACTOR", inv.workOrderId);
+      const paired = await findPairedInvoice(tx, id, inv.type as "CLIENT" | "CONTRACTOR", inv.workOrderId);
       if (paired) {
         await syncInvoiceItemStructure(tx, id, paired.id);
       }

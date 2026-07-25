@@ -2534,6 +2534,8 @@ export function BidEntryList({
   const [showAIBid, setShowAIBid] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [newDescRows, setNewDescRows] = useState(3);
+  const [editDescRows, setEditDescRows] = useState(2);
   const [newTitle, setNewTitle] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -2851,12 +2853,32 @@ export function BidEntryList({
                         )}
                       </div>
                     </div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[8px] font-bold text-text-dim uppercase tracking-wider block">Description</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditDescRows(prev => Math.min(15, prev + 2))}
+                          className="text-[8px] font-bold text-emerald-400 hover:text-emerald-300 uppercase tracking-tighter"
+                        >
+                          + Expand
+                        </button>
+                        <span className="text-[8px] text-text-dim">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditDescRows(prev => Math.max(2, prev - 2))}
+                          className="text-[8px] font-bold text-text-dim hover:text-text-muted uppercase tracking-tighter"
+                        >
+                          - Reduce
+                        </button>
+                      </div>
+                    </div>
                     <textarea
                       value={editDesc}
                       onChange={(e) => setEditDesc(e.target.value)}
                       placeholder="Provide justification..."
-                      className="w-full px-4 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-secondary focus:border-emerald-500/50 focus:outline-none resize-none"
-                      rows={2}
+                      className="w-full px-4 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-secondary focus:border-emerald-500/50 focus:outline-none resize-y"
+                      rows={editDescRows}
                     />
                     <div className="grid grid-cols-3 gap-3">
                       <div>
@@ -3118,13 +3140,32 @@ export function BidEntryList({
             </div>
           </div>
           <div>
-            <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1.5 block">Detailed Justification</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-black text-text-dim uppercase tracking-widest block">Detailed Justification</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewDescRows(prev => Math.min(20, prev + 3))}
+                  className="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 uppercase tracking-tighter"
+                >
+                  + Expand
+                </button>
+                <span className="text-[9px] text-text-dim">|</span>
+                <button
+                  type="button"
+                  onClick={() => setNewDescRows(prev => Math.max(3, prev - 3))}
+                  className="text-[9px] font-bold text-text-dim hover:text-text-muted uppercase tracking-tighter"
+                >
+                  - Reduce
+                </button>
+              </div>
+            </div>
             <textarea
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
               placeholder="Explain the scope of work and financial reasoning..."
-              rows={3}
-              className="w-full px-4 py-3 bg-surface-hover border border-border-subtle rounded-2xl text-xs text-text-secondary focus:border-emerald-500/50 focus:outline-none resize-none shadow-inner"
+              rows={newDescRows}
+              className="w-full px-4 py-3 bg-surface-hover border border-border-subtle rounded-2xl text-xs text-text-secondary focus:border-emerald-500/50 focus:outline-none resize-y shadow-inner"
             />
           </div>
           <div className="flex gap-2">

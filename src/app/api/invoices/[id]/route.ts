@@ -127,94 +127,99 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const role = (session.user as any).role;
-  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR", "PROCESSOR"].includes(role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const companyId = (session.user as any).companyId;
-  const { id } = await params;
-  const existing = await prisma.invoice.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  if (role !== "SUPER_ADMIN" && existing.companyId !== companyId) {
-    return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
-  }
-
-  const body = await req.json();
-  const { items, notes, dueDate, noCharge, tax, type } = body;
-
-  if (!items?.length) {
-    return NextResponse.json(
-      { error: "Items are required" },
-      { status: 400 }
-    );
-  }
-
-  const subtotal = items.reduce(
-    (sum: number, item: any) => sum + (item.quantity * item.unitPrice),
-    0
-  );
-  const totalDiscount = items.reduce(
-    (sum: number, item: any) => sum + (item.quantity * item.unitPrice * (item.discountPercent || 0)) / 100,
-    0
-  );
-  const total = subtotal - totalDiscount + (tax || 0);
-
-  // Use a transaction to delete old items and create new ones, then sync to paired invoice
-  const invoice = await prisma.$transaction(async (tx) => {
-    await tx.invoiceItem.deleteMany({
-      where: { invoiceId: id },
-    });
-
-    const updated = await tx.invoice.update({
-      where: { id },
-      data: {
-        ...(type ? { type: type as any } : {}),
-        subtotal,
-        tax: tax || 0,
-        total: noCharge ? 0 : total,
-        noCharge: noCharge || false,
-        notes,
-        dueDate: dueDate ? new Date(dueDate) : null,
-        items: {
-          create: items.map((item: any) => ({
-            taskName: item.taskName,
-            description: item.description,
-            unit: item.unit || null,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discountPercent: item.discountPercent || 0,
-            amount: (item.quantity * item.unitPrice) * (1 - (item.discountPercent || 0) / 100),
-          })),
-        },
-      },
-      include: {
-        client: { select: { id: true, name: true, email: true } },
-        items: true,
-      },
-    });
-
-    // Sync item structure to paired invoice (client ↔ contractor)
-    const invoiceType = (type || updated.type) as "CLIENT" | "CONTRACTOR";
-    const workOrderId = updated.workOrderId;
-    if (workOrderId) {
-      const paired = await findPairedInvoice(id, invoiceType, workOrderId);
-      if (paired) {
-        await syncInvoiceItemStructure(tx, id, paired.id);
-      }
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    return updated;
-  });
+    const role = (session.user as any).role;
+    if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR", "PROCESSOR"].includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-  return NextResponse.json(invoice);
+    const companyId = (session.user as any).companyId;
+    const { id } = await params;
+    const existing = await prisma.invoice.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (role !== "SUPER_ADMIN" && existing.companyId !== companyId) {
+      return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { items, notes, dueDate, noCharge, tax, type } = body;
+
+    if (!items?.length) {
+      return NextResponse.json(
+        { error: "Items are required" },
+        { status: 400 }
+      );
+    }
+
+    const subtotal = items.reduce(
+      (sum: number, item: any) => sum + (item.quantity * item.unitPrice),
+      0
+    );
+    const totalDiscount = items.reduce(
+      (sum: number, item: any) => sum + (item.quantity * item.unitPrice * (item.discountPercent || 0)) / 100,
+      0
+    );
+    const total = subtotal - totalDiscount + (tax || 0);
+
+    // Use a transaction to delete old items and create new ones, then sync to paired invoice
+    const invoice = await prisma.$transaction(async (tx) => {
+      await tx.invoiceItem.deleteMany({
+        where: { invoiceId: id },
+      });
+
+      const updated = await tx.invoice.update({
+        where: { id },
+        data: {
+          ...(type ? { type: type as any } : {}),
+          subtotal,
+          tax: tax || 0,
+          total: noCharge ? 0 : total,
+          noCharge: noCharge || false,
+          notes,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          items: {
+            create: items.map((item: any) => ({
+              taskName: item.taskName,
+              description: item.description,
+              unit: item.unit || null,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discountPercent: item.discountPercent || 0,
+              amount: (item.quantity * item.unitPrice) * (1 - (item.discountPercent || 0) / 100),
+            })),
+          },
+        },
+        include: {
+          client: { select: { id: true, name: true, email: true } },
+          items: true,
+        },
+      });
+
+      // Sync item structure to paired invoice (client ↔ contractor)
+      const invoiceType = (type || updated.type) as "CLIENT" | "CONTRACTOR";
+      const workOrderId = updated.workOrderId;
+      if (workOrderId) {
+        const paired = await findPairedInvoice(tx, id, invoiceType, workOrderId);
+        if (paired) {
+          await syncInvoiceItemStructure(tx, id, paired.id);
+        }
+      }
+
+      return updated;
+    });
+
+    return NextResponse.json(invoice);
+  } catch (error: any) {
+    console.error("Failed to save invoice:", error);
+    return NextResponse.json({ error: error.message || "Failed to save invoice" }, { status: 500 });
+  }
 }
 
 export async function DELETE(
