@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   const role = (session.user as any).role;
-  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR", "PROCESSOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -69,6 +69,20 @@ export async function POST(req: NextRequest) {
       { error: "Client and items are required" },
       { status: 400 }
     );
+  }
+
+  // Validate that the work order belongs to the user's company
+  if (workOrderId) {
+    const workOrder = await prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { companyId: true }
+    });
+    if (!workOrder) {
+      return NextResponse.json({ error: "Work order not found" }, { status: 404 });
+    }
+    if (role !== "SUPER_ADMIN" && workOrder.companyId !== companyId) {
+      return NextResponse.json({ error: "Forbidden: Work order belongs to another company" }, { status: 403 });
+    }
   }
 
   // Validate invoice type

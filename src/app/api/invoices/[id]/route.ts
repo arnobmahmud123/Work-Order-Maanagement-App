@@ -27,6 +27,12 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const role = (session.user as any).role;
+  const companyId = (session.user as any).companyId;
+  if (role !== "SUPER_ADMIN" && invoice.companyId !== companyId) {
+    return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
+  }
+
   // Fetch paired invoice (contractor ↔ client) for the same work order
   let pairedInvoice = null;
   if (invoice.workOrderId) {
@@ -59,6 +65,16 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
+
+  const existing = await prisma.invoice.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const role = (session.user as any).role;
+  const companyId = (session.user as any).companyId;
+  if (role !== "SUPER_ADMIN" && existing.companyId !== companyId) {
+    return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
+  }
 
   const invoice = await prisma.invoice.update({
     where: { id },
@@ -117,11 +133,20 @@ export async function PUT(
   }
 
   const role = (session.user as any).role;
-  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR", "PROCESSOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const companyId = (session.user as any).companyId;
   const { id } = await params;
+  const existing = await prisma.invoice.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (role !== "SUPER_ADMIN" && existing.companyId !== companyId) {
+    return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
+  }
+
   const body = await req.json();
   const { items, notes, dueDate, noCharge, tax, type } = body;
 
@@ -202,11 +227,19 @@ export async function DELETE(
   }
 
   const role = (session.user as any).role;
-  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR", "PROCESSOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const companyId = (session.user as any).companyId;
   const { id } = await params;
+  const existing = await prisma.invoice.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (role !== "SUPER_ADMIN" && existing.companyId !== companyId) {
+    return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
+  }
 
   try {
     await prisma.invoice.delete({
