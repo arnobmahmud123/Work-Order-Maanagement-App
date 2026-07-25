@@ -117,7 +117,7 @@ export async function PUT(
   }
 
   const role = (session.user as any).role;
-  if (!["ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -202,7 +202,7 @@ export async function DELETE(
   }
 
   const role = (session.user as any).role;
-  if (!["ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

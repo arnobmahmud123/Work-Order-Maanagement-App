@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   const role = (session.user as any).role;
-  if (!["ADMIN", "COORDINATOR"].includes(role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "COORDINATOR"].includes(role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
