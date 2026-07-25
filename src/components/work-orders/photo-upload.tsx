@@ -755,8 +755,10 @@ export function PhotoUploadSection({
                 type="button"
                 disabled={selectedExistingIds.size === 0}
                 onClick={() => {
-                  const toAttach = existingPhotos.filter((p) => selectedExistingIds.has(p.url)).map(p => ({
+                  const toAttach = existingPhotos.filter((p) => selectedExistingIds.has(p.url)).map((p, idx) => ({
                     ...p,
+                    id: p.id || `attached-photo-${Date.now()}-${idx}`,
+                    persisted: true,
                     category: targetCategory // Assign the current bucket's category!
                   }));
                   onPhotosChange([...photos, ...toAttach]);

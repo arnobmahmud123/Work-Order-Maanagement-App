@@ -440,6 +440,9 @@ export function TaskEntryList({
   const [editQty, setEditQty] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showAITask, setShowAITask] = useState(false);
+  const [aiTaskPrompt, setAiTaskPrompt] = useState("");
+  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
 
   const templates = getTemplatesForService(serviceType);
 
@@ -541,6 +544,44 @@ export function TaskEntryList({
       )
     );
     setEditingId(null);
+  }
+
+  async function handleAITaskGenerate() {
+    if (!aiTaskPrompt.trim()) return;
+    setIsGeneratingTasks(true);
+    try {
+      const res = await fetch("/api/ai/task-generator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiTaskPrompt })
+      });
+      if (!res.ok) throw new Error("AI generation failed");
+      const data = await res.json();
+
+      const parsedData = Array.isArray(data) ? data : [data];
+
+      const newTasks: TaskEntry[] = parsedData.map((item: any, index: number) => ({
+        id: `task-ai-${Date.now()}-${index}`,
+        title: item.title || "AI Generated Task",
+        description: item.description || aiTaskPrompt,
+        completed: false,
+        status: "PENDING",
+        photos: [],
+        expanded: true,
+        unit: item.unit,
+        quantity: item.quantity ? parseFloat(item.quantity) : undefined,
+        price: item.price ? parseFloat(item.price) : undefined,
+      }));
+
+      onTasksChange([...tasks, ...newTasks]);
+      setAiTaskPrompt("");
+      setShowAITask(false);
+      toast.success(`Generated ${newTasks.length} preservation tasks`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate tasks via AI");
+    } finally {
+      setIsGeneratingTasks(false);
+    }
   }
 
   function startEdit(task: TaskEntry) {
@@ -1106,12 +1147,24 @@ export function TaskEntryList({
           <div className="flex w-full gap-3">
             <button
               onClick={() => setShowAddForm(true)}
-              className="flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-border-subtle bg-surface-hover text-text-muted hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all group"
+              className="flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-border-subtle bg-surface-hover text-text-muted hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/[0.02] transition-all group shadow-inner"
             >
               <div className="h-8 w-8 rounded-xl bg-surface-hover group-hover:bg-cyan-500/10 flex items-center justify-center transition-all">
                 <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
               </div>
-              <span className="text-sm font-black uppercase tracking-widest">Manual Requirement</span>
+              <span className="text-sm font-black uppercase tracking-widest hidden md:inline">Manual Requirement</span>
+              <span className="text-sm font-black uppercase tracking-widest md:hidden">Manual</span>
+            </button>
+
+            <button
+              onClick={() => setShowAITask(true)}
+              className="flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-violet-500/20 bg-violet-500/[0.02] text-violet-500/80 hover:text-violet-400 hover:border-violet-500/40 hover:bg-violet-500/[0.05] transition-all group shadow-inner"
+            >
+              <div className="h-8 w-8 rounded-xl bg-violet-500/10 group-hover:bg-violet-500/20 flex items-center justify-center transition-all">
+                <Sparkles className="h-4 w-4 transition-transform group-hover:scale-110" />
+              </div>
+              <span className="text-sm font-black uppercase tracking-widest hidden md:inline">Generate via AI</span>
+              <span className="text-sm font-black uppercase tracking-widest md:hidden">AI Auto-Task</span>
             </button>
             
             {templates.length > 0 && (
@@ -1122,12 +1175,59 @@ export function TaskEntryList({
                 <div className="h-8 w-8 rounded-xl bg-cyan-500/5 group-hover:bg-cyan-500/10 flex items-center justify-center transition-all">
                   <FileText className="h-4 w-4" />
                 </div>
-                <span className="text-sm font-black uppercase tracking-widest">Project Templates</span>
+                <span className="text-sm font-black uppercase tracking-widest hidden md:inline">Project Templates</span>
+                <span className="text-sm font-black uppercase tracking-widest md:hidden">Templates</span>
               </button>
             )}
           </div>
         )}
       </div>
+
+      {/* AI Task Prompt Form */}
+      {showAITask && (
+        <div className="mt-4 p-6 rounded-3xl border border-violet-500/30 bg-violet-500/[0.02] backdrop-blur-xl shadow-2xl space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-8 w-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-violet-400" />
+            </div>
+            <h4 className="text-sm font-black text-violet-400 uppercase tracking-widest">AI Task Auto-Generation</h4>
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-1.5 block">Describe the task requirement</label>
+            <textarea
+              value={aiTaskPrompt}
+              onChange={(e) => setAiTaskPrompt(e.target.value)}
+              placeholder='e.g. "remove vinyl siding 100sqft and install new vinyl siding" or "winterize whole plumbing plumbing system"'
+              rows={3}
+              className="w-full px-4 py-3 bg-surface-hover border border-violet-500/30 rounded-2xl text-xs text-text-primary focus:border-violet-500/60 focus:outline-none resize-none shadow-inner animate-in fade-in duration-200"
+              disabled={isGeneratingTasks}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleAITaskGenerate}
+              disabled={!aiTaskPrompt.trim() || isGeneratingTasks}
+              className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-xs font-black uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-violet-500/20 flex items-center justify-center gap-2"
+            >
+              {isGeneratingTasks ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>Generate Tasks</>
+              )}
+            </button>
+            <button 
+              onClick={() => { setShowAITask(false); setAiTaskPrompt(""); }} 
+              disabled={isGeneratingTasks}
+              className="px-6 py-3 rounded-2xl bg-surface-hover text-white text-xs font-black uppercase tracking-widest hover:bg-surface-hover disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Templates Dropdown */}
       {showTemplates && templates.length > 0 && (
