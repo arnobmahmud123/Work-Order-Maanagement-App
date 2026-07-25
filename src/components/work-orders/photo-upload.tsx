@@ -690,8 +690,8 @@ export function PhotoUploadSection({
         document.body
       )}
 
-      {showAttachModal && existingPhotos && createPortal(
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-[9999]" onClick={() => setShowAttachModal(false)}>
+      {showAttachModal && existingPhotos && typeof window !== "undefined" && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/85 backdrop-blur-md z-[999999]" onClick={() => setShowAttachModal(false)}>
           <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-lg p-5 shadow-2xl space-y-4 m-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-white uppercase tracking-wider">Select Existing Photos</h3>
@@ -706,17 +706,17 @@ export function PhotoUploadSection({
 
             <div className="grid grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
               {existingPhotos.map((photo) => {
-                const isAttached = photos.some((p) => p.id === photo.id || p.url === photo.url);
-                const isSelected = selectedExistingIds.has(photo.id || photo.url);
+                const isAttached = photos.some((p) => p.url === photo.url);
+                const isSelected = selectedExistingIds.has(photo.url);
 
                 return (
                   <div
-                    key={photo.id || photo.url}
+                    key={photo.url}
                     onClick={() => {
                       if (isAttached) return;
                       const next = new Set(selectedExistingIds);
-                      if (isSelected) next.delete(photo.id || photo.url);
-                      else next.add(photo.id || photo.url);
+                      if (isSelected) next.delete(photo.url);
+                      else next.add(photo.url);
                       setSelectedExistingIds(next);
                     }}
                     className={cn(
@@ -755,7 +755,7 @@ export function PhotoUploadSection({
                 type="button"
                 disabled={selectedExistingIds.size === 0}
                 onClick={() => {
-                  const toAttach = existingPhotos.filter((p) => selectedExistingIds.has(p.id || p.url)).map(p => ({
+                  const toAttach = existingPhotos.filter((p) => selectedExistingIds.has(p.url)).map(p => ({
                     ...p,
                     category: targetCategory // Assign the current bucket's category!
                   }));
