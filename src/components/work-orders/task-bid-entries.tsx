@@ -417,6 +417,7 @@ export function TaskEntryList({
   onUpload,
   onOpenCamera,
   className,
+  existingPhotos,
 }: {
   tasks: TaskEntry[];
   onTasksChange: (tasks: TaskEntry[]) => void;
@@ -424,6 +425,7 @@ export function TaskEntryList({
   onUpload?: (file: File, category: string) => Promise<{ url: string; rawUrl?: string; id: string }>;
   onOpenCamera?: (category: string, taskId: string) => void;
   className?: string;
+  existingPhotos?: PhotoItem[];
 }) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -970,6 +972,7 @@ export function TaskEntryList({
                     onUpload={onUpload}
                     onOpenCamera={onOpenCamera ? (cat) => onOpenCamera(cat, task.id) : undefined}
                     title={`${task.title} Assets`}
+                    existingPhotos={existingPhotos}
                   />
                 </div>
               )}
@@ -2418,12 +2421,14 @@ export function BidEntryList({
   onUpload,
   onOpenCamera,
   className,
+  existingPhotos,
 }: {
   bids: BidEntry[];
   onBidsChange: (bids: BidEntry[]) => void;
   onUpload?: (file: File, category: string) => Promise<{ url: string; rawUrl?: string; id: string }>;
   onOpenCamera?: (category: string, bidId: string) => void;
   className?: string;
+  existingPhotos?: PhotoItem[];
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showAIBid, setShowAIBid] = useState(false);
@@ -2922,6 +2927,7 @@ export function BidEntryList({
                     singleBucketCategory="BID"
                     showCategories={["BID"]}
                     compact
+                    existingPhotos={existingPhotos}
                   />
                 </div>
               )}

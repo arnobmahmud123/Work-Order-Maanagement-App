@@ -20,35 +20,37 @@ export async function POST(req: NextRequest) {
 Parse the user's natural language request and break it down into a highly comprehensive, granular list of structured bid items (up to 50 items max).
 Do NOT write generic summaries. You must cover every step of the job in detail using industry-standard construction terminology and language.
 
+CRITICAL REQUIREMENT: Every single line item's "description" field MUST explicitly include the calculated dimension/quantity and unit of measurement for that specific item (for example: "Remove existing asphalt shingles down to deck for 1,200 SF area", "Install galvanized drip edge over a length of 180 LF", "Load and haul off 15 CYD of organic yard waste debris", etc.). Never write descriptions without stating the exact dimension and unit.
+
 For example, if the request is "siding remove and replace for vinyl siding 100sqft", you must output distinct items for:
-1. Removal of vinyl siding (100 SF)
-2. Installation of vinyl siding (100 SF)
-3. Debris haul-off (e.g., 1 CYD of generated debris for siding removal)
+1. Removal of vinyl siding (100 SF) with description containing "100 SF"
+2. Installation of vinyl siding (100 SF) with description containing "100 SF"
+3. Debris haul-off (1 CYD) with description containing "1 CYD"
 
 If the request is "roof removal and replace for 1000sqft", you must output a highly detailed breakdown including all related roofing items such as:
-1. Remove existing asphalt shingles (1000 SF)
-2. Remove existing synthetic/felt underlayment (1000 SF)
-3. Remove existing roofing nails and fasteners (1 LS)
-4. Remove and dispose of damaged drip edge (180 LF)
-5. Remove and dispose of ridge cap shingles (45 LF)
-6. Remove and dispose of pipe boot flashings (3 EA)
-7. Remove and dispose of roof vent flashings (4 EA)
-8. Remove and dispose of chimney flashing (if present) (25 LF)
-9. Remove all roofing debris from roof surface and surrounding grounds (1 LS)
-10. Furnish and install ice & water shield at eaves and valleys (220 SF)
-11. Furnish and install synthetic roof underlayment (1000 SF)
-12. Furnish and install architectural asphalt shingles (1000 SF)
-13. Furnish and install starter strip shingles (180 LF)
-14. Furnish and install ridge cap shingles (45 LF)
-15. Furnish and install aluminum drip edge (180 LF)
-16. Furnish and install pipe boot flashings (3 EA)
-17. Furnish and install roof vent flashings (4 EA)
-18. Furnish and install step/counter flashing as required (25 LF)
-19. Install new galvanized roofing nails and fasteners (1 LS)
-20. Seal all flashing penetrations with roofing sealant (1 LS)
-21. Final roof inspection and cleanup (1 LS)
-22. Magnet sweep to remove roofing nails from lawn and driveway (1 LS)
-23. Haul away and legally dispose of all roofing debris (1 LS)
+1. Remove existing asphalt shingles (1000 SF) - description must contain "1000 SF"
+2. Remove existing synthetic/felt underlayment (1000 SF) - description must contain "1000 SF"
+3. Remove existing roofing nails and fasteners (1 LS) - description must contain "1 LS"
+4. Remove and dispose of damaged drip edge (180 LF) - description must contain "180 LF"
+5. Remove and dispose of ridge cap shingles (45 LF) - description must contain "45 LF"
+6. Remove and dispose of pipe boot flashings (3 EA) - description must contain "3 EA"
+7. Remove and dispose of roof vent flashings (4 EA) - description must contain "4 EA"
+8. Remove and dispose of chimney flashing (25 LF) - description must contain "25 LF"
+9. Remove all roofing debris from roof surface and surrounding grounds (1 LS) - description must contain "1 LS"
+10. Furnish and install ice & water shield at eaves and valleys (220 SF) - description must contain "220 SF"
+11. Furnish and install synthetic roof underlayment (1000 SF) - description must contain "1000 SF"
+12. Furnish and install architectural asphalt shingles (1000 SF) - description must contain "1000 SF"
+13. Furnish and install starter strip shingles (180 LF) - description must contain "180 LF"
+14. Furnish and install ridge cap shingles (45 LF) - description must contain "45 LF"
+15. Furnish and install aluminum drip edge (180 LF) - description must contain "180 LF"
+16. Furnish and install pipe boot flashings (3 EA) - description must contain "3 EA"
+17. Furnish and install roof vent flashings (4 EA) - description must contain "4 EA"
+18. Furnish and install step/counter flashing as required (25 LF) - description must contain "25 LF"
+19. Install new galvanized roofing nails and fasteners (1 LS) - description must contain "1 LS"
+20. Seal all flashing penetrations with roofing sealant (1 LS) - description must contain "1 LS"
+21. Final roof inspection and cleanup (1 LS) - description must contain "1 LS"
+22. Magnet sweep to remove roofing nails from lawn and driveway (1 LS) - description must contain "1 LS"
+23. Haul away and legally dispose of all roofing debris (1 LS) - description must contain "1 LS"
 
 Make similar thorough, highly detailed breakdowns for all types of jobs (drywall, siding, roofing, trashouts, winterization, painting, flooring, framing, demolition, etc.) covering removals, installations, haul-offs, and cleanups in proper industry-standard language.
 
@@ -56,7 +58,7 @@ Output ONLY a valid JSON ARRAY matching this schema exactly:
 [
   {
     "title": "Short descriptive title of the work item",
-    "description": "Detailed description of what will be done in professional, industry-standard terms",
+    "description": "Detailed description of what will be done in professional, industry-standard terms, explicitly mentioning the quantity and unit (e.g. 1000 SF, 180 LF, 12 CYD)",
     "unit": "The unit of measurement (e.g., SF, EACH, CYD, LF, LS, HR)",
     "quantity": number,
     "price": number (the price per unit),
@@ -133,7 +135,7 @@ function generateFallbackBids(prompt: string) {
     return [
       {
         title: "Remove existing asphalt shingles",
-        description: "Carefully remove and strip existing asphalt shingles down to the bare wooden decking.",
+        description: `Carefully remove and strip existing asphalt shingles down to the bare wooden decking for a total of ${qty} SF.`,
         unit: "SF",
         quantity: qty,
         price: 1.50,
@@ -141,7 +143,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove existing synthetic/felt underlayment",
-        description: "Remove and dispose of existing deteriorated felt paper or synthetic underlayment.",
+        description: `Remove and dispose of existing deteriorated felt paper or synthetic underlayment across ${qty} SF of surface area.`,
         unit: "SF",
         quantity: qty,
         price: 0.40,
@@ -149,7 +151,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove existing roofing nails and fasteners",
-        description: "Extract remaining nails, staples, and metallic fasteners from deck surface to prepare for re-roofing.",
+        description: `Extract remaining nails, staples, and metallic fasteners from deck surface to prepare for re-roofing (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 150.00,
@@ -157,7 +159,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove and dispose of damaged drip edge",
-        description: "Remove old corroded aluminum or galvanized steel drip edge from the eaves and rakes.",
+        description: `Remove old corroded aluminum or galvanized steel drip edge from the eaves and rakes over a length of ${lfMultiplier || 180} LF.`,
         unit: "LF",
         quantity: lfMultiplier || 180,
         price: 1.20,
@@ -165,7 +167,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove and dispose of ridge cap shingles",
-        description: "Tear off existing cap shingles along the ridge lines and hips.",
+        description: `Tear off existing cap shingles along the ridge lines and hips over a length of ${ridgeMultiplier || 45} LF.`,
         unit: "LF",
         quantity: ridgeMultiplier || 45,
         price: 1.50,
@@ -173,7 +175,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove and dispose of pipe boot flashings",
-        description: "Extract deteriorated rubber/neoprene pipe boot flashings from plumbing vent penetrations.",
+        description: `Extract deteriorated rubber/neoprene pipe boot flashings from plumbing vent penetrations (3 EA).`,
         unit: "EA",
         quantity: 3,
         price: 35.00,
@@ -181,7 +183,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove and dispose of roof vent flashings",
-        description: "Tear out old passive roof ventilation units (box vents/slant-back vents) and clear perimeter.",
+        description: `Tear out old passive roof ventilation units (box vents/slant-back vents) and clear perimeter (4 EA).`,
         unit: "EA",
         quantity: 4,
         price: 45.00,
@@ -189,7 +191,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove and dispose of chimney flashing (if present)",
-        description: "Carefully detach old lead or copper step and counter-flashing from the brick chimney structure.",
+        description: `Carefully detach old lead or copper step and counter-flashing from the chimney structure over a length of 25 LF.`,
         unit: "LF",
         quantity: 25,
         price: 5.50,
@@ -197,7 +199,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Remove all roofing debris from roof surface and surrounding grounds",
-        description: "Clean gutters, rakes, valley lines, and ground perimeter of all loose shingles, paper, and grit.",
+        description: `Clean gutters, rakes, valley lines, and ground perimeter of all loose shingles, paper, and grit (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 250.00,
@@ -205,7 +207,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install ice & water shield at eaves and valleys",
-        description: "Apply self-adhering polymer-modified asphalt ice and water barrier membrane along eaves and valley bottoms.",
+        description: `Apply self-adhering polymer-modified asphalt ice and water barrier membrane along eaves and valleys for ${iceShieldMultiplier || 220} SF.`,
         unit: "SF",
         quantity: iceShieldMultiplier || 220,
         price: 2.50,
@@ -213,7 +215,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install synthetic roof underlayment",
-        description: "Install high-tensile strength non-woven synthetic roof underlayment over the remaining roof decking.",
+        description: `Install high-tensile strength non-woven synthetic roof underlayment over the ${qty} SF roof decking.`,
         unit: "SF",
         quantity: qty,
         price: 0.90,
@@ -221,7 +223,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install architectural asphalt shingles",
-        description: "Supply and install premium 30-year lifetime architectural laminated asphalt shingles with corrosion-resistant fasteners.",
+        description: `Supply and install premium 30-year lifetime architectural laminated asphalt shingles over ${qty} SF roof area.`,
         unit: "SF",
         quantity: qty,
         price: 3.75,
@@ -229,7 +231,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install starter strip shingles",
-        description: "Install pre-cut shingle starter strip along all eaves and rakes to ensure proper wind uplift protection.",
+        description: `Install pre-cut shingle starter strip along all eaves and rakes over a length of ${lfMultiplier || 180} LF.`,
         unit: "LF",
         quantity: lfMultiplier || 180,
         price: 2.20,
@@ -237,7 +239,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install ridge cap shingles",
-        description: "Install matching high-profile ridge cap shingles along all hips and ridges.",
+        description: `Install matching high-profile ridge cap shingles along hips and ridges over a length of ${ridgeMultiplier || 45} LF.`,
         unit: "LF",
         quantity: ridgeMultiplier || 45,
         price: 3.50,
@@ -245,7 +247,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install aluminum drip edge",
-        description: "Install new pre-bent 2x2 white or brown aluminum drip edge along eaves and rakes.",
+        description: `Install new pre-bent 2x2 white or brown aluminum drip edge along eaves and rakes over ${lfMultiplier || 180} LF.`,
         unit: "LF",
         quantity: lfMultiplier || 180,
         price: 2.80,
@@ -253,7 +255,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install pipe boot flashings",
-        description: "Install new leak-proof rubber/silicone boot flashings over all plumbing stack protrusions.",
+        description: `Install new leak-proof rubber/silicone boot flashings over all stack protrusions (3 EA).`,
         unit: "EA",
         quantity: 3,
         price: 75.00,
@@ -261,7 +263,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install roof vent flashings",
-        description: "Supply and install high-airflow passive box vents with integrated rodent screens.",
+        description: `Supply and install high-airflow passive box vents with integrated rodent screens (4 EA).`,
         unit: "EA",
         quantity: 4,
         price: 95.00,
@@ -269,7 +271,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install step/counter flashing as required",
-        description: "Install galvanized metal step flashing and counter-flashing, sealed with premium polyurethane sealant.",
+        description: `Install galvanized metal step flashing and counter-flashing over a length of 25 LF.`,
         unit: "LF",
         quantity: 25,
         price: 12.50,
@@ -277,7 +279,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Install new galvanized roofing nails and fasteners",
-        description: "Secure all shingles and underlayment using double-hot-dipped galvanized ring shank roofing nails.",
+        description: `Secure all shingles and underlayment using double-hot-dipped galvanized nails (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 120.00,
@@ -285,7 +287,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Seal all flashing penetrations with roofing sealant",
-        description: "Apply industrial grade elastomeric black flashing cement to all exposed fasteners and boot margins.",
+        description: `Apply industrial grade elastomeric black flashing cement to all exposed fasteners and boot margins (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 110.00,
@@ -293,7 +295,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Final roof inspection and cleanup",
-        description: "Complete final quality control check of shingles alignment, flashing seals, and ensure deck rigidity.",
+        description: `Complete final quality control check of shingles alignment, flashing seals, and decking rigidity (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 200.00,
@@ -301,7 +303,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Magnet sweep to remove roofing nails from lawn and driveway",
-        description: "Run heavy-duty rolling magnetic sweeps across the entire perimeter lawn, landscaping, and driveway.",
+        description: `Run heavy-duty rolling magnetic sweeps across the entire lawn perimeter and driveway (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 95.00,
@@ -309,7 +311,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Haul away and legally dispose of all roofing debris",
-        description: "Load all stripped shingles, paper, metal scrap, and trash into dump container and pay landfill tipping fees.",
+        description: `Load all stripped shingles, paper, metal scrap, and trash into dump container and haul away (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 380.00,
@@ -325,16 +327,16 @@ function generateFallbackBids(prompt: string) {
 
     return [
       {
-        title: `Remove existing vinyl siding`,
-        description: "Carefully strip and remove deteriorated or damaged vinyl siding panels and utility trim.",
+        title: "Remove existing vinyl siding",
+        description: `Carefully strip and remove deteriorated or damaged vinyl siding panels and utility trim for ${qty} SF of wall surface.`,
         unit: "SF",
         quantity: qty,
         price: 1.25,
         amount: qty * 1.25
       },
       {
-        title: `Furnish and install new vinyl siding`,
-        description: "Supply and install premium double-four profile vinyl siding, including house wrap and insulation backing.",
+        title: "Furnish and install new vinyl siding",
+        description: `Supply and install premium double-four profile vinyl siding, including house wrap and insulation backing, over ${qty} SF of wall area.`,
         unit: "SF",
         quantity: qty,
         price: 4.50,
@@ -342,7 +344,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Haul away generated vinyl siding debris",
-        description: "Load all old vinyl, packaging, and scrap siding into vehicle and legally dispose of at facility.",
+        description: `Load all old vinyl, packaging, and scrap siding into vehicle and haul away covering ${debrisCyd} CYD of debris.`,
         unit: "CYD",
         quantity: debrisCyd,
         price: 65.00,
@@ -350,7 +352,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install vinyl starter strips",
-        description: "Secure new vinyl locking starter tracks along the base perimeter of all walls to be sided.",
+        description: `Secure new vinyl locking starter tracks along the base perimeter of all walls over a length of ${lfMultiplier || 80} LF.`,
         unit: "LF",
         quantity: lfMultiplier || 80,
         price: 2.50,
@@ -358,7 +360,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Furnish and install vinyl outside corner posts",
-        description: "Install 3-1/4 inch vinyl outside corner posts to ensure clean waterproof vertical seams.",
+        description: `Install 3-1/4 inch vinyl outside corner posts to ensure clean waterproof vertical seams (4 EA).`,
         unit: "EACH",
         quantity: 4,
         price: 45.00,
@@ -366,7 +368,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Trim around windows, doors, and penetrations",
-        description: "Install vinyl J-channel molding around all window frames, door frames, and dryer vents.",
+        description: `Install vinyl J-channel molding around all window frames, door frames, and dryer vents (1 LS).`,
         unit: "LS",
         quantity: 1,
         price: 250.00,
@@ -381,7 +383,7 @@ function generateFallbackBids(prompt: string) {
     return [
       {
         title: "Initial Overgrown Yard Clean-Cut & Edging",
-        description: "Cut overgrown grass up to 12 inches, trim perimeter edges, and blow clear walkways",
+        description: `Cut overgrown grass up to 12 inches, trim perimeter edges, and blow clear walkways for ${qty || 2500} SF of yard area.`,
         unit: "SF",
         quantity: qty || 2500,
         price: 0.15,
@@ -389,7 +391,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Tree Branch Trimming & Brush Clearing",
-        description: "Trim low-hanging branches touching structure and clear dense brush from fence line",
+        description: `Trim low-hanging branches touching structure and clear dense brush from fence line (6 HR).`,
         unit: "HOURS",
         quantity: 6,
         price: 65.00,
@@ -397,7 +399,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Yard Debris Loading & Haul-Off",
-        description: "Load organic debris and branches into trailer and haul to authorized green waste facility",
+        description: `Load organic debris and branches into trailer and haul away covering ${debrisQty || 10} CYD of yard debris.`,
         unit: "CYD",
         quantity: debrisQty || 10,
         price: 45.00,
@@ -405,7 +407,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Apply Weed Killer and Herbicide Treatment",
-        description: "Treat driveway, expansion joints, and planter beds with non-selective herbicide.",
+        description: `Treat driveway, expansion joints, and planter beds with non-selective herbicide over ${qty || 2500} SF area.`,
         unit: "SQFT",
         quantity: qty || 2500,
         price: 0.05,
@@ -419,7 +421,7 @@ function generateFallbackBids(prompt: string) {
     return [
       {
         title: "Complete System Winterization & Pressure Test",
-        description: "Drain all water lines, blow out supply pipes with compressed air, and test pressure hold",
+        description: `Drain all water lines, blow out supply pipes with compressed air, and test pressure hold (1 JOB).`,
         unit: "JOB",
         quantity: 1,
         price: 350.00,
@@ -427,7 +429,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Non-Toxic Antifreeze Treatment",
-        description: "Add non-toxic RV antifreeze to all traps, sinks, toilets, and appliance drainage points",
+        description: `Add non-toxic RV antifreeze to all traps, sinks, toilets, and appliance drainage points (5 EA).`,
         unit: "EACH",
         quantity: 5,
         price: 35.00,
@@ -435,7 +437,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Main Water Valve Lockout & Posting",
-        description: "Secure main water shut-off valve with zip lock and attach official winterization tag",
+        description: `Secure main water shut-off valve with zip lock and attach official winterization tag (1 EA).`,
         unit: "EACH",
         quantity: 1,
         price: 75.00,
@@ -443,7 +445,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Water Heater Tank Drainage",
-        description: "Hook up hose to bottom spigot of water heater, open pressure release valve, and drain tank completely.",
+        description: `Hook up hose to bottom spigot of water heater, open pressure release valve, and drain tank completely (1 EA).`,
         unit: "EACH",
         quantity: 1,
         price: 95.00,
@@ -458,7 +460,7 @@ function generateFallbackBids(prompt: string) {
     return [
       {
         title: "Interior Debris & Personal Property Removal",
-        description: "Bag, haul out, and dispose of remaining interior debris and hazardous materials",
+        description: `Bag, haul out, and dispose of remaining interior debris and hazardous materials covering ${debrisVol || 15} CYD of volume.`,
         unit: "CYD",
         quantity: debrisVol || 15,
         price: 48.00,
@@ -466,7 +468,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Broom-Swept Interior Maid Service",
-        description: "Broom sweep all hard floors, vacuum carpets, wipe down countertops, and sanitize sinks",
+        description: `Broom sweep all hard floors, vacuum carpets, wipe down countertops, and sanitize sinks for ${qty || 1800} SF.`,
         unit: "SQFT",
         quantity: qty || 1800,
         price: 0.20,
@@ -474,7 +476,7 @@ function generateFallbackBids(prompt: string) {
       },
       {
         title: "Exterior Yard Trash and General Debris Haul",
-        description: "Gather, load, and transport exterior junk, loose tires, and loose metal sheets to disposal site.",
+        description: `Gather, load, and transport exterior junk, loose tires, and loose metal sheets covering 5 CYD.`,
         unit: "CYD",
         quantity: 5,
         price: 45.00,
@@ -486,8 +488,8 @@ function generateFallbackBids(prompt: string) {
   // Default multi-item preservation bid generator
   return [
     {
-      title: `Property Inspection & Scope Evaluation`,
-      description: `Perform initial walkthrough and safety audit for: ${prompt}`,
+      title: "Property Inspection & Scope Evaluation",
+      description: `Perform initial walkthrough and safety audit for: ${prompt} (1 JOB).`,
       unit: "JOB",
       quantity: 1,
       price: 150.00,
@@ -495,7 +497,7 @@ function generateFallbackBids(prompt: string) {
     },
     {
       title: "Preservation Repair & Remediation Labor",
-      description: `Execute required repairs, secure structure, and correct safety violations per specs: ${prompt}`,
+      description: `Execute required repairs, secure structure, and correct safety violations for: ${prompt} (8 HR).`,
       unit: "HOURS",
       quantity: 8,
       price: 75.00,
@@ -503,7 +505,7 @@ function generateFallbackBids(prompt: string) {
     },
     {
       title: "Materials, Hauling & Site Cleanup",
-      description: "Supply required lumber, fasteners, hardware, and haul off generated job site waste",
+      description: `Supply required lumber, fasteners, hardware, and haul off generated job site waste (1 JOB).`,
       unit: "JOB",
       quantity: 1,
       price: 275.00,

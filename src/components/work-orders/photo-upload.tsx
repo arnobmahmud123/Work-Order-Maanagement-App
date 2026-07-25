@@ -15,7 +15,8 @@ import {
   Pencil,
   ChevronLeft,
   ChevronRight,
-  Info
+  Info,
+  ImagePlus
 } from "lucide-react";
 import { readEXIF, type EXIFInfo } from "@/lib/exif";
 
@@ -331,6 +332,7 @@ export function PhotoUploadSection({
   onPhotosChange,
   onUpload,
   existingFiles,
+  existingPhotos,
   title = "Photos",
   singleBucket,
   singleBucketCategory,
@@ -343,6 +345,7 @@ export function PhotoUploadSection({
   onPhotosChange: (photos: PhotoItem[]) => void;
   onUpload?: (file: File, category: PhotoCategory) => Promise<{ url: string; rawUrl?: string; id: string }>;
   existingFiles?: any[];
+  existingPhotos?: PhotoItem[];
   title?: string;
   singleBucket?: boolean;
   /** Category used by single-bucket mode. Defaults to the first shown category. */
@@ -357,6 +360,10 @@ export function PhotoUploadSection({
   const [viewerPhoto, setViewerPhoto] = useState<PhotoItem | null>(null);
   const [editorPhoto, setEditorPhoto] = useState<PhotoItem | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
+  const [selectedExistingIds, setSelectedExistingIds] = useState<Set<string>>(new Set());
+  const [targetCategory, setTargetCategory] = useState<PhotoCategory>("DURING");
+
   const photosRef = useRef(photos);
   photosRef.current = photos;
 
@@ -469,16 +476,32 @@ export function PhotoUploadSection({
           compact={compact}
         />
 
-        {onOpenCamera && (
-          <button
-            type="button"
-            onClick={() => onOpenCamera(bucketCategory)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-cyan-500/30 bg-cyan-500/[0.05] text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/50 transition-all text-xs font-medium"
-          >
-            <MapPin className="h-3.5 w-3.5" />
-            GPS Camera
-          </button>
-        )}
+        <div className="flex gap-2">
+          {onOpenCamera && (
+            <button
+              type="button"
+              onClick={() => onOpenCamera(bucketCategory)}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-cyan-500/30 bg-cyan-500/[0.05] text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/50 transition-all text-xs font-medium"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              GPS Camera
+            </button>
+          )}
+          {existingPhotos && existingPhotos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setTargetCategory(bucketCategory);
+                setSelectedExistingIds(new Set());
+                setShowAttachModal(true);
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-sky-500/30 bg-sky-500/[0.05] text-sky-400 hover:bg-sky-500/10 hover:border-sky-500/50 transition-all text-xs font-medium"
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+              Select Existing
+            </button>
+          )}
+        </div>
 
         {/* Lightbox */}
         {viewerPhoto && createPortal(
@@ -574,17 +597,32 @@ export function PhotoUploadSection({
               onEdit={setEditorPhoto}
               uploading={uploading}
             />
-            {/* GPS Camera button */}
-            {onOpenCamera && (
-              <button
-                type="button"
-                onClick={() => onOpenCamera(cat)}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-cyan-500/30 bg-cyan-500/[0.05] text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/50 transition-all text-xs font-medium"
-              >
-                <MapPin className="h-3.5 w-3.5" />
-                GPS Camera
-              </button>
-            )}
+            <div className="flex gap-2">
+              {onOpenCamera && (
+                <button
+                  type="button"
+                  onClick={() => onOpenCamera(cat)}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-cyan-500/30 bg-cyan-500/[0.05] text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/50 transition-all text-xs font-medium"
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  GPS Camera
+                </button>
+              )}
+              {existingPhotos && existingPhotos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTargetCategory(cat);
+                    setSelectedExistingIds(new Set());
+                    setShowAttachModal(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-sky-500/30 bg-sky-500/[0.05] text-sky-400 hover:bg-sky-500/10 hover:border-sky-500/50 transition-all text-xs font-medium"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  Select Existing
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -649,6 +687,89 @@ export function PhotoUploadSection({
             }}
           />
         </Suspense>,
+        document.body
+      )}
+
+      {showAttachModal && existingPhotos && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-[9999]" onClick={() => setShowAttachModal(false)}>
+          <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-lg p-5 shadow-2xl space-y-4 m-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">Select Existing Photos</h3>
+              <button onClick={() => setShowAttachModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-zinc-400">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <p className="text-[11px] text-zinc-400">
+              Choose photos from this work order to attach to this item. Already attached photos are marked with a check.
+            </p>
+
+            <div className="grid grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+              {existingPhotos.map((photo) => {
+                const isAttached = photos.some((p) => p.id === photo.id || p.url === photo.url);
+                const isSelected = selectedExistingIds.has(photo.id || photo.url);
+
+                return (
+                  <div
+                    key={photo.id || photo.url}
+                    onClick={() => {
+                      if (isAttached) return;
+                      const next = new Set(selectedExistingIds);
+                      if (isSelected) next.delete(photo.id || photo.url);
+                      else next.add(photo.id || photo.url);
+                      setSelectedExistingIds(next);
+                    }}
+                    className={cn(
+                      "relative rounded-xl overflow-hidden aspect-square border-2 transition-all cursor-pointer",
+                      isAttached ? "border-zinc-800 opacity-40 cursor-not-allowed" :
+                      isSelected ? "border-sky-500 scale-95 shadow-md shadow-sky-500/20" : "border-white/10 hover:border-white/20"
+                    )}
+                  >
+                    <img src={photo.url} alt={photo.name} className="w-full h-full object-cover" />
+                    
+                    {/* Checkmark overlay for selected/attached states */}
+                    {isAttached && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Attached</span>
+                      </div>
+                    )}
+                    {isSelected && (
+                      <div className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-sky-500 flex items-center justify-center text-black font-black text-[10px]">
+                        ✓
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowAttachModal(false)}
+                className="px-3.5 py-1.5 rounded-xl bg-white/5 text-xs font-bold text-zinc-300 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={selectedExistingIds.size === 0}
+                onClick={() => {
+                  const toAttach = existingPhotos.filter((p) => selectedExistingIds.has(p.id || p.url)).map(p => ({
+                    ...p,
+                    category: targetCategory // Assign the current bucket's category!
+                  }));
+                  onPhotosChange([...photos, ...toAttach]);
+                  setSelectedExistingIds(new Set());
+                  setShowAttachModal(false);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-sky-500 text-xs font-bold text-black hover:bg-sky-400 disabled:opacity-40"
+              >
+                Attach Selected ({selectedExistingIds.size})
+              </button>
+            </div>
+          </div>
+        </div>,
         document.body
       )}
     </div>

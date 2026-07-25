@@ -2969,6 +2969,7 @@ export default function WorkOrderDetailPage({
               serviceType={workOrder.serviceType}
               onUpload={handlePhotoUpload}
               onOpenCamera={(category, taskId) => openGPSCamera("task", category as PhotoCategory, taskId)}
+              existingPhotos={allPhotos}
             />
           </Card>
         </div>
@@ -3001,7 +3002,7 @@ export default function WorkOrderDetailPage({
           </div>
           <Card padding={false}>
             <div className="p-4">
-              <BidEntryList bids={bids} onBidsChange={setBids} onUpload={handlePhotoUpload} onOpenCamera={(category, bidId) => openGPSCamera("bid", category as PhotoCategory, undefined, bidId)} />
+              <BidEntryList bids={bids} onBidsChange={setBids} onUpload={handlePhotoUpload} onOpenCamera={(category, bidId) => openGPSCamera("bid", category as PhotoCategory, undefined, bidId)} existingPhotos={allPhotos} />
             </div>
           </Card>
         </div>
