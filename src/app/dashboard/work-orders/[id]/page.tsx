@@ -569,6 +569,7 @@ export default function WorkOrderDetailPage({
   const [completionDate, setCompletionDate] = useState("");
   const [sentToClientDate, setSentToClientDate] = useState("");
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
+  const [invoiceItemRows, setInvoiceItemRows] = useState<Record<string, number>>({});
 
   // Inline editing state — tracks edited items per invoice ID
   const [inlineEditItems, setInlineEditItems] = useState<Record<string, InvoiceItem[]>>({});
@@ -3536,13 +3537,32 @@ export default function WorkOrderDetailPage({
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <textarea
-                                value={item.description}
-                                onChange={(e) => updateInvoiceItem(item.id, "description", e.target.value)}
-                                placeholder="Description"
-                                rows={1}
-                                className="w-full bg-transparent border border-transparent hover:border-border-subtle focus:border-cyan-500/50 rounded-lg px-2 py-1.5 text-xs text-text-primary outline-none transition-colors resize-none"
-                              />
+                              <div className="flex flex-col gap-1 w-full">
+                                <textarea
+                                  value={item.description}
+                                  onChange={(e) => updateInvoiceItem(item.id, "description", e.target.value)}
+                                  placeholder="Description"
+                                  rows={invoiceItemRows[item.id] || 1}
+                                  className="w-full bg-transparent border border-transparent hover:border-border-subtle focus:border-cyan-500/50 rounded-lg px-2 py-1.5 text-xs text-text-primary outline-none transition-colors resize-y"
+                                />
+                                <div className="flex items-center gap-1.5 px-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setInvoiceItemRows(prev => ({ ...prev, [item.id]: Math.min(10, (prev[item.id] || 1) + 2) }))}
+                                    className="text-[8px] font-bold text-cyan-400 hover:text-cyan-300 uppercase tracking-tighter"
+                                  >
+                                    + Expand
+                                  </button>
+                                  <span className="text-[8px] text-text-dim">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setInvoiceItemRows(prev => ({ ...prev, [item.id]: Math.max(1, (prev[item.id] || 1) - 2) }))}
+                                    className="text-[8px] font-bold text-text-dim hover:text-text-muted uppercase tracking-tighter"
+                                  >
+                                    - Reduce
+                                  </button>
+                                </div>
+                              </div>
                             </td>
                             <td className="px-1 py-2">
                               <select

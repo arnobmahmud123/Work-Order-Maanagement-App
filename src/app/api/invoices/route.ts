@@ -105,48 +105,44 @@ export async function POST(req: NextRequest) {
 
     const targetCompanyId = role === "SUPER_ADMIN" ? (body.companyId || null) : companyId;
 
-    const invoice = await prisma.$transaction(async (tx) => {
-      const created = await tx.invoice.create({
-        data: {
-          invoiceNumber,
-          type: invoiceType as any,
-          workOrderId,
-          clientId,
-          subtotal,
-          tax: tax || 0,
-          total: noCharge ? 0 : total,
-          noCharge: noCharge || false,
-          notes,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          companyId: targetCompanyId,
-          items: {
-            create: items.map((item: any) => ({
-              taskName: item.taskName,
-              description: item.description,
-              unit: item.unit || null,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discountPercent: item.discountPercent || 0,
-              amount: (item.quantity * item.unitPrice) * (1 - (item.discountPercent || 0) / 100),
-            })),
-          },
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoiceNumber,
+        type: invoiceType as any,
+        workOrderId,
+        clientId,
+        subtotal,
+        tax: tax || 0,
+        total: noCharge ? 0 : total,
+        noCharge: noCharge || false,
+        notes,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        companyId: targetCompanyId,
+        items: {
+          create: items.map((item: any) => ({
+            taskName: item.taskName,
+            description: item.description,
+            unit: item.unit || null,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountPercent: item.discountPercent || 0,
+            amount: (item.quantity * item.unitPrice) * (1 - (item.discountPercent || 0) / 100),
+          })),
         },
-        include: {
-          client: { select: { id: true, name: true, email: true } },
-          items: true,
-        },
-      });
-
-      // Sync item structure to paired invoice (client ↔ contractor)
-      if (workOrderId) {
-        const paired = await findPairedInvoice(tx, created.id, invoiceType, workOrderId);
-        if (paired) {
-          await syncInvoiceItemStructure(tx, created.id, paired.id);
-        }
-      }
-
-      return created;
+      },
+      include: {
+        client: { select: { id: true, name: true, email: true } },
+        items: true,
+      },
     });
+
+    // Sync item structure to paired invoice (client ↔ contractor)
+    if (workOrderId) {
+      const paired = await findPairedInvoice(prisma, invoice.id, invoiceType, workOrderId);
+      if (paired) {
+        await syncInvoiceItemStructure(prisma, invoice.id, paired.id);
+      }
+    }
 
     // Notify the client about the new invoice
     try {

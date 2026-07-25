@@ -39,79 +39,75 @@ export async function PATCH(
     return NextResponse.json({ error: "items array required" }, { status: 400 });
   }
 
-  const invoice = await prisma.$transaction(async (tx) => {
-    for (const item of items) {
-      if (!item.id) continue;
-      if (item.id.startsWith("new-")) {
-        await tx.invoiceItem.create({
-          data: {
-            taskName: item.taskName,
-            description: item.description || null,
-            unit: item.unit || null,
-            quantity: Number(item.quantity) || 0,
-            unitPrice: Number(item.unitPrice) || 0,
-            discountPercent: Number(item.discountPercent) || 0,
-            amount:
-              (Number(item.quantity) || 0) *
-              (Number(item.unitPrice) || 0) *
-              (1 - (Number(item.discountPercent) || 0) / 100),
-            invoiceId: id,
-          },
-        });
-      } else {
-        await tx.invoiceItem.update({
-          where: { id: item.id },
-          data: {
-            taskName: item.taskName,
-            description: item.description || null,
-            unit: item.unit || null,
-            quantity: Number(item.quantity) || 0,
-            unitPrice: Number(item.unitPrice) || 0,
-            discountPercent: Number(item.discountPercent) || 0,
-            amount:
-              (Number(item.quantity) || 0) *
-              (Number(item.unitPrice) || 0) *
-              (1 - (Number(item.discountPercent) || 0) / 100),
-          },
-        });
-      }
+  for (const item of items) {
+    if (!item.id) continue;
+    if (item.id.startsWith("new-")) {
+      await prisma.invoiceItem.create({
+        data: {
+          taskName: item.taskName,
+          description: item.description || null,
+          unit: item.unit || null,
+          quantity: Number(item.quantity) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+          discountPercent: Number(item.discountPercent) || 0,
+          amount:
+            (Number(item.quantity) || 0) *
+            (Number(item.unitPrice) || 0) *
+            (1 - (Number(item.discountPercent) || 0) / 100),
+          invoiceId: id,
+        },
+      });
+    } else {
+      await prisma.invoiceItem.update({
+        where: { id: item.id },
+        data: {
+          taskName: item.taskName,
+          description: item.description || null,
+          unit: item.unit || null,
+          quantity: Number(item.quantity) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+          discountPercent: Number(item.discountPercent) || 0,
+          amount:
+            (Number(item.quantity) || 0) *
+            (Number(item.unitPrice) || 0) *
+            (1 - (Number(item.discountPercent) || 0) / 100),
+        },
+      });
     }
+  }
 
-    // Recalculate totals
-    const allItems = await tx.invoiceItem.findMany({
-      where: { invoiceId: id },
-    });
-    const subtotal = allItems.reduce(
-      (sum, i) => sum + i.quantity * i.unitPrice,
-      0
-    );
-    const totalDiscount = allItems.reduce(
-      (sum, i) =>
-        sum + (i.quantity * i.unitPrice * (i.discountPercent || 0)) / 100,
-      0
-    );
-    const inv = await tx.invoice.findUnique({ where: { id } });
-    const total = subtotal - totalDiscount + (inv?.tax || 0);
-
-    const updated = await tx.invoice.update({
-      where: { id },
-      data: {
-        subtotal,
-        total: inv?.noCharge ? 0 : total,
-      },
-      include: { items: true },
-    });
-
-    // Sync item structure to paired invoice (client ↔ contractor)
-    if (inv?.workOrderId) {
-      const paired = await findPairedInvoice(tx, id, inv.type as "CLIENT" | "CONTRACTOR", inv.workOrderId);
-      if (paired) {
-        await syncInvoiceItemStructure(tx, id, paired.id);
-      }
-    }
-
-    return updated;
+  // Recalculate totals
+  const allItems = await prisma.invoiceItem.findMany({
+    where: { invoiceId: id },
   });
+  const subtotal = allItems.reduce(
+    (sum, i) => sum + i.quantity * i.unitPrice,
+    0
+  );
+  const totalDiscount = allItems.reduce(
+    (sum, i) =>
+      sum + (i.quantity * i.unitPrice * (i.discountPercent || 0)) / 100,
+    0
+  );
+  const inv = await prisma.invoice.findUnique({ where: { id } });
+  const total = subtotal - totalDiscount + (inv?.tax || 0);
+
+  const invoice = await prisma.invoice.update({
+    where: { id },
+    data: {
+      subtotal,
+      total: inv?.noCharge ? 0 : total,
+    },
+    include: { items: true },
+  });
+
+  // Sync item structure to paired invoice (client ↔ contractor)
+  if (inv?.workOrderId) {
+    const paired = await findPairedInvoice(prisma, id, inv.type as "CLIENT" | "CONTRACTOR", inv.workOrderId);
+    if (paired) {
+      await syncInvoiceItemStructure(prisma, id, paired.id);
+    }
+  }
 
   return NextResponse.json(invoice);
 }
