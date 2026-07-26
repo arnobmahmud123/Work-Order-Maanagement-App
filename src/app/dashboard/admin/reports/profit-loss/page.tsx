@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Activity, Download } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 import toast from "react-hot-toast";
@@ -116,16 +116,17 @@ export default function ProfitLossPage() {
         </div>
         
         <div className="flex items-center gap-3">
-          <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="w-32 bg-surface">
-              <SelectValue placeholder="Year" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="2026">2026</SelectItem>
-              <SelectItem value="2025">2025</SelectItem>
-              <SelectItem value="2024">2024</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="w-32">
+            <Select 
+              value={year} 
+              onChange={(e) => setYear(e.target.value)}
+              options={[
+                { value: "2026", label: "2026" },
+                { value: "2025", label: "2025" },
+                { value: "2024", label: "2024" }
+              ]}
+            />
+          </div>
           
           <Button variant="outline" className="gap-2 bg-surface">
             <Download className="h-4 w-4" />
@@ -143,10 +144,10 @@ export default function ProfitLossPage() {
               <DollarSign className="h-4 w-4 text-emerald-500" />
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <div className="px-6 pb-6 pt-0">
             <div className="text-2xl font-bold">{loading ? "..." : formatCurrency(totalIncome)}</div>
             <p className="text-xs text-text-muted mt-1">Total revenue generated</p>
-          </CardContent>
+          </div>
         </Card>
         
         <Card className="bg-surface shadow-sm">
@@ -156,10 +157,10 @@ export default function ProfitLossPage() {
               <TrendingDown className="h-4 w-4 text-rose-500" />
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <div className="px-6 pb-6 pt-0">
             <div className="text-2xl font-bold">{loading ? "..." : formatCurrency(totalExpenses)}</div>
             <p className="text-xs text-text-muted mt-1">All categorized costs</p>
-          </CardContent>
+          </div>
         </Card>
 
         <Card className="bg-surface shadow-sm border-t-4 border-t-blue-500">
@@ -169,12 +170,12 @@ export default function ProfitLossPage() {
               <Activity className="h-4 w-4 text-blue-500" />
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <div className="px-6 pb-6 pt-0">
             <div className={cn("text-2xl font-bold", netProfit < 0 ? "text-rose-500" : "text-emerald-500")}>
               {loading ? "..." : formatCurrency(netProfit)}
             </div>
             <p className="text-xs text-text-muted mt-1">After all expenses</p>
-          </CardContent>
+          </div>
         </Card>
 
         <Card className="bg-surface shadow-sm">
@@ -184,10 +185,10 @@ export default function ProfitLossPage() {
               <PieChartIcon className="h-4 w-4 text-purple-500" />
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <div className="px-6 pb-6 pt-0">
             <div className="text-2xl font-bold">{loading ? "..." : `${profitMargin}%`}</div>
             <p className="text-xs text-text-muted mt-1">Net profit relative to income</p>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
@@ -196,9 +197,9 @@ export default function ProfitLossPage() {
         <Card className="bg-surface shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Monthly Performance</CardTitle>
-            <CardDescription>Income vs Expenses over the year</CardDescription>
+            <p className="text-sm text-text-muted">Income vs Expenses over the year</p>
           </CardHeader>
-          <CardContent>
+          <div className="px-6 pb-6 pt-0">
             <div className="h-[350px] w-full">
               {loading ? (
                 <div className="flex items-center justify-center h-full">Loading...</div>
@@ -209,7 +210,7 @@ export default function ProfitLossPage() {
                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(value) => `$${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
                     <RechartsTooltip 
-                      formatter={(value: number) => formatCurrency(value)}
+                      formatter={(value: any) => formatCurrency(value as number)}
                       contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
                       itemStyle={{ color: '#f8fafc' }}
                     />
@@ -220,16 +221,16 @@ export default function ProfitLossPage() {
                 </ResponsiveContainer>
               )}
             </div>
-          </CardContent>
+          </div>
         </Card>
 
         {/* Expense Breakdown Pie Chart */}
         <Card className="bg-surface shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">Expense Breakdown</CardTitle>
-            <CardDescription>Where costs are allocated</CardDescription>
+            <p className="text-sm text-text-muted">Where costs are allocated</p>
           </CardHeader>
-          <CardContent>
+          <div className="px-6 pb-6 pt-0">
             <div className="h-[250px] w-full">
               {loading ? (
                 <div className="flex items-center justify-center h-full">Loading...</div>
@@ -252,7 +253,7 @@ export default function ProfitLossPage() {
                       ))}
                     </Pie>
                     <RechartsTooltip 
-                      formatter={(value: number) => formatCurrency(value)}
+                      formatter={(value: any) => formatCurrency(value as number)}
                       contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
                     />
                   </PieChart>
@@ -271,7 +272,7 @@ export default function ProfitLossPage() {
                 </div>
               ))}
             </div>
-          </CardContent>
+          </div>
         </Card>
       </div>
       
@@ -280,7 +281,7 @@ export default function ProfitLossPage() {
         <CardHeader>
           <CardTitle className="text-lg">Recent Ledger Entries</CardTitle>
         </CardHeader>
-        <CardContent>
+        <div className="px-6 pb-6 pt-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-text-muted uppercase border-b border-border-subtle">
@@ -325,7 +326,7 @@ export default function ProfitLossPage() {
               </tbody>
             </table>
           </div>
-        </CardContent>
+        </div>
       </Card>
     </div>
   );

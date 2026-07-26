@@ -68,6 +68,7 @@
     "react-easy-crop": "^6.2.2",
     "react-hook-form": "^7.74.0",
     "react-hot-toast": "^2.6.0",
+    "react-is": "^19.2.8",
     "recharts": "^3.8.1",
     "serwist": "^9.5.11",
     "tailwind-merge": "^3.5.0",
