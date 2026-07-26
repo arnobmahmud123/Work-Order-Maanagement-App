@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest) {
       elevenlabsAgentId: body.elevenlabsAgentId || null,
       elevenlabsPhoneId: body.elevenlabsPhoneId || null,
       smtpHost: body.smtpHost || null,
-      smtpPort: body.smtpPort ? parseInt(body.smtpPort, 10) : null,
+      smtpPort: body.smtpPort && !isNaN(parseInt(body.smtpPort, 10)) ? parseInt(body.smtpPort, 10) : null,
       smtpUser: body.smtpUser || null,
       smtpFrom: body.smtpFrom || null,
     };
