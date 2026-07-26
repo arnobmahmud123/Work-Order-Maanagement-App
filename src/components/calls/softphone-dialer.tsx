@@ -19,9 +19,11 @@ export function SoftphoneDialer() {
     async function initDevice() {
       try {
         const res = await fetch("/api/twilio/token");
-        if (!res.ok) throw new Error("Failed to fetch Twilio token");
-        
         const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to fetch Twilio token");
+        }
         
         const newDevice = new Device(data.token, {
           logLevel: 1,
@@ -30,8 +32,9 @@ export function SoftphoneDialer() {
         
         await newDevice.register();
         setDevice(newDevice);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Twilio Device initialization error:", err);
+        toast.error(err.message || "Twilio not configured properly");
       }
     }
     

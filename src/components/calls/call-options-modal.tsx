@@ -26,25 +26,28 @@ export function CallOptionModal({ phoneNumber, contractorId, workOrderId, childr
   const handleAICall = async () => {
     setIsAICalling(true);
     try {
-      const response = await fetch("/api/ai/voice-agent/work-order", {
+      const response = await fetch("/api/calls", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          phone: phoneNumber,
+          recipientPhone: phoneNumber,
           workOrderId,
-          contractorId,
+          recipientId: contractorId,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to start AI call");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to start AI call");
+      }
       
       toast.success("AI Voice Agent is now calling the contact");
       setIsOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Failed to trigger AI call. Please try again.");
+      toast.error(error.message || "Failed to trigger AI call. Please try again.");
     } finally {
       setIsAICalling(false);
     }

@@ -22,12 +22,16 @@ export async function GET(req: NextRequest) {
         where: { id: companyId },
         select: { twilioPhone: true, twilioSid: true, twilioToken: true }
       });
-      if (company?.twilioPhone) {
-        callerId = company.twilioPhone;
+      
+      if (!company?.twilioPhone || !company?.twilioSid || !company?.twilioToken) {
+        return NextResponse.json(
+          { error: "Please configure your Twilio settings in Admin > Company Settings to enable manual calling." }, 
+          { status: 400 }
+        );
       }
-      if (company?.twilioSid) {
-        accountSid = company.twilioSid;
-      }
+      
+      callerId = company.twilioPhone;
+      accountSid = company.twilioSid;
     }
 
     if (!accountSid || !apiKey || !apiSecret || !twimlAppSid) {

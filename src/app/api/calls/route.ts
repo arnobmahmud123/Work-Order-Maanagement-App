@@ -64,20 +64,23 @@ export async function POST(req: NextRequest) {
 
   const companyId = (session?.user as any)?.companyId;
   let companyName = "";
+  
   if (companyId) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { name: true, elevenlabsAgentId: true, elevenlabsPhoneId: true }
     });
-    if (company) {
-      companyName = company.name;
-      if (company.elevenlabsAgentId) {
-        agentId = company.elevenlabsAgentId;
-      }
-      if (company.elevenlabsPhoneId) {
-        phoneNumberId = company.elevenlabsPhoneId;
-      }
+    
+    if (!company?.elevenlabsAgentId || !company?.elevenlabsPhoneId) {
+      return NextResponse.json(
+        { error: "Please configure your ElevenLabs settings in Admin > Company Settings to enable AI calling." }, 
+        { status: 400 }
+      );
     }
+    
+    companyName = company.name;
+    agentId = company.elevenlabsAgentId;
+    phoneNumberId = company.elevenlabsPhoneId;
   }
 
   if (apiKey && agentId && phoneNumberId && !enableSimulation) {
@@ -132,11 +135,18 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(call, { status: 201 });
     } catch (e: any) {
-      console.error("Failed to initiate ElevenLabs outbound call, falling back to mock:", e);
+      console.error("Failed to initiate ElevenLabs outbound call:", e);
+      return NextResponse.json({ error: "Failed to initiate AI call." }, { status: 500 });
     }
   }
 
-  // Mock: Create call log with simulated Twilio integration
+  // If we reach here, it means the API key or agent ID is missing (for system default users without a company)
+  // or it's running in simulation mode.
+  if (companyId) {
+    return NextResponse.json({ error: "AI calling is not configured properly." }, { status: 500 });
+  }
+
+  // Mock: Create call log with simulated Twilio integration (ONLY for non-company test accounts)
   const call = await prisma.callLog.create({
     data: {
       initiatorId: userId,
