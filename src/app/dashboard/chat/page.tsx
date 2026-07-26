@@ -22,6 +22,8 @@ import { EmojiPicker } from "@/components/chat/emoji-picker";
 import { ChannelInfoPanel } from "@/components/chat/channel-info";
 import { MessageActions, TypingIndicator } from "@/components/chat/message-actions";
 import { MentionDropdown } from "@/components/chat/mention-dropdown";
+import { PhotoViewer } from "@/components/photo-viewer";
+import React from "react";
 import {
   Hash,
   Plus,
@@ -111,6 +113,24 @@ function getWorkOrderLink(channel: any): string {
 
   // Last resort: search
   return `/dashboard/work-orders?search=${encodeURIComponent(name.replace(/^#/, ""))}`;
+}
+
+function renderMarkdown(text: string) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*.*?\*\*|_[^_]+_|`[^`]+`|>.+|\[.*?\]\(.*?\))/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('_') && part.endsWith('_')) return <em key={i}>{part.slice(1, -1)}</em>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={i} className="bg-black/20 dark:bg-white/10 px-1 py-0.5 rounded text-sm font-mono text-cyan-400">{part.slice(1, -1)}</code>;
+    if (part.startsWith('>')) return <blockquote key={i} className="border-l-2 border-border-medium pl-2 italic my-1 opacity-80">{part.slice(1).trim()}</blockquote>;
+    const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
+    if (linkMatch) return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">{linkMatch[1]}</a>;
+    if (part.includes('@')) {
+       const subparts = part.split(/(@\w+)/g);
+       return <span key={i}>{subparts.map((sp, j) => sp.startsWith('@') ? <span key={j} className="bg-cyan-500/15 text-cyan-300 px-1.5 py-0.5 rounded-md font-medium cursor-pointer hover:bg-cyan-500/25 transition-colors">{sp}</span> : sp)}</span>;
+    }
+    return part;
+  });
 }
 
 // ─── Gradient palette for message bubbles ────────────────────────────────────
@@ -738,6 +758,9 @@ function ChatArea({
 
   const messages = messagesData?.messages || [];
   const [message, setMessage] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<{file: File, previewUrl: string}[]>([]);
+  const [pendingAudio, setPendingAudio] = useState<{file: File, previewUrl: string} | null>(null);
+  const [viewerPhoto, setViewerPhoto] = useState<{url: string, name?: string} | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -867,9 +890,10 @@ function ChatArea({
     }
   }
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!message.trim()) return;
+  async function handleSend(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const hasMedia = pendingFiles.length > 0 || pendingAudio !== null;
+    if (!message.trim() && !hasMedia) return;
 
     if (editingMessage) {
       try {
@@ -918,16 +942,59 @@ function ChatArea({
     }
 
     try {
-      await sendMessage.mutateAsync({
-        content: trimmed,
-        parentId: replyTo?.id || undefined,
-      });
+      // Upload pending files
+      for (const pending of pendingFiles) {
+        const formData = new FormData();
+        formData.append("file", pending.file);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+        const { url } = await uploadRes.json();
+        
+        await sendMessage.mutateAsync({
+          content: `📎 Shared ${pending.file.name}`,
+          type: pending.file.type.startsWith("image/") ? "IMAGE" : "FILE",
+          fileUrl: url,
+          fileName: pending.file.name,
+          fileSize: pending.file.size,
+          fileMime: pending.file.type,
+          parentId: replyTo?.id || undefined,
+        });
+      }
+      
+      // Upload pending audio
+      if (pendingAudio) {
+        const formData = new FormData();
+        formData.append("file", pendingAudio.file);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+        const { url } = await uploadRes.json();
+        
+        await sendMessage.mutateAsync({
+          content: "🎤 Voice Message",
+          type: "AUDIO",
+          fileUrl: url,
+          fileName: pendingAudio.file.name,
+          fileSize: pendingAudio.file.size,
+          fileMime: pendingAudio.file.type,
+          parentId: replyTo?.id || undefined,
+        });
+      }
+      
+      if (trimmed) {
+        await sendMessage.mutateAsync({
+          content: trimmed,
+          parentId: replyTo?.id || undefined,
+        });
+      }
+
       setMessage("");
       setReplyTo(null);
       setMentionQuery(null);
+      setPendingFiles([]);
+      setPendingAudio(null);
       if (soundEnabled) playSendSound();
     } catch {
-      toast.error("Failed to send message");
+      toast.error("Failed to send message or media");
     }
   }
 
@@ -952,32 +1019,11 @@ function ChatArea({
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: "audio/webm" });
-        
-        try {
-          const formData = new FormData();
-          formData.append("file", file);
-          
-          const uploadRes = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) throw new Error("Upload failed");
-          
-          const { url } = await uploadRes.json();
-          await sendMessage.mutateAsync({
-            content: "🎤 Voice Message",
-            type: "AUDIO",
-            fileUrl: url,
-            fileName: file.name,
-            fileSize: file.size,
-            fileMime: file.type,
-          });
-        } catch {
-          toast.error("Failed to send voice message");
-        }
+        const previewUrl = URL.createObjectURL(file);
+        setPendingAudio({ file, previewUrl });
       };
 
       mediaRecorder.start();
@@ -1000,31 +1046,18 @@ function ChatArea({
     setDragOver(false);
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
-    for (const file of files) {
+    const validFiles = files.filter((file) => {
       if (file.size > 10 * 1024 * 1024) {
         toast.error(`${file.name} exceeds 10MB limit`);
-        continue;
+        return false;
       }
-      try {
-        // Upload to server first for persistent storage
-        const formData = new FormData();
-        formData.append("file", file);
-        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-        if (!uploadRes.ok) throw new Error("Upload failed");
-        const { url } = await uploadRes.json();
-
-        await sendMessage.mutateAsync({
-          content: `📎 Shared ${file.name}`,
-          type: file.type.startsWith("image/") ? "IMAGE" : "FILE",
-          fileUrl: url,
-          fileName: file.name,
-          fileSize: file.size,
-          fileMime: file.type,
-        });
-      } catch {
-        toast.error(`Failed to upload ${file.name}`);
-      }
-    }
+      return true;
+    });
+    
+    setPendingFiles(prev => [
+      ...prev,
+      ...validFiles.map(file => ({ file, previewUrl: URL.createObjectURL(file) }))
+    ]);
   }
 
   function highlightMentions(text: string) {
@@ -1325,7 +1358,7 @@ function ChatArea({
                 return (
                   <div key={msg.id} className="flex justify-center py-4">
                     <div className="px-4 py-1.5 bg-surface-hover border border-border-subtle rounded-full text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                      {msg.content}
+                      {msg.isDeleted ? msg.content : renderMarkdown(msg.content)}
                     </div>
                   </div>
                 )
@@ -1461,20 +1494,26 @@ function ChatArea({
 
                             {msg.type === "IMAGE" && msg.fileUrl && !msg.isDeleted && (
                               <div className="mb-2">
-                                <img
-                                  src={msg.fileUrl}
-                                  alt={msg.fileName || "Image"}
-                                  className="max-w-[240px] rounded-lg border border-border-subtle shadow-lg object-cover"
-                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setViewerPhoto({ url: msg.fileUrl as string, name: msg.fileName || "Image" })}
+                                  className="block text-left transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                                >
+                                  <img
+                                    src={msg.fileUrl}
+                                    alt={msg.fileName || "Image"}
+                                    className="max-w-[240px] rounded-lg border border-border-subtle shadow-lg object-cover"
+                                  />
+                                </button>
                               </div>
                             )}
 
-                            <p className={cn(
+                            <div className={cn(
                               "whitespace-pre-wrap leading-relaxed",
                               msg.isDeleted && "italic opacity-70 text-[13px]"
                             )}>
-                              {msg.content}
-                            </p>
+                              {msg.isDeleted ? msg.content : renderMarkdown(msg.content)}
+                            </div>
 
                             {/* Floating actions menu */}
                             <div
@@ -1628,6 +1667,42 @@ function ChatArea({
 
       {/* Message Input */}
       <div className="px-5 py-4 border-t border-border-subtle bg-surface/50">
+        
+        {/* Pending Media Previews */}
+        {(pendingFiles.length > 0 || pendingAudio) && (
+          <div className="flex flex-wrap gap-2 mb-3 p-2 bg-surface/80 rounded-xl border border-border-subtle shadow-sm backdrop-blur-sm">
+            {pendingFiles.map((pf, idx) => (
+              <div key={idx} className="relative group rounded-lg overflow-hidden border border-border-subtle bg-surface w-16 h-16 shadow-sm">
+                {pf.file.type.startsWith("image/") ? (
+                  <img src={pf.previewUrl} alt={pf.file.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full text-[10px] break-words p-1 text-center bg-surface-hover text-text-dim">
+                    {pf.file.name.slice(0, 10)}...
+                  </div>
+                )}
+                <button
+                  onClick={() => setPendingFiles(prev => prev.filter((_, i) => i !== idx))}
+                  className="absolute top-0 right-0 bg-red-500/80 text-white p-0.5 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {pendingAudio && (
+              <div className="relative rounded-lg border border-border-subtle bg-surface p-1.5 flex items-center gap-2 shadow-sm">
+                <audio src={pendingAudio.previewUrl} controls className="h-10 max-w-[220px]" />
+                <button
+                  onClick={() => setPendingAudio(null)}
+                  className="text-text-muted hover:text-red-500 p-1 transition-colors bg-surface-hover rounded-md"
+                  title="Remove voice message"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Formatting toolbar */}
         <div className="flex items-center gap-0.5 mb-2.5">
           {[
@@ -1672,33 +1747,23 @@ function ChatArea({
             ref={fileInputRef}
             className="hidden"
             multiple
-            onChange={async (e) => {
+            onChange={(e) => {
               const files = Array.from(e.target.files || []);
-              for (const file of files) {
+              if (files.length === 0) return;
+              
+              const validFiles = files.filter((file) => {
                 if (file.size > 10 * 1024 * 1024) {
                   toast.error(`${file.name} exceeds 10MB limit`);
-                  continue;
+                  return false;
                 }
-                try {
-                  // Upload to server first for persistent storage
-                  const formData = new FormData();
-                  formData.append("file", file);
-                  const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-                  if (!uploadRes.ok) throw new Error("Upload failed");
-                  const { url } = await uploadRes.json();
+                return true;
+              });
+              
+              setPendingFiles(prev => [
+                ...prev,
+                ...validFiles.map(file => ({ file, previewUrl: URL.createObjectURL(file) }))
+              ]);
 
-                  await sendMessage.mutateAsync({
-                    content: `📎 Shared ${file.name}`,
-                    type: file.type.startsWith("image/") ? "IMAGE" : "FILE",
-                    fileUrl: url,
-                    fileName: file.name,
-                    fileSize: file.size,
-                    fileMime: file.type,
-                  });
-                } catch {
-                  toast.error(`Failed to upload ${file.name}`);
-                }
-              }
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
           />
@@ -1903,6 +1968,15 @@ function ChatArea({
           channelName={channel?.name}
         />
       )}
+
+      {/* Photo Viewer */}
+      {viewerPhoto && (
+        <PhotoViewer
+          photoUrl={viewerPhoto.url}
+          photoName={viewerPhoto.name}
+          onClose={() => setViewerPhoto(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1986,9 +2060,9 @@ function ThreadPanel({
               </div>
             </div>
             <div className="rounded-xl bg-surface-hover border border-border-subtle px-3 py-2.5">
-              <p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
-                {parentMsg.content}
-              </p>
+              <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
+                {parentMsg.isDeleted ? parentMsg.content : renderMarkdown(parentMsg.content)}
+              </div>
             </div>
           </div>
         )}
@@ -2021,9 +2095,9 @@ function ThreadPanel({
                   </span>
                 </div>
                 <div className="rounded-xl bg-surface-hover border border-border-subtle px-3 py-2">
-                  <p className="text-[13px] text-text-primary whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
-                  </p>
+                  <div className="text-[13px] text-text-primary whitespace-pre-wrap leading-relaxed">
+                    {msg.isDeleted ? msg.content : renderMarkdown(msg.content)}
+                  </div>
                 </div>
                 {msg.reactions?.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">

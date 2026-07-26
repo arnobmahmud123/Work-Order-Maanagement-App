@@ -1093,9 +1093,17 @@ export function printWorkOrder(data: PrintData) {
 function renderPhotoSection(label: string, photos: any[], color: string, icon: string): string {
   if (photos.length === 0) return "";
 
+  const getAbsoluteUrl = (url: string) => {
+    if (!url) return "";
+    if (url.startsWith("http") || url.startsWith("data:")) return url;
+    // Need to safely use window since it might run on server in some edge cases (though it shouldn't here)
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return origin + (url.startsWith("/") ? "" : "/") + url;
+  };
+
   const photoCells = photos.map((p) => `
     <div class="photo-cell">
-      <img src="${p.url || p.path}" alt="${esc(p.name || p.originalName || "Photo")}" loading="lazy" />
+      <img src="${getAbsoluteUrl(p.url || p.path)}" alt="${esc(p.name || p.originalName || "Photo")}" loading="lazy" />
     </div>
   `).join("");
 
