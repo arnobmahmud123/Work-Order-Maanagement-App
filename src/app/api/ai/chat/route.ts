@@ -26,6 +26,19 @@ export async function POST(req: NextRequest) {
   const userId = (session.user as any).id;
   const role = (session.user as any).role;
   const userName = (session.user as any).name || "User";
+  const companyId = (session.user as any).companyId;
+  let companyName = "the property management company";
+
+  if (companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true }
+    });
+    if (company) {
+      companyName = company.name;
+    }
+  }
+
   const body: ChatRequest = await req.json();
   const { message, context, conversationHistory } = body;
 
@@ -42,7 +55,7 @@ export async function POST(req: NextRequest) {
     const appContext = await gatherFullContext(userId, role, context);
 
     // Build the Gemini request
-    const geminiPayload = buildGeminiRequest(message, appContext, role, userName, conversationHistory);
+    const geminiPayload = buildGeminiRequest(message, appContext, role, userName, companyName, conversationHistory);
 
     // Call Gemini API
     const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
@@ -431,9 +444,10 @@ function buildGeminiRequest(
   appContext: any,
   role: string,
   userName: string,
+  companyName: string,
   history?: { role: string; content: string }[],
 ) {
-  const systemInstruction = `You are PropPreserve AI (also called "Aura Intelligence") — the built-in AI assistant for PropPreserve, a property preservation management platform.
+  const systemInstruction = `You are PropPreserve AI (also called "Aura Intelligence") — the built-in AI assistant for PropPreserve, working specifically for ${companyName}.
 
 You have FULL ACCESS to the entire app's data. You can answer ANY question about:
 - Work orders (status, details, assignments, due dates, addresses, lock codes, instructions)
@@ -453,7 +467,7 @@ You can format responses with markdown for readability (bold, bullet points, tab
 If the user asks about something not in the data, say so honestly.
 Never make up data — only use what's provided in the context.
 
-The user is "${userName}" with role: ${role}.`;
+The user is "${userName}" with role: ${role}. You are representing ${companyName}.`;
 
   const dataSummary = `
 === PLATFORM STATS ===

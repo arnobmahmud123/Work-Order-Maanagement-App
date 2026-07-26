@@ -134,6 +134,22 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     });
   }
 
+  if (isAdmin || role === "SUPER_ADMIN" || isAccountant) {
+    visibleNavItems.push({
+      label: "Profit & Loss",
+      href: "/dashboard/admin/reports/profit-loss",
+      icon: BarChart3,
+    });
+  }
+
+  if (isAdmin || role === "SUPER_ADMIN") {
+    visibleNavItems.push({
+      label: "Company Settings",
+      href: "/dashboard/admin/company-settings",
+      icon: Settings,
+    });
+  }
+
   const visibleNetworkItems = networkItems.filter((item) => {
     if (isContractor && item.href === "/dashboard/network/map") return false;
     return true;

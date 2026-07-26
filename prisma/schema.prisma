@@ -1372,6 +1372,13 @@ model Company {
   twilioToken          String?
   elevenlabsAgentId    String?
   elevenlabsPhoneId    String?
+  
+  // Custom Email Config
+  smtpHost             String?
+  smtpPort             Int?
+  smtpUser             String?
+  smtpPass             String?
+  smtpFrom             String?
 
   // Subscription plans
   plan             String  @default("TRIAL") // TRIAL, BASIC, PROFESSIONAL, ENTERPRISE, CUSTOM
@@ -1410,7 +1417,31 @@ model Company {
   leads              Lead[]
   FileUpload         FileUpload[]
   Thread             Thread[]
-  Inspector          Inspector[]
+  Inspector             Inspector[]
+  financialTransactions FinancialTransaction[]
 
   @@map("companies")
+}
+
+// ─── Financial Transactions ──────────────────────────────────────────────────
+
+model FinancialTransaction {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        String   // "INCOME" or "EXPENSE"
+  category    String   // "MATERIALS", "CONTRACTOR_PAYMENT", "INSURANCE", "COMPLIANCE", "STAFF_PAYMENT", "SUBSCRIPTION", "MISC", "REVENUE"
+  amount      Float
+  date        DateTime @default(now())
+  description String?
+  referenceId String?  // Optional link to WorkOrder, Invoice, etc.
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@index([companyId])
+  @@index([type])
+  @@index([category])
+  @@index([date])
+  @@map("financial_transactions")
 }

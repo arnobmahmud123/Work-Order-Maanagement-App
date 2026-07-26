@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let companyName = "the property management company";
+    const companyId = (session.user as any).companyId;
+    if (companyId) {
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { name: true }
+      });
+      if (company) {
+        companyName = company.name;
+      }
     }
 
     const { prompt } = await req.json();
@@ -16,11 +29,15 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (apiKey) {
-      const systemPrompt = `You are a professional construction and property preservation estimator.
-Parse the user's natural language request and break it down into a highly comprehensive, granular list of structured bid items (up to 50 items max).
-Do NOT write generic summaries. You must cover every step of the job in detail using industry-standard construction terminology and language.
+      const systemPrompt = `You are a professional construction and property preservation estimator working for ${companyName}.
+Parse the user's natural language request and break it down into a highly comprehensive, granular list of structured bid items.
+Do NOT write generic summaries. You must cover every step of the job in detail using industry-standard property preservation terminology and language.
 
-CRITICAL REQUIREMENT: Every single line item's "description" field MUST explicitly include the calculated dimension/quantity and unit of measurement for that specific item (for example: "Remove existing asphalt shingles down to deck for 1,200 SF area", "Install galvanized drip edge over a length of 180 LF", "Load and haul off 15 CYD of organic yard waste debris", etc.). Never write descriptions without stating the exact dimension and unit.
+CRITICAL PRICING & SCOPE GUIDELINES:
+- Bids must be realistic for Property Preservation (e.g., standard winterizations are $50-$100 total, grass cuts are $40-$70, lock changes are $30-$50). Do NOT generate multi-thousand dollar bids for simple preservation tasks like winterizations.
+- Strictly EXCLUDE unnecessary fluff items like "mobilization", "truck charges", "initial clean up", "final clean up", or "debris disposal" UNLESS the user explicitly asks for trashout, debris removal, or clean up. Property preservation strictly pays per work item.
+- Every single line item's "description" field MUST explicitly include the calculated dimension/quantity and unit of measurement for that specific item. Never write descriptions without stating the exact dimension and unit.
+
 
 For example, if the request is "siding remove and replace for vinyl siding 100sqft", you must output distinct items for:
 1. Removal of vinyl siding (100 SF) with description containing "100 SF"
@@ -420,36 +437,12 @@ function generateFallbackBids(prompt: string) {
   if (p.includes("winter") || p.includes("plumb") || p.includes("pipe") || p.includes("freeze")) {
     return [
       {
-        title: "Complete System Winterization & Pressure Test",
-        description: `Drain all water lines, blow out supply pipes with compressed air, and test pressure hold (1 JOB).`,
+        title: "Standard Dry Winterization",
+        description: `Perform complete dry winterization: drain all water lines, blow out supply pipes with compressed air, add non-toxic RV antifreeze to all traps/toilets, lock out main water valve, and post winterization notices (1 JOB).`,
         unit: "JOB",
         quantity: 1,
-        price: 350.00,
-        amount: 350,
-      },
-      {
-        title: "Non-Toxic Antifreeze Treatment",
-        description: `Add non-toxic RV antifreeze to all traps, sinks, toilets, and appliance drainage points (5 EA).`,
-        unit: "EACH",
-        quantity: 5,
-        price: 35.00,
-        amount: 175,
-      },
-      {
-        title: "Main Water Valve Lockout & Posting",
-        description: `Secure main water shut-off valve with zip lock and attach official winterization tag (1 EA).`,
-        unit: "EACH",
-        quantity: 1,
         price: 75.00,
-        amount: 75,
-      },
-      {
-        title: "Water Heater Tank Drainage",
-        description: `Hook up hose to bottom spigot of water heater, open pressure release valve, and drain tank completely (1 EA).`,
-        unit: "EACH",
-        quantity: 1,
-        price: 95.00,
-        amount: 95.00
+        amount: 75.00,
       }
     ];
   }
