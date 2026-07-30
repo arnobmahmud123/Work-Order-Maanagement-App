@@ -607,6 +607,7 @@ function parseEXIFAPP1(data: Uint8Array): EXIFInfo {
   const entries = view.getUint16(tiffStart + ifd0Offset, littleEndian);
 
   let gpsIFDOffset = 0;
+  let exifIFDOffset = 0;
 
   for (let i = 0; i < entries; i++) {
     const entryStart = tiffStart + ifd0Offset + 2 + i * 12;
@@ -626,8 +627,36 @@ function parseEXIFAPP1(data: Uint8Array): EXIFInfo {
     } else if (tag === 0x8825) {
       // GPS IFD Pointer
       gpsIFDOffset = view.getUint32(entryStart + 8, littleEndian);
+    } else if (tag === 0x8769) {
+      // Exif IFD Pointer
+      exifIFDOffset = view.getUint32(entryStart + 8, littleEndian);
     }
   }
+
+  // Parse Exif IFD for accurate date/time
+  let dateTimeOriginal: string | undefined;
+  let dateTimeDigitized: string | undefined;
+
+  if (exifIFDOffset > 0) {
+    try {
+      const exifEntries = view.getUint16(tiffStart + exifIFDOffset, littleEndian);
+      for (let i = 0; i < exifEntries; i++) {
+        const entryStart = tiffStart + exifIFDOffset + 2 + i * 12;
+        const tag = view.getUint16(entryStart, littleEndian);
+        const count = view.getUint32(entryStart + 4, littleEndian);
+
+        if (tag === 0x9003) {
+          dateTimeOriginal = readASCIIValue(view, data, entryStart, tiffStart, littleEndian, count);
+        } else if (tag === 0x9004) {
+          dateTimeDigitized = readASCIIValue(view, data, entryStart, tiffStart, littleEndian, count);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not parse Exif IFD", e);
+    }
+  }
+
+  info.dateTime = dateTimeOriginal || dateTimeDigitized || info.dateTime;
 
   // Parse GPS IFD
   if (gpsIFDOffset > 0) {
