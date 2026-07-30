@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin } from "lucide-react";
 import JSZip from "jszip";
+import * as piexif from "piexifjs";
 import { readEXIF, generatePhotoWithOverlay, GPSData } from "@/lib/exif";
 import { TopNav } from "@/components/layout/top-nav";
 
@@ -164,13 +165,44 @@ export default function ExifToolsPage() {
           format: "12h"
         });
         
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+        const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.95);
+        let finalBlob: Blob | null = null;
         
-        if (blob) {
+        try {
+          // Format date for EXIF (YYYY:MM:DD HH:MM:SS)
+          const pad = (n: number) => n.toString().padStart(2, "0");
+          const exifDateStr = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())} ${pad(effectiveDate.getHours())}:${pad(effectiveDate.getMinutes())}:${pad(effectiveDate.getSeconds())}`;
+          
+          const zeroth = { [piexif.ImageIFD.DateTime]: exifDateStr };
+          const exif = {
+            [piexif.ExifIFD.DateTimeOriginal]: exifDateStr,
+            [piexif.ExifIFD.DateTimeDigitized]: exifDateStr
+          };
+          
+          const exifObj = { "0th": zeroth, "Exif": exif, "GPS": {} };
+          const exifBytes = piexif.dump(exifObj);
+          
+          const newJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
+          
+          // Convert data URI back to Blob
+          const byteString = atob(newJpegDataUrl.split(',')[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let k = 0; k < byteString.length; k++) {
+            ia[k] = byteString.charCodeAt(k);
+          }
+          finalBlob = new Blob([ab], { type: "image/jpeg" });
+        } catch (e) {
+          console.warn("Could not inject EXIF data", e);
+          // Fallback if piexif fails
+          finalBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+        }
+        
+        if (finalBlob) {
           // Generate a filename based on original or index
           const originalName = p.file.name.replace(/\.[^/.]+$/, "");
           const ext = "jpg";
-          zip.file(`${originalName}_stamped.${ext}`, blob);
+          zip.file(`${originalName}_stamped.${ext}`, finalBlob);
         }
       }
       
