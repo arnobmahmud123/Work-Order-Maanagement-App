@@ -418,6 +418,7 @@ export function TaskEntryList({
   onOpenCamera,
   className,
   existingPhotos,
+  onDeletePhoto,
 }: {
   tasks: TaskEntry[];
   onTasksChange: (tasks: TaskEntry[]) => void;
