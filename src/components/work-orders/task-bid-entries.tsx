@@ -2533,6 +2533,7 @@ export function BidEntryList({
   onOpenCamera,
   className,
   existingPhotos,
+  onDeletePhoto,
 }: {
   bids: BidEntry[];
   onBidsChange: (bids: BidEntry[]) => void;
@@ -2540,6 +2541,7 @@ export function BidEntryList({
   onOpenCamera?: (category: string, bidId: string) => void;
   className?: string;
   existingPhotos?: PhotoItem[];
+  onDeletePhoto?: (id: string, skipConfirm?: boolean) => void;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showAIBid, setShowAIBid] = useState(false);
