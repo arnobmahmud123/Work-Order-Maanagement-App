@@ -426,6 +426,7 @@ export function TaskEntryList({
   onOpenCamera?: (category: string, taskId: string) => void;
   className?: string;
   existingPhotos?: PhotoItem[];
+  onDeletePhoto?: (id: string, skipConfirm?: boolean) => void;
 }) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -518,7 +519,17 @@ export function TaskEntryList({
   }
 
   function removeTask(id: string) {
-    onTasksChange(tasks.filter((t) => t.id !== id));
+    if (confirm("Are you sure you want to delete this task?")) {
+      const task = tasks.find((t) => t.id === id);
+      if (task && task.photos && onDeletePhoto) {
+        task.photos.forEach((p) => {
+          if (p.persisted && p.id && !p.id.startsWith("temp-") && !p.id.startsWith("gps-")) {
+            onDeletePhoto(p.id, true);
+          }
+        });
+      }
+      onTasksChange(tasks.filter((t) => t.id !== id));
+    }
   }
 
   function updateTaskPhotos(id: string, photos: PhotoItem[]) {
@@ -2606,7 +2617,17 @@ export function BidEntryList({
   }
 
   function removeBid(id: string) {
-    onBidsChange(bids.filter((b) => b.id !== id));
+    if (confirm("Are you sure you want to delete this bid?")) {
+      const bid = bids.find((b) => b.id === id);
+      if (bid && bid.photos && onDeletePhoto) {
+        bid.photos.forEach((p) => {
+          if (p.persisted && p.id && !p.id.startsWith("temp-") && !p.id.startsWith("gps-")) {
+            onDeletePhoto(p.id, true);
+          }
+        });
+      }
+      onBidsChange(bids.filter((b) => b.id !== id));
+    }
   }
 
   function toggleExpand(id: string) {

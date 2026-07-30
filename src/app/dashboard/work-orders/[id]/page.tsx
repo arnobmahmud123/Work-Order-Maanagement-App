@@ -1413,8 +1413,8 @@ export default function WorkOrderDetailPage({
   }
 
   // Delete handler — removes a file from the server
-  async function handlePhotoDelete(photoId: string) {
-    if (!confirm("Are you sure you want to delete this photo?")) return;
+  async function handlePhotoDelete(photoId: string, skipConfirm = false) {
+    if (!skipConfirm && !confirm("Are you sure you want to delete this photo?")) return;
     // Only delete from server if it's a persisted file (not a blob)
     if (!photoId.startsWith("temp-") && !photoId.startsWith("gps-")) {
       try {
@@ -1906,11 +1906,17 @@ export default function WorkOrderDetailPage({
     seenPhotoKeys.add(key);
     return true;
   });
-  const beforePhotos = allPhotos.filter((p) => p.category === "BEFORE");
-  const duringPhotos = allPhotos.filter((p) => p.category === "DURING");
-  const afterPhotos = allPhotos.filter((p) => p.category === "AFTER");
-  const bidPhotoItems = allPhotos.filter((p) => p.category === "BID");
-  const inspectionPhotoItems = allPhotos.filter((p) => p.category === "INSPECTION");
+
+  const itemPhotoIds = new Set<string>();
+  tasks.forEach(t => t.photos?.forEach(p => p.id && itemPhotoIds.add(p.id)));
+  bids.forEach(b => b.photos?.forEach(p => p.id && itemPhotoIds.add(p.id)));
+  customInspectionItems.forEach(i => i.photos?.forEach(p => p.id && itemPhotoIds.add(p.id)));
+
+  const beforePhotos = allPhotos.filter((p) => p.category === "BEFORE" && !itemPhotoIds.has(p.id!));
+  const duringPhotos = allPhotos.filter((p) => p.category === "DURING" && !itemPhotoIds.has(p.id!));
+  const afterPhotos = allPhotos.filter((p) => p.category === "AFTER" && !itemPhotoIds.has(p.id!));
+  const bidPhotoItems = allPhotos.filter((p) => p.category === "BID" && !itemPhotoIds.has(p.id!));
+  const inspectionPhotoItems = allPhotos.filter((p) => p.category === "INSPECTION" && !itemPhotoIds.has(p.id!));
   const taskPhotoCount = tasks.reduce((sum, task) => sum + (task.photos?.length || 0), 0);
   const bidItemPhotoCount = bids.reduce((sum, bid) => sum + (bid.photos?.length || 0), 0);
   const inspectionItemPhotoCount =
@@ -2971,6 +2977,7 @@ export default function WorkOrderDetailPage({
               onUpload={handlePhotoUpload}
               onOpenCamera={(category, taskId) => openGPSCamera("task", category as PhotoCategory, taskId)}
               existingPhotos={allPhotos}
+              onDeletePhoto={handlePhotoDelete}
             />
           </Card>
         </div>
@@ -3003,7 +3010,7 @@ export default function WorkOrderDetailPage({
           </div>
           <Card padding={false}>
             <div className="p-4">
-              <BidEntryList bids={bids} onBidsChange={setBids} onUpload={handlePhotoUpload} onOpenCamera={(category, bidId) => openGPSCamera("bid", category as PhotoCategory, undefined, bidId)} existingPhotos={allPhotos} />
+              <BidEntryList bids={bids} onBidsChange={setBids} onUpload={handlePhotoUpload} onOpenCamera={(category, bidId) => openGPSCamera("bid", category as PhotoCategory, undefined, bidId)} existingPhotos={allPhotos} onDeletePhoto={handlePhotoDelete} />
             </div>
           </Card>
         </div>
@@ -3168,7 +3175,17 @@ export default function WorkOrderDetailPage({
                         </button>
                         <button
                           onClick={() => {
-                            setCustomInspectionItems((prev) => prev.filter((_, ciIdx) => ciIdx !== i));
+                            if (confirm("Are you sure you want to delete this inspection item?")) {
+                              const itemToDelete = customInspectionItems[i];
+                              if (itemToDelete && itemToDelete.photos) {
+                                itemToDelete.photos.forEach(p => {
+                                  if (p.persisted && p.id && !p.id.startsWith("temp-") && !p.id.startsWith("gps-")) {
+                                    handlePhotoDelete(p.id, true);
+                                  }
+                                });
+                              }
+                              setCustomInspectionItems((prev) => prev.filter((_, ciIdx) => ciIdx !== i));
+                            }
                           }}
                           className="p-2 rounded-lg text-text-muted hover:text-rose-700 dark:text-rose-400 hover:bg-rose-500/10"
                         >
@@ -4145,9 +4162,14 @@ function WorkOrderQuickViewModal({
   const completedTasks = tasks.filter((t) => t.completed).length;
   const totalBids = bids.reduce((s, b) => s + b.amount, 0);
   const approvedBids = bids.filter((b) => b.status === "APPROVED").reduce((s, b) => s + b.amount, 0);
-  const beforePhotos = allPhotos.filter((p) => p.category === "BEFORE");
-  const duringPhotos = allPhotos.filter((p) => p.category === "DURING");
-  const afterPhotos = allPhotos.filter((p) => p.category === "AFTER");
+
+  const itemPhotoIds = new Set<string>();
+  tasks.forEach(t => t.photos?.forEach(p => p.id && itemPhotoIds.add(p.id)));
+  bids.forEach(b => b.photos?.forEach(p => p.id && itemPhotoIds.add(p.id)));
+
+  const beforePhotos = allPhotos.filter((p) => p.category === "BEFORE" && !itemPhotoIds.has(p.id!));
+  const duringPhotos = allPhotos.filter((p) => p.category === "DURING" && !itemPhotoIds.has(p.id!));
+  const afterPhotos = allPhotos.filter((p) => p.category === "AFTER" && !itemPhotoIds.has(p.id!));
 
   return (
     <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483600 }}>
