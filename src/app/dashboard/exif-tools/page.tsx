@@ -27,10 +27,9 @@ export default function ExifToolsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    const files = Array.from(e.target.files);
-    
+  const [isDragging, setIsDragging] = useState(false);
+
+  const processFiles = async (files: File[]) => {
     const newPhotos: ProcessedPhoto[] = [];
     
     for (const file of files) {
@@ -80,6 +79,32 @@ export default function ExifToolsPage() {
       fileInputRef.current.value = "";
     }
   };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    await processFiles(Array.from(e.target.files));
+  };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length > 0) {
+        await processFiles(files);
+      }
+    }
+  }, []);
 
   const removePhoto = (id: string) => {
     setPhotos(prev => prev.filter(p => p.id !== id));
@@ -171,8 +196,19 @@ export default function ExifToolsPage() {
     <div className="flex h-screen bg-background overflow-hidden">
       <main className="flex-1 flex flex-col min-w-0">
         <TopNav />
-        
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <div 
+          className={`flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative transition-colors ${isDragging ? 'bg-cyan-500/5' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-cyan-500 rounded-3xl m-4 md:m-6 lg:m-8">
+              <Upload className="h-12 w-12 text-cyan-500 mb-4 animate-bounce" />
+              <h2 className="text-2xl font-black text-cyan-500 tracking-tight">Drop photos here</h2>
+              <p className="text-text-secondary mt-2 font-medium">Release to add to EXIF tools</p>
+            </div>
+          )}
           <div className="max-w-6xl mx-auto space-y-6">
             
             {/* Header Area */}
