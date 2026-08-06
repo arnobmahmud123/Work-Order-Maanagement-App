@@ -25,8 +25,10 @@ export default function ExifToolsPage() {
   const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
   const [customDate, setCustomDate] = useState("");
   const [customTime, setCustomTime] = useState("");
+  const [printTimestamp, setPrintTimestamp] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -86,18 +88,33 @@ export default function ExifToolsPage() {
     await processFiles(Array.from(e.target.files));
   };
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }, []);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    e.stopPropagation();
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
@@ -153,8 +170,8 @@ export default function ExifToolsPage() {
           dateTime: effectiveDate,
           gps: p.exifData?.gps // we don't stamp GPS by default in this tool, but passing it just in case
         }, {
-          showDate: downloadMode !== "custom" || !!customDate,
-          showTime: downloadMode === "datetime" || (downloadMode === "custom" && !!customTime),
+          showDate: printTimestamp && (downloadMode !== "custom" || !!customDate),
+          showTime: printTimestamp && (downloadMode === "datetime" || (downloadMode === "custom" && !!customTime)),
           showGPS: false,
           showAddress: false,
           position: "bottom-right",
@@ -230,12 +247,13 @@ export default function ExifToolsPage() {
         <TopNav />
         <div 
           className={`flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative transition-colors ${isDragging ? 'bg-cyan-500/5' : ''}`}
+          onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
           {isDragging && (
-            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-cyan-500 rounded-3xl m-4 md:m-6 lg:m-8">
+            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-cyan-500 rounded-3xl m-4 md:m-6 lg:m-8 pointer-events-none">
               <Upload className="h-12 w-12 text-cyan-500 mb-4 animate-bounce" />
               <h2 className="text-2xl font-black text-cyan-500 tracking-tight">Drop photos here</h2>
               <p className="text-text-secondary mt-2 font-medium">Release to add to EXIF tools</p>
@@ -317,6 +335,21 @@ export default function ExifToolsPage() {
                       </div>
                     )}
                     
+                    
+                    <div className="pt-4 border-t border-border-subtle space-y-3">
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input 
+                          type="checkbox" 
+                          checked={printTimestamp}
+                          onChange={(e) => setPrintTimestamp(e.target.checked)}
+                          className="rounded border-border-medium text-cyan-500 focus:ring-cyan-500"
+                        />
+                        <span className="text-sm font-medium text-text-primary group-hover:text-cyan-600 transition-colors">
+                          Print visible timestamp on photo
+                        </span>
+                      </label>
+                    </div>
+
                     <div className="pt-4 border-t border-border-subtle">
                       <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Download</h3>
                       <button
