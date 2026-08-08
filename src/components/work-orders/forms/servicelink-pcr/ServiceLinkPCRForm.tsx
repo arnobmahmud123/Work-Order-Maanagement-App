@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Save, Printer, Download, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { createPortal } from "react-dom";
 
 import {
   GeneralInformationTab,
@@ -53,6 +54,11 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Load existing submission if editing
   useEffect(() => {
@@ -137,8 +143,10 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
     { id: "summary", label: "Summary" },
   ];
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/50 backdrop-blur-sm">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-900/50 backdrop-blur-sm">
       <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 w-full max-w-[1400px] mx-auto shadow-2xl overflow-hidden border-x border-slate-200 dark:border-slate-800 my-0">
         
         {/* Header */}
@@ -257,6 +265,7 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
