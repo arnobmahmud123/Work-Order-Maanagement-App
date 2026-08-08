@@ -173,6 +173,7 @@ model WorkOrder {
   // Contractor Network
   posts       Post[]
   jobRequests JobRequest[]
+  formSubmissions WorkOrderFormSubmission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1444,4 +1445,19 @@ model FinancialTransaction {
   @@index([category])
   @@index([date])
   @@map("financial_transactions")
+}
+
+model WorkOrderFormSubmission {
+  id          String   @id @default(cuid())
+  workOrderId String
+  formType    String   // e.g. "servicelink-pcr"
+  formName    String   // e.g. "ServiceLink PCR"
+  formData    String   // JSON blob of all field values
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([formType])
 }

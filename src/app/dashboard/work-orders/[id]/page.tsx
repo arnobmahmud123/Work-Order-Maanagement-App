@@ -70,7 +70,9 @@ import {
   Package,
   Truck,
   AlertTriangle,
+  ClipboardList,
 } from "lucide-react";
+import { WorkOrderFormsTab } from "@/components/work-orders/forms/WorkOrderFormsTab";
 import {
   cn,
   SERVICE_TYPE_LABELS,
@@ -2078,6 +2080,7 @@ export default function WorkOrderDetailPage({
     { id: "inspection", label: "Inspection", icon: Shield },
     { id: "photos", label: "Photos", icon: Camera, count: itemPhotoCount },
     { id: "invoices", label: "Invoices", icon: Receipt },
+    { id: "forms", label: "Forms", icon: ClipboardList },
     { id: "history", label: "Property History", icon: Calendar, count: (propertyHistoryData?.workOrders?.length || 0) },
     { id: "messages", label: "Messages", icon: MessageSquare, count: workOrder._count?.threads || 0 },
   ];
@@ -3985,6 +3988,12 @@ export default function WorkOrderDetailPage({
         <WorkOrderMessagesTab
           workOrderId={id}
           workOrderTitle={workOrder.title}
+        />
+      )}
+
+      {activeTab === "forms" && (
+        <WorkOrderFormsTab
+          workOrderId={id}
         />
       )}
 
