@@ -12,9 +12,14 @@ import {
 } from "./PropertyInfoTab";
 
 import {
+  UtilitiesTab,
+  defaultUtilitiesData,
+  type UtilitiesData,
+} from "./UtilitiesTab";
+
+import {
   CompletionInfoTab,
   OccupancyTab,
-  UtilitiesTab,
   WinterizationTab,
   DumpStorageTab,
   GenericChecklistTab,
@@ -29,10 +34,12 @@ interface Props {
 
 interface FullMCSPCRData {
   propertyInfo: PropertyInfoData;
+  utilities: UtilitiesData;
 }
 
 const defaultFullData: FullMCSPCRData = {
   propertyInfo: defaultPropertyInfoData,
+  utilities: defaultUtilitiesData,
 };
 
 export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Props) {
@@ -62,6 +69,7 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
         const parsed = data.formData || {};
         setFormData({
           propertyInfo: { ...defaultPropertyInfoData, ...parsed.propertyInfo },
+          utilities: { ...defaultUtilitiesData, ...parsed.utilities },
         });
       } catch (err: any) {
         console.error(err);
@@ -115,6 +123,14 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
     setFormData((prev) => ({
       ...prev,
       propertyInfo: propertyInfoData,
+    }));
+    setIsDirty(true);
+  };
+
+  const handleUtilitiesChange = (utilitiesData: UtilitiesData) => {
+    setFormData((prev) => ({
+      ...prev,
+      utilities: utilitiesData,
     }));
     setIsDirty(true);
   };
@@ -218,7 +234,12 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
                 )}
                 {activeTab === "completion_info" && <CompletionInfoTab />}
                 {activeTab === "occupancy" && <OccupancyTab />}
-                {activeTab === "utilities" && <UtilitiesTab />}
+                {activeTab === "utilities" && (
+                  <UtilitiesTab
+                    data={formData.utilities}
+                    onChange={handleUtilitiesChange}
+                  />
+                )}
                 {activeTab === "dump_storage" && <DumpStorageTab />}
                 {activeTab === "winterization" && <WinterizationTab />}
                 

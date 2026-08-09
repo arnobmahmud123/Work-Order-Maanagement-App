@@ -17,6 +17,7 @@ export interface PropertyInfoData {
   unableToAccess: string;
   reasonWhyAccess: string;
   isOccupied: string;
+  reasonWhyOccupied?: string;
   isVacantWithPersonals: string;
   environmentalHazards: string;
   hasDamages: string;
@@ -35,7 +36,7 @@ export interface PropertyInfoData {
   doorSecure1: string;
   keycode2: string;
   doorSecure2: string;
-
+ 
   // Additional Buildings Checkbox List
   barn: boolean;
   detachedGarage: boolean;
@@ -52,6 +53,7 @@ export const defaultPropertyInfoData: PropertyInfoData = {
   unableToAccess: "No",
   reasonWhyAccess: "",
   isOccupied: "",
+  reasonWhyOccupied: "",
   isVacantWithPersonals: "",
   environmentalHazards: "",
   hasDamages: "",
@@ -97,13 +99,11 @@ export function PropertyInfoTab({ data, onChange }: Props) {
   ];
 
   const buildingTypeOptions = [
-    { label: "Single Family Home", value: "Single Family Home" },
-    { label: "Multi Family Home", value: "Multi Family Home" },
-    { label: "Condo", value: "Condo" },
-    { label: "Townhouse", value: "Townhouse" },
-    { label: "Mobile Home", value: "Mobile Home" },
-    { label: "Commercial", value: "Commercial" },
+    { label: "-- Select Building Type --", value: "" },
     { label: "Vacant Lot", value: "Vacant Lot" },
+    { label: "Single Family Home", value: "Single Family Home" },
+    { label: "Mobile Home", value: "Mobile Home" },
+    { label: "Multi-Unit", value: "Multi-Unit" },
   ];
 
   const unitOptions = [
@@ -127,12 +127,22 @@ export function PropertyInfoTab({ data, onChange }: Props) {
 
   const keycodeOptions = [
     { label: "-- Select Keycode --", value: "" },
-    { label: "7618", value: "7618" },
+    { label: "23323", value: "23323" },
+    { label: "25223", value: "25223" },
+    { label: "2563", value: "2563" },
+    { label: "25632", value: "25632" },
+    { label: "34255", value: "34255" },
+    { label: "34939", value: "34939" },
     { label: "35241", value: "35241" },
-    { label: "46322", value: "46322" },
+    { label: "35542", value: "35542" },
+    { label: "4453", value: "4453" },
+    { label: "44535", value: "44535" },
+    { label: "64445", value: "64445" },
+    { label: "67767", value: "67767" },
+    { label: "76667", value: "76667" },
+    { label: "7667", value: "7667" },
     { label: "A389 Padlock", value: "A389 Padlock" },
-    { label: "54321 / Master", value: "54321" },
-    { label: "Unable to Determine", value: "Unknown" },
+    { label: "PK67767", value: "PK67767" },
   ];
 
   const secureLocationOptions = [
@@ -140,9 +150,20 @@ export function PropertyInfoTab({ data, onChange }: Props) {
     { label: "Front", value: "Front" },
     { label: "Back", value: "Back" },
     { label: "Side", value: "Side" },
-    { label: "Garage", value: "Garage" },
-    { label: "Outbuilding", value: "Outbuilding" },
-    { label: "N/A", value: "N/A" },
+    { label: "Other", value: "Other" },
+    { label: "Gate/Fence", value: "Gate/Fence" },
+    { label: "All Doors", value: "All Doors" },
+    { label: "None", value: "None" },
+  ];
+
+  const reasonWhyOccupiedOptions = [
+    { label: "-- Select Reason --", value: "" },
+    { label: "Contact made with occupant", value: "Contact made with occupant" },
+    { label: "Personal property present", value: "Personal property present" },
+    { label: "Neighbors confirm occupied", value: "Neighbors confirm occupied" },
+    { label: "Active utilities & lights", value: "Active utilities & lights" },
+    { label: "Visual observation of occupant", value: "Visual observation of occupant" },
+    { label: "Other / Direct Contact", value: "Other" },
   ];
 
   const roofTarpOptions = [
@@ -209,6 +230,15 @@ export function PropertyInfoTab({ data, onChange }: Props) {
               value={data.isOccupied}
               onChange={(v) => updateField("isOccupied", v)}
             />
+
+            {data.isOccupied === "Yes" && (
+              <SelectField
+                label="Reason Why Occupied:"
+                options={reasonWhyOccupiedOptions}
+                value={data.reasonWhyOccupied || ""}
+                onChange={(v) => updateField("reasonWhyOccupied", v)}
+              />
+            )}
 
             <RadioGroup
               label="Is the property vacant with personals?"

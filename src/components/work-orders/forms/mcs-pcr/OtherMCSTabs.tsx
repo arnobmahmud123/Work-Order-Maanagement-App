@@ -98,33 +98,7 @@ export function OccupancyTab() {
   );
 }
 
-// ── Utilities Tab ──
-export function UtilitiesTab() {
-  const statusOptions = [
-    { label: "On", value: "On" },
-    { label: "Off", value: "Off" },
-    { label: "Disconnected / Meter Removed", value: "Disconnected" },
-    { label: "Unable to Determine", value: "Unknown" },
-  ];
 
-  return (
-    <div className="space-y-6 max-w-3xl">
-      <FormSection title="Utility Status Check">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SelectField label="Water Service:" options={statusOptions} value="Off" onChange={() => {}} />
-          <SelectField label="Electric Service:" options={statusOptions} value="Off" onChange={() => {}} />
-          <SelectField label="Gas Service:" options={statusOptions} value="Off" onChange={() => {}} />
-        </div>
-        <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextField label="Water Meter Reading (if visible):" placeholder="Reading" value="" onChange={() => {}} />
-            <TextField label="Electric Meter Serial #:" placeholder="Serial Number" value="" onChange={() => {}} />
-          </div>
-        </div>
-      </FormSection>
-    </div>
-  );
-}
 
 // ── Winterization Tab ──
 export function WinterizationTab() {

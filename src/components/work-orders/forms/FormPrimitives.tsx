@@ -66,24 +66,28 @@ interface TextFieldProps {
   required?: boolean;
   info?: string;
   type?: string;
+  disabled?: boolean;
 }
 
-export function TextField({ label, value, onChange, placeholder, required, info, type = "text" }: TextFieldProps) {
+export function TextField({ label, value, onChange, placeholder, required, info, type = "text", disabled = false }: TextFieldProps) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
-        {label}
-        {required && <span className="text-rose-500">*</span>}
-        {info && (
-          <span title={info} className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[10px]">ⓘ</span>
-        )}
-      </label>
+      {label && (
+        <label className="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+          {label}
+          {required && <span className="text-rose-500">*</span>}
+          {info && (
+            <span title={info} className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[10px]">ⓘ</span>
+          )}
+        </label>
+      )}
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-4 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 focus:bg-white dark:focus:bg-slate-900 outline-none transition-all duration-200 shadow-inner"
+        disabled={disabled}
+        className="w-full px-4 py-2 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 focus:bg-white dark:focus:bg-slate-900 outline-none transition-all duration-200 shadow-inner disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
   );
