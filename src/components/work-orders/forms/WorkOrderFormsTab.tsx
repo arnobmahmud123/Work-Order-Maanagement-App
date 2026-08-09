@@ -5,6 +5,7 @@ import { Plus, ClipboardCheck, Trash2, Eye, Edit, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { ServiceLinkPCRForm } from "./servicelink-pcr/ServiceLinkPCRForm";
+import { MCSPCRForm } from "./mcs-pcr/MCSPCRForm";
 
 interface Props {
   workOrderId: string;
@@ -23,6 +24,7 @@ export function WorkOrderFormsTab({ workOrderId }: Props) {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedFormType, setSelectedFormType] = useState("");
+  const [activeFormType, setActiveFormType] = useState("");
   const [activeSubmissionId, setActiveSubmissionId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -69,23 +71,23 @@ export function WorkOrderFormsTab({ workOrderId }: Props) {
       return;
     }
     
-    // For now we only support ServiceLink PCR
-    if (selectedFormType === "servicelink-pcr") {
+    if (selectedFormType === "servicelink-pcr" || selectedFormType === "mcs-pcr") {
       setIsEditing(true);
+      setActiveFormType(selectedFormType);
       setActiveSubmissionId(null); // Create new
       setShowAddModal(false);
     } else {
-      toast.error("Only ServiceLink PCR Form is currently implemented");
+      toast.error("Only ServiceLink PCR & MCS Maintenance Forms are currently implemented");
     }
   };
 
   const availableForms = [
     { value: "servicelink-pcr", label: "ServiceLink PCR" },
+    { value: "mcs-pcr", label: "MCS Maintenance Form" },
     { value: "cyprexx-grass", label: "Cyprexx Grass checklist (Coming Soon)", disabled: true },
     { value: "cyprexx-icc", label: "Cyprexx ICC checklist (Coming Soon)", disabled: true },
     { value: "cyprexx-universal", label: "Cyprexx Universal Damage (Coming Soon)", disabled: true },
     { value: "five-brother-inspection", label: "Five Brother Inspection (Coming Soon)", disabled: true },
-    { value: "mcs-pcr", label: "MCS PCR (Coming Soon)", disabled: true },
     { value: "msi-preservation", label: "MSI Preservation PCR (Coming Soon)", disabled: true },
   ];
 
@@ -128,6 +130,7 @@ export function WorkOrderFormsTab({ workOrderId }: Props) {
               key={sub.id}
               onClick={() => {
                 setActiveSubmissionId(sub.id);
+                setActiveFormType(sub.formType);
                 setIsEditing(true);
               }}
               className="bg-surface/50 border border-border-subtle rounded-2xl p-4 flex flex-col justify-between hover:bg-surface-hover hover:border-cyan-500/30 transition cursor-pointer group shadow-sm"
@@ -207,18 +210,39 @@ export function WorkOrderFormsTab({ workOrderId }: Props) {
       )}
 
       {/* ── Active ServiceLink PCR Form Sheet/Modal ────────────────────── */}
-      {isEditing && (
+      {isEditing && activeFormType === "servicelink-pcr" && (
         <ServiceLinkPCRForm
           workOrderId={workOrderId}
           submissionId={activeSubmissionId || undefined}
           onClose={() => {
             setIsEditing(false);
             setActiveSubmissionId(null);
+            setActiveFormType("");
           }}
           onSaved={() => {
             loadSubmissions();
             setIsEditing(false);
             setActiveSubmissionId(null);
+            setActiveFormType("");
+          }}
+        />
+      )}
+
+      {/* ── Active MCS PCR Form Sheet/Modal ───────────────────────────── */}
+      {isEditing && activeFormType === "mcs-pcr" && (
+        <MCSPCRForm
+          workOrderId={workOrderId}
+          submissionId={activeSubmissionId || undefined}
+          onClose={() => {
+            setIsEditing(false);
+            setActiveSubmissionId(null);
+            setActiveFormType("");
+          }}
+          onSaved={() => {
+            loadSubmissions();
+            setIsEditing(false);
+            setActiveSubmissionId(null);
+            setActiveFormType("");
           }}
         />
       )}

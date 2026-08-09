@@ -95,9 +95,10 @@ interface TextAreaFieldProps {
   onChange: (v: string) => void;
   rows?: number;
   info?: string;
+  placeholder?: string;
 }
 
-export function TextAreaField({ label, value, onChange, rows = 3, info }: TextAreaFieldProps) {
+export function TextAreaField({ label, value, onChange, rows = 3, info, placeholder }: TextAreaFieldProps) {
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
@@ -110,6 +111,7 @@ export function TextAreaField({ label, value, onChange, rows = 3, info }: TextAr
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
+        placeholder={placeholder}
         className="w-full px-4 py-2.5 text-xs border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 focus:bg-white dark:focus:bg-slate-900 outline-none transition-all duration-200 shadow-inner resize-y"
       />
     </div>
