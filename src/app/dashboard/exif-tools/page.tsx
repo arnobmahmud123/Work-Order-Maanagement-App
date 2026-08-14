@@ -89,7 +89,7 @@ export default function ExifToolsPage() {
   const [printTimestamp, setPrintTimestamp] = useState(true);
   const [cropRatio, setCropRatio] = useState<"none" | "4:3" | "16:9" | "1:1">("none");
   const [maxDimension, setMaxDimension] = useState<"none" | "1200" | "1600" | "1920">("1600");
-  const [compressionQuality, setCompressionQuality] = useState<number>(82);
+  const [compressionQuality, setCompressionQuality] = useState<number>(50);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
