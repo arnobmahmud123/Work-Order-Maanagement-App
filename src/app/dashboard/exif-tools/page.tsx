@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin } from "lucide-react";
+import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin, Crop, Maximize2, Sliders } from "lucide-react";
 import JSZip from "jszip";
 import * as piexif from "piexifjs";
 import { readEXIF, generatePhotoWithOverlay, GPSData } from "@/lib/exif";
@@ -20,12 +20,76 @@ interface ProcessedPhoto {
   selected: boolean;
 }
 
+function cropAndResizeImage(
+  img: HTMLImageElement,
+  cropRatio: "none" | "4:3" | "16:9" | "1:1",
+  maxDimension: "none" | "1200" | "1600" | "1920"
+): HTMLCanvasElement {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  
+  let srcX = 0;
+  let srcY = 0;
+  let srcWidth = W;
+  let srcHeight = H;
+
+  // 1. Calculate Crop
+  if (cropRatio !== "none") {
+    let ratio = 1;
+    if (cropRatio === "4:3") ratio = 4 / 3;
+    else if (cropRatio === "16:9") ratio = 16 / 9;
+    else if (cropRatio === "1:1") ratio = 1;
+
+    const currentRatio = W / H;
+    if (currentRatio > ratio) {
+      // Image is wider than target ratio: crop sides
+      srcWidth = H * ratio;
+      srcHeight = H;
+      srcX = (W - srcWidth) / 2;
+      srcY = 0;
+    } else if (currentRatio < ratio) {
+      // Image is taller than target ratio: crop top/bottom
+      srcWidth = W;
+      srcHeight = W / ratio;
+      srcX = 0;
+      srcY = (H - srcHeight) / 2;
+    }
+  }
+
+  // 2. Calculate Resize
+  let destWidth = srcWidth;
+  let destHeight = srcHeight;
+  if (maxDimension !== "none") {
+    const maxDim = Number(maxDimension);
+    if (srcWidth > maxDim || srcHeight > maxDim) {
+      const scale = Math.min(maxDim / srcWidth, maxDim / srcHeight);
+      destWidth = Math.round(srcWidth * scale);
+      destHeight = Math.round(srcHeight * scale);
+    }
+  }
+
+  // 3. Render on Canvas
+  const canvas = document.createElement("canvas");
+  canvas.width = destWidth;
+  canvas.height = destHeight;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, srcX, srcY, srcWidth, srcHeight, 0, 0, destWidth, destHeight);
+  }
+  return canvas;
+}
+
 export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
   const [customDate, setCustomDate] = useState("");
   const [customTime, setCustomTime] = useState("");
   const [printTimestamp, setPrintTimestamp] = useState(true);
+  const [cropRatio, setCropRatio] = useState<"none" | "4:3" | "16:9" | "1:1">("none");
+  const [maxDimension, setMaxDimension] = useState<"none" | "1200" | "1600" | "1920">("1600");
+  const [compressionQuality, setCompressionQuality] = useState<number>(82);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
@@ -166,9 +230,13 @@ export default function ExifToolsPage() {
         
         const effectiveDate = getEffectiveDateTime(p);
         
-        const canvas = generatePhotoWithOverlay(img, {
+        // 1. Crop and Resize first
+        const croppedCanvas = cropAndResizeImage(img, cropRatio, maxDimension);
+        
+        // 2. Generate yellow timestamp overlay on top of the cropped & resized canvas
+        const canvas = generatePhotoWithOverlay(croppedCanvas, {
           dateTime: effectiveDate,
-          gps: p.exifData?.gps // we don't stamp GPS by default in this tool, but passing it just in case
+          gps: p.exifData?.gps
         }, {
           showDate: printTimestamp && (downloadMode !== "custom" || !!customDate),
           showTime: printTimestamp && (downloadMode === "datetime" || (downloadMode === "custom" && !!customTime)),
@@ -177,28 +245,43 @@ export default function ExifToolsPage() {
           position: "bottom-right",
           fontColor: "#FFFF00", // Standard yellow for property preservation
           backgroundColor: "rgba(0,0,0,0)", // Transparent background
-          fontSize: Math.max(24, Math.floor(img.naturalWidth * 0.03)), // Scale font size based on image width
+          fontSize: Math.max(20, Math.floor(croppedCanvas.width * 0.03)), // Scale font size based on new image width
           dateFormat: "MM/DD/YYYY",
           format: "12h"
         });
         
-        const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.95);
+        // 3. Compress with the specified quality setting
+        const qualityDecimal = compressionQuality / 100;
+        const jpegDataUrl = canvas.toDataURL("image/jpeg", qualityDecimal);
         let finalBlob: Blob | null = null;
+        
+        // 4. Load the original EXIF and merge date/time overrides to preserve GPS & camera metadata
+        let exifObj: any = { "0th": {}, "Exif": {}, "GPS": {} };
+        try {
+          const originalDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(p.file);
+          });
+          exifObj = piexif.load(originalDataUrl);
+        } catch (e) {
+          console.warn("Could not load original EXIF, creating fresh structure", e);
+        }
         
         try {
           // Format date for EXIF (YYYY:MM:DD HH:MM:SS)
           const pad = (n: number) => n.toString().padStart(2, "0");
           const exifDateStr = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())} ${pad(effectiveDate.getHours())}:${pad(effectiveDate.getMinutes())}:${pad(effectiveDate.getSeconds())}`;
           
-          const zeroth = { [piexif.ImageIFD.DateTime]: exifDateStr };
-          const exif = {
-            [piexif.ExifIFD.DateTimeOriginal]: exifDateStr,
-            [piexif.ExifIFD.DateTimeDigitized]: exifDateStr
-          };
+          if (!exifObj["0th"]) exifObj["0th"] = {};
+          if (!exifObj["Exif"]) exifObj["Exif"] = {};
           
-          const exifObj = { "0th": zeroth, "Exif": exif, "GPS": {} };
+          exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
+          exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
+          exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
+          
           const exifBytes = piexif.dump(exifObj);
-          
           const newJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
           
           // Convert data URI back to Blob
@@ -212,7 +295,7 @@ export default function ExifToolsPage() {
         } catch (e) {
           console.warn("Could not inject EXIF data", e);
           // Fallback if piexif fails
-          finalBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+          finalBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', qualityDecimal));
         }
         
         if (finalBlob) {
@@ -348,6 +431,65 @@ export default function ExifToolsPage() {
                           Print visible timestamp on photo
                         </span>
                       </label>
+                    </div>
+
+                    {/* Crop & Scale Settings */}
+                    <div className="pt-4 border-t border-border-subtle space-y-4">
+                      <div>
+                        <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <Crop className="h-4 w-4 text-cyan-500" />
+                          Crop Aspect Ratio
+                        </h3>
+                        <select
+                          value={cropRatio}
+                          onChange={(e) => setCropRatio(e.target.value as any)}
+                          className="w-full px-3 py-2 bg-background rounded-xl border border-border-medium text-sm font-medium focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+                        >
+                          <option value="none">Original (No Crop)</option>
+                          <option value="4:3">4:3 Ratio (Standard)</option>
+                          <option value="16:9">16:9 Ratio (Widescreen)</option>
+                          <option value="1:1">1:1 Ratio (Square)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <Maximize2 className="h-4 w-4 text-cyan-500" />
+                          Resolution Limit
+                        </h3>
+                        <select
+                          value={maxDimension}
+                          onChange={(e) => setMaxDimension(e.target.value as any)}
+                          className="w-full px-3 py-2 bg-background rounded-xl border border-border-medium text-sm font-medium focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+                        >
+                          <option value="none">Original Resolution</option>
+                          <option value="1920">Max 1920px (Full HD)</option>
+                          <option value="1600">Max 1600px (Recommended)</option>
+                          <option value="1200">Max 1200px (Standard)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Compression Settings */}
+                    <div className="pt-4 border-t border-border-subtle space-y-3">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-black text-text-primary uppercase tracking-widest flex items-center gap-1.5">
+                          <Sliders className="h-4 w-4 text-cyan-500" />
+                          Compression Quality
+                        </h3>
+                        <span className="text-xs font-bold text-cyan-500">{compressionQuality}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="50"
+                        max="100"
+                        value={compressionQuality}
+                        onChange={(e) => setCompressionQuality(Number(e.target.value))}
+                        className="w-full h-1.5 bg-border-medium rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                      />
+                      <p className="text-[10px] text-text-secondary leading-relaxed">
+                        80%–85% is visually indistinguishable but reduces file sizes by up to 80% to prevent upload errors.
+                      </p>
                     </div>
 
                     <div className="pt-4 border-t border-border-subtle">

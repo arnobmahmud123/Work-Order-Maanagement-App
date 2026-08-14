@@ -782,7 +782,7 @@ export const DEFAULT_OVERLAY_OPTIONS: OverlayOptions = {
  * Generate a canvas with date/time/GPS overlay drawn on the image.
  */
 export function generatePhotoWithOverlay(
-  image: HTMLImageElement,
+  image: HTMLImageElement | HTMLCanvasElement,
   metadata: {
     dateTime?: Date;
     gps?: GPSData;
@@ -793,8 +793,10 @@ export function generatePhotoWithOverlay(
 ): HTMLCanvasElement {
   const opts = { ...DEFAULT_OVERLAY_OPTIONS, ...options };
   const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
+  const width = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const height = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d")!;
 
   // Draw image
