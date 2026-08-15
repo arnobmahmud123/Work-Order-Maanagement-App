@@ -18,12 +18,17 @@ import {
 } from "./UtilitiesTab";
 
 import {
-  CompletionInfoTab,
   OccupancyTab,
   WinterizationTab,
   DumpStorageTab,
   GenericChecklistTab,
 } from "./OtherMCSTabs";
+
+import {
+  CompletionInfoTab,
+  defaultCompletionInfoData,
+  type CompletionInfoData,
+} from "./CompletionInfoTab";
 
 interface Props {
   workOrderId: string;
@@ -35,16 +40,19 @@ interface Props {
 interface FullMCSPCRData {
   propertyInfo: PropertyInfoData;
   utilities: UtilitiesData;
+  completionInfo: CompletionInfoData;
 }
 
 const defaultFullData: FullMCSPCRData = {
   propertyInfo: defaultPropertyInfoData,
   utilities: defaultUtilitiesData,
+  completionInfo: defaultCompletionInfoData,
 };
 
 export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Props) {
   const [activeTab, setActiveTab] = useState<string>("property_info");
   const [formData, setFormData] = useState<FullMCSPCRData>(defaultFullData);
+  const [woTasks, setWoTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -54,32 +62,40 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
     setMounted(true);
   }, []);
 
-  // Load existing submission if editing
+  // Load work order tasks and existing submission if editing
   useEffect(() => {
-    if (!submissionId) return;
-
-    const loadData = async () => {
+    const loadAllData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/work-orders/${workOrderId}/forms/${submissionId}`);
-        if (!res.ok) throw new Error("Failed to load form submission");
-        const data = await res.json();
-        
-        // Ensure structure is correct
-        const parsed = data.formData || {};
-        setFormData({
-          propertyInfo: { ...defaultPropertyInfoData, ...parsed.propertyInfo },
-          utilities: { ...defaultUtilitiesData, ...parsed.utilities },
-        });
+        // 1. Fetch work order details to get tasks
+        const woRes = await fetch(`/api/work-orders/${workOrderId}`);
+        if (woRes.ok) {
+          const woData = await woRes.json();
+          setWoTasks(woData.tasks || []);
+        }
+
+        // 2. Fetch existing form submission if editing
+        if (submissionId) {
+          const res = await fetch(`/api/work-orders/${workOrderId}/forms/${submissionId}`);
+          if (!res.ok) throw new Error("Failed to load form submission");
+          const data = await res.json();
+          
+          const parsed = data.formData || {};
+          setFormData({
+            propertyInfo: { ...defaultPropertyInfoData, ...parsed.propertyInfo },
+            utilities: { ...defaultUtilitiesData, ...parsed.utilities },
+            completionInfo: { ...defaultCompletionInfoData, ...parsed.completionInfo },
+          });
+        }
       } catch (err: any) {
         console.error(err);
-        toast.error("Failed to load existing form data");
+        toast.error("Failed to load form data");
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
+    loadAllData();
   }, [workOrderId, submissionId]);
 
   const handleSave = async () => {
@@ -135,6 +151,14 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
     setIsDirty(true);
   };
 
+  const handleCompletionInfoChange = (completionInfoData: CompletionInfoData) => {
+    setFormData((prev) => ({
+      ...prev,
+      completionInfo: completionInfoData,
+    }));
+    setIsDirty(true);
+  };
+
   const mcsTabs = [
     { id: "property_info", label: "Property Info", status: "needs_info" },
     { id: "completion_info", label: "Completion Info", status: "needs_info" },
@@ -161,6 +185,9 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
   // Helper to determine status icon on the tab sidebar
   const renderTabIcon = (tabId: string, status: string) => {
     if (tabId === "property_info" && formData.propertyInfo.isCompletionNeeded !== "") {
+      return <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />;
+    }
+    if (tabId === "completion_info" && formData.completionInfo?.dateWorkCompleted !== "") {
       return <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />;
     }
     if (status === "completed") {
@@ -232,7 +259,13 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
                     onChange={handlePropertyInfoChange}
                   />
                 )}
-                {activeTab === "completion_info" && <CompletionInfoTab />}
+                {activeTab === "completion_info" && (
+                  <CompletionInfoTab
+                    data={formData.completionInfo}
+                    onChange={handleCompletionInfoChange}
+                    woTasks={woTasks}
+                  />
+                )}
                 {activeTab === "occupancy" && <OccupancyTab />}
                 {activeTab === "utilities" && (
                   <UtilitiesTab

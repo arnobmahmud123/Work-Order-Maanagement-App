@@ -10,42 +10,7 @@ import {
   FormSection 
 } from "../FormPrimitives";
 
-// ── Completion Info Tab ──
-export function CompletionInfoTab() {
-  const yesNoOptions = [
-    { label: "Yes", value: "Yes" },
-    { label: "No", value: "No" },
-  ];
-  return (
-    <div className="space-y-6 max-w-3xl">
-      <FormSection title="Completion Information">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <TextField label="Actual Completion Date:" type="date" value="" onChange={() => {}} />
-          <TextField label="Completed By (Crew Lead):" placeholder="Crew Name / ID" value="" onChange={() => {}} />
-          <TextField label="Crew Size:" type="number" placeholder="1" value="" onChange={() => {}} />
-          <TextField label="Hours spent on site:" placeholder="e.g. 3.5" value="" onChange={() => {}} />
-        </div>
-        <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-4">
-          <RadioGroup 
-            label="Was all requested work completed?" 
-            name="allWorkCompleted"
-            options={yesNoOptions} 
-            value="Yes" 
-            onChange={() => {}} 
-          />
-        </div>
-        <div className="pt-2">
-          <TextAreaField 
-            label="General Crew / Completion Notes:" 
-            placeholder="Describe overall work performed, delays, or on-site conditions..." 
-            value="" 
-            onChange={() => {}} 
-          />
-        </div>
-      </FormSection>
-    </div>
-  );
-}
+// Completion Info Tab is now imported from its own dedicated file CompletionInfoTab.tsx
 
 // ── Occupancy Tab ──
 export function OccupancyTab() {
