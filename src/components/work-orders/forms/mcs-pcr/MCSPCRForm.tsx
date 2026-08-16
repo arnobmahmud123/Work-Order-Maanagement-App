@@ -18,11 +18,39 @@ import {
 } from "./UtilitiesTab";
 
 import {
-  OccupancyTab,
   WinterizationTab,
-  DumpStorageTab,
   GenericChecklistTab,
 } from "./OtherMCSTabs";
+
+import {
+  OccupancyTab,
+  defaultOccupancyData,
+  type OccupancyData,
+} from "./OccupancyTab";
+
+import {
+  AccessIssueTab,
+  defaultAccessIssueData,
+  type AccessIssueData,
+} from "./AccessIssueTab";
+
+import {
+  DumpStorageTab,
+  defaultDumpStorageData,
+  type DumpStorageData,
+} from "./DumpStorageTab";
+
+import {
+  ViolationsTab,
+  defaultViolationsData,
+  type ViolationsData,
+} from "./ViolationsTab";
+
+import {
+  DamagesTab,
+  defaultDamagesData,
+  type DamagesData,
+} from "./DamagesTab";
 
 import {
   CompletionInfoTab,
@@ -41,12 +69,22 @@ interface FullMCSPCRData {
   propertyInfo: PropertyInfoData;
   utilities: UtilitiesData;
   completionInfo: CompletionInfoData;
+  occupancy: OccupancyData;
+  accessIssue: AccessIssueData;
+  dumpStorage: DumpStorageData;
+  violations: ViolationsData;
+  damages: DamagesData;
 }
 
 const defaultFullData: FullMCSPCRData = {
   propertyInfo: defaultPropertyInfoData,
   utilities: defaultUtilitiesData,
   completionInfo: defaultCompletionInfoData,
+  occupancy: defaultOccupancyData,
+  accessIssue: defaultAccessIssueData,
+  dumpStorage: defaultDumpStorageData,
+  violations: defaultViolationsData,
+  damages: defaultDamagesData,
 };
 
 export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Props) {
@@ -85,6 +123,11 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
             propertyInfo: { ...defaultPropertyInfoData, ...parsed.propertyInfo },
             utilities: { ...defaultUtilitiesData, ...parsed.utilities },
             completionInfo: { ...defaultCompletionInfoData, ...parsed.completionInfo },
+            occupancy: { ...defaultOccupancyData, ...parsed.occupancy },
+            accessIssue: { ...defaultAccessIssueData, ...parsed.accessIssue },
+            dumpStorage: { ...defaultDumpStorageData, ...parsed.dumpStorage },
+            violations: { ...defaultViolationsData, ...parsed.violations },
+            damages: { ...defaultDamagesData, ...parsed.damages },
           });
         }
       } catch (err: any) {
@@ -159,6 +202,46 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
     setIsDirty(true);
   };
 
+  const handleOccupancyChange = (occupancyData: OccupancyData) => {
+    setFormData((prev) => ({
+      ...prev,
+      occupancy: occupancyData,
+    }));
+    setIsDirty(true);
+  };
+
+  const handleAccessIssueChange = (accessIssueData: AccessIssueData) => {
+    setFormData((prev) => ({
+      ...prev,
+      accessIssue: accessIssueData,
+    }));
+    setIsDirty(true);
+  };
+
+  const handleDumpStorageChange = (dumpStorageData: DumpStorageData) => {
+    setFormData((prev) => ({
+      ...prev,
+      dumpStorage: dumpStorageData,
+    }));
+    setIsDirty(true);
+  };
+
+  const handleViolationsChange = (violationsData: ViolationsData) => {
+    setFormData((prev) => ({
+      ...prev,
+      violations: violationsData,
+    }));
+    setIsDirty(true);
+  };
+
+  const handleDamagesChange = (damagesData: DamagesData) => {
+    setFormData((prev) => ({
+      ...prev,
+      damages: damagesData,
+    }));
+    setIsDirty(true);
+  };
+
   const mcsTabs = [
     { id: "property_info", label: "Property Info", status: "needs_info" },
     { id: "completion_info", label: "Completion Info", status: "needs_info" },
@@ -182,18 +265,103 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
     { id: "exp_comp_date", label: "Exp Comp Date", status: "none" },
   ];
 
+  const isTabDisabled = (tabId: string) => {
+    if (tabId === "occupancy") {
+      return formData.propertyInfo?.isOccupied !== "Yes";
+    }
+    if (tabId === "access_issue") {
+      return formData.propertyInfo?.unableToAccess !== "Yes";
+    }
+    if (tabId === "violations") {
+      return formData.propertyInfo?.hasViolation !== "Yes";
+    }
+    // Style unimplemented checklist tabs as disabled (no longer needed)
+    if ([
+      "wint_checklist", "mobile_home", "reo_checklist", "dil_checklist", 
+      "vcl", "viccr_checklist", "hazard_eob", "outstanding_bids", "checkins"
+    ].includes(tabId)) {
+      return true;
+    }
+    return false;
+  };
+
+  const isTabCompleted = (tabId: string) => {
+    if (tabId === "property_info") {
+      return formData.propertyInfo?.isCompletionNeeded !== "";
+    }
+    if (tabId === "completion_info") {
+      return formData.completionInfo?.dateWorkCompleted !== "";
+    }
+    if (tabId === "occupancy") {
+      if (formData.propertyInfo?.isOccupied !== "Yes") return false;
+      const activeIndicators = formData.occupancy?.indicators?.filter(
+        (ind) => ind.indicator !== "" && ind.comment.trim() !== ""
+      ) || [];
+      return activeIndicators.length >= 2;
+    }
+    if (tabId === "utilities") {
+      const ut = formData.utilities;
+      if (!ut) return false;
+      return (
+        ut.elecArrivalStatus !== "" &&
+        ut.gasArrivalStatus !== "" &&
+        ut.waterArrivalStatus !== "" &&
+        ut.sumpRequireSumpPump !== ""
+      );
+    }
+    if (tabId === "access_issue") {
+      if (formData.propertyInfo?.unableToAccess !== "Yes") return false;
+      return formData.accessIssue?.noAccessReason !== "" || formData.accessIssue?.badAddressReason !== "";
+    }
+    if (tabId === "dump_storage") {
+      const currentFee = formData.dumpStorage?.dumpFees?.[formData.dumpStorage?.currentDumpIndex] || formData.dumpStorage?.dumpFees?.[0];
+      return !!(
+        currentFee &&
+        currentFee.disposalDate !== "" &&
+        currentFee.facilityName !== "" &&
+        currentFee.facilityAddress !== "" &&
+        currentFee.facilityCity !== "" &&
+        currentFee.facilityZip !== "" &&
+        currentFee.cubicYards !== "" &&
+        currentFee.itemDescription !== "" &&
+        formData.dumpStorage?.storageSelect !== ""
+      );
+    }
+    if (tabId === "violations") {
+      if (formData.propertyInfo?.hasViolation !== "Yes") return false;
+      return (formData.violations?.violationsList?.length || 0) > 0;
+    }
+    if (tabId === "damages") {
+      return (formData.damages?.damagesList?.length || 0) > 0;
+    }
+    if (tabId === "notes") return true;
+    return false;
+  };
+
+  // Redirect active tab if it becomes disabled dynamically
+  useEffect(() => {
+    if (isTabDisabled(activeTab)) {
+      setActiveTab("property_info");
+    }
+  }, [
+    formData.propertyInfo?.isOccupied,
+    formData.propertyInfo?.unableToAccess,
+    formData.propertyInfo?.hasViolation,
+    activeTab
+  ]);
+
   // Helper to determine status icon on the tab sidebar
-  const renderTabIcon = (tabId: string, status: string) => {
-    if (tabId === "property_info" && formData.propertyInfo.isCompletionNeeded !== "") {
+  const renderTabIcon = (tabId: string) => {
+    if (isTabDisabled(tabId)) {
+      return <X className="h-4 w-4 text-rose-500 flex-shrink-0" />;
+    }
+    if (isTabCompleted(tabId)) {
       return <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />;
     }
-    if (tabId === "completion_info" && formData.completionInfo?.dateWorkCompleted !== "") {
-      return <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />;
-    }
-    if (status === "completed") {
-      return <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />;
-    }
-    if (status === "needs_info") {
+    if ([
+      "property_info", "completion_info", "occupancy", "utilities", 
+      "dump_storage", "winterization", "access_issue", "damages", "violations"
+    ].includes(tabId)) {
       return <AlertCircle className="h-4 w-4 text-rose-500 flex-shrink-0" />;
     }
     return <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-700 flex-shrink-0" />;
@@ -227,17 +395,25 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Form Chapters</p>
             {mcsTabs.map((tab) => {
               const active = activeTab === tab.id;
+              const disabled = isTabDisabled(tab.id);
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    if (!disabled) {
+                      setActiveTab(tab.id);
+                    }
+                  }}
+                  disabled={disabled}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all duration-200 ${
                     active
                       ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20"
+                      : disabled
+                      ? "text-slate-400 dark:text-slate-600 opacity-40 cursor-not-allowed pointer-events-none"
                       : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/40 hover:text-slate-800 dark:hover:text-slate-200"
                   }`}
                 >
-                  {renderTabIcon(tab.id, tab.status)}
+                  {renderTabIcon(tab.id)}
                   <span className="truncate">{tab.label}</span>
                 </button>
               );
@@ -266,18 +442,49 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
                     woTasks={woTasks}
                   />
                 )}
-                {activeTab === "occupancy" && <OccupancyTab />}
+                {activeTab === "occupancy" && (
+                  <OccupancyTab
+                    data={formData.occupancy}
+                    onChange={handleOccupancyChange}
+                    enabled={formData.propertyInfo?.isOccupied === "Yes"}
+                  />
+                )}
                 {activeTab === "utilities" && (
                   <UtilitiesTab
                     data={formData.utilities}
                     onChange={handleUtilitiesChange}
                   />
                 )}
-                {activeTab === "dump_storage" && <DumpStorageTab />}
+                {activeTab === "dump_storage" && (
+                  <DumpStorageTab
+                    data={formData.dumpStorage}
+                    onChange={handleDumpStorageChange}
+                  />
+                )}
                 {activeTab === "winterization" && <WinterizationTab />}
+                {activeTab === "access_issue" && (
+                  <AccessIssueTab
+                    data={formData.accessIssue}
+                    onChange={handleAccessIssueChange}
+                    enabled={formData.propertyInfo?.unableToAccess === "Yes"}
+                  />
+                )}
+                {activeTab === "violations" && (
+                  <ViolationsTab
+                    data={formData.violations}
+                    onChange={handleViolationsChange}
+                    enabled={formData.propertyInfo?.hasViolation === "Yes"}
+                  />
+                )}
+                {activeTab === "damages" && (
+                  <DamagesTab
+                    data={formData.damages}
+                    onChange={handleDamagesChange}
+                  />
+                )}
                 
                 {/* Fallback for other checkboxes checklist tabs */}
-                {!["property_info", "completion_info", "occupancy", "utilities", "dump_storage", "winterization"].includes(activeTab) && (
+                {!["property_info", "completion_info", "occupancy", "utilities", "dump_storage", "winterization", "access_issue", "violations", "damages"].includes(activeTab) && (
                   <GenericChecklistTab title={mcsTabs.find(t => t.id === activeTab)?.label || "Checklist"} />
                 )}
               </>

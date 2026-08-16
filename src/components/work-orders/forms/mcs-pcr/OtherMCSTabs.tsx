@@ -12,56 +12,7 @@ import {
 
 // Completion Info Tab is now imported from its own dedicated file CompletionInfoTab.tsx
 
-// ── Occupancy Tab ──
-export function OccupancyTab() {
-  const occupancyOptions = [
-    { label: "Vacant", value: "Vacant" },
-    { label: "Occupied", value: "Occupied" },
-    { label: "Co-Occupied", value: "Co-Occupied" },
-    { label: "Unknown / Unable to Verify", value: "Unknown" },
-  ];
-
-  const verificationOptions = [
-    { label: "Visual Inspection", value: "Visual" },
-    { label: "Contact with Neighbor", value: "Neighbor" },
-    { label: "Contact with Tenant/Owner", value: "Contact" },
-    { label: "Direct Observation", value: "Direct" },
-  ];
-
-  return (
-    <div className="space-y-6 max-w-3xl">
-      <FormSection title="Occupancy Verification">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <SelectField 
-            label="Occupancy Status:" 
-            options={occupancyOptions} 
-            value="Vacant" 
-            onChange={() => {}} 
-          />
-          <SelectField 
-            label="Verified By:" 
-            options={verificationOptions} 
-            value="Visual" 
-            onChange={() => {}} 
-          />
-          <TextField label="Date Checked:" type="date" value="" onChange={() => {}} />
-        </div>
-
-        <div className="border-t border-slate-100 dark:border-slate-800 my-2 pt-4">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-3">Occupancy Indicators Found:</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <CheckboxField label="Active Utilities (Lights/Meter running)" checked={false} onChange={() => {}} />
-            <CheckboxField label="Accumulated Mail/Circulars" checked={true} onChange={() => {}} />
-            <CheckboxField label="Lawn Maintained/Overgrown" checked={false} onChange={() => {}} />
-            <CheckboxField label="Personal Items visible inside" checked={false} onChange={() => {}} />
-            <CheckboxField label="Neighbors confirm occupancy" checked={false} onChange={() => {}} />
-            <CheckboxField label="Trash/Garbage cans out" checked={false} onChange={() => {}} />
-          </div>
-        </div>
-      </FormSection>
-    </div>
-  );
-}
+// Occupancy Tab is now imported from its own dedicated file OccupancyTab.tsx
 
 
 
@@ -106,37 +57,7 @@ export function WinterizationTab() {
   );
 }
 
-// ── Dump & Storage Tab ──
-export function DumpStorageTab() {
-  const yesNoOptions = [
-    { label: "Yes", value: "Yes" },
-    { label: "No", value: "No" },
-  ];
-  return (
-    <div className="space-y-6 max-w-3xl">
-      <FormSection title="Debris & Storage Management">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <RadioGroup 
-            label="Is interior debris present?" 
-            name="intDebris"
-            options={yesNoOptions} 
-            value="No" 
-            onChange={() => {}} 
-          />
-          <RadioGroup 
-            label="Is exterior debris present?" 
-            name="extDebris"
-            options={yesNoOptions} 
-            value="No" 
-            onChange={() => {}} 
-          />
-          <TextField label="Estimated Debris Volume (Cubic Yards):" placeholder="e.g. 10 CY" value="" onChange={() => {}} />
-          <TextField label="Hazards/Chemicals present?" placeholder="Describe any paints, tires, etc." value="" onChange={() => {}} />
-        </div>
-      </FormSection>
-    </div>
-  );
-}
+// Dump & Storage Tab is now imported from its own dedicated file DumpStorageTab.tsx
 
 // ── Generic Checklist Tab ──
 export function GenericChecklistTab({ title }: { title: string }) {
