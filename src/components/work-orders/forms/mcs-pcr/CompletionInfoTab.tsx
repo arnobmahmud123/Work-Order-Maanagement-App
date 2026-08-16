@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { FormSection } from "../FormPrimitives";
-import { CheckSquare, HelpCircle } from "lucide-react";
+import { CheckSquare, HelpCircle, Trash2 } from "lucide-react";
 
 export interface CompletionInfoTask {
   taskId: string;
@@ -55,46 +55,32 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
     });
   };
 
-  // Sync work order tasks to completion info task list
+  // Sync work order tasks to completion info task list on initial load
   useEffect(() => {
-    if (woTasks && woTasks.length > 0) {
-      const existingTasksMap = new Map((data.tasks || []).map((t) => [t.taskId, t]));
-      let hasChanges = false;
+    if (woTasks && woTasks.length > 0 && (!data.tasks || data.tasks.length === 0)) {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const defaultDate = data.dateWorkCompleted || todayStr;
       
-      const mergedTasks = woTasks.map((t) => {
-        const existing = existingTasksMap.get(t.id);
-        if (existing) {
-          return existing;
-        }
-        
-        hasChanges = true;
-        // Set default completion date as today or work completed date
-        const todayStr = new Date().toISOString().split("T")[0];
-        const defaultDate = data.dateWorkCompleted || todayStr;
-        
-        return {
-          taskId: t.id,
-          pending: t.status !== "COMPLETED",
-          done: t.completed || t.status === "COMPLETED",
-          na: false,
-          multiDay: false,
-          completedDate: defaultDate,
-          description: t.title || "", // Default description as task title
-          vendorComment: t.description || "", // Default vendor comment as task description details
-          mcsComment: "",
-          imgCount: t.photos?.length || 0,
-          woInstructions: t.description || "",
-        };
-      });
+      const initialTasks = woTasks.map((t) => ({
+        taskId: t.id,
+        pending: t.status !== "COMPLETED",
+        done: t.completed || t.status === "COMPLETED",
+        na: false,
+        multiDay: false,
+        completedDate: defaultDate,
+        description: t.title || "", // Default description as task title
+        vendorComment: t.description || "", // Default vendor comment as task description details
+        mcsComment: "",
+        imgCount: t.photos?.length || 0,
+        woInstructions: t.description || "",
+      }));
 
-      if (hasChanges || !data.tasks || data.tasks.length === 0) {
-        onChange({
-          ...data,
-          tasks: mergedTasks,
-        });
-      }
+      onChange({
+        ...data,
+        tasks: initialTasks,
+      });
     }
-  }, [woTasks, data.dateWorkCompleted]);
+  }, [woTasks]);
 
   // Update a single task field in the array
   const updateTask = (index: number, updates: Partial<CompletionInfoTask>) => {
@@ -116,6 +102,36 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
       updatedTasks[index].done = false;
     }
 
+    onChange({
+      ...data,
+      tasks: updatedTasks,
+    });
+  };
+
+  const handleAddTask = () => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const defaultDate = data.dateWorkCompleted || todayStr;
+    const newTask: CompletionInfoTask = {
+      taskId: `custom-${Date.now()}`,
+      pending: true,
+      done: false,
+      na: false,
+      multiDay: false,
+      completedDate: defaultDate,
+      description: "",
+      vendorComment: "",
+      mcsComment: "",
+      imgCount: 0,
+      woInstructions: "",
+    };
+    onChange({
+      ...data,
+      tasks: [...(data.tasks || []), newTask],
+    });
+  };
+
+  const handleDeleteTask = (index: number) => {
+    const updatedTasks = (data.tasks || []).filter((_, i) => i !== index);
     onChange({
       ...data,
       tasks: updatedTasks,
@@ -266,8 +282,15 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
 
       {/* Task Line Items Table */}
       <div className="border border-slate-200/60 dark:border-slate-800/80 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60 shadow-md">
-        <div className="bg-slate-100 dark:bg-slate-800/50 px-5 py-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="bg-slate-100 dark:bg-slate-800/50 px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h4 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">Line Item Tasks Status</h4>
+          <button
+            type="button"
+            onClick={handleAddTask}
+            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all"
+          >
+            + Add Task
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1200px] border-collapse text-left text-xs">
@@ -283,13 +306,14 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                 <th className="py-3 px-4 w-60">MCS Comment (to vendor)</th>
                 <th className="py-3 px-3 text-center w-24">Img Count</th>
                 <th className="py-3 px-4">WO Instructions</th>
+                <th className="py-3 px-4 text-center w-16">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-150 dark:divide-slate-800/60">
               {!data.tasks || data.tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-10 px-4 text-center text-slate-400 font-bold">
-                    No work order tasks found. Add tasks to the work order first.
+                  <td colSpan={11} className="py-10 px-4 text-center text-slate-400 font-bold">
+                    No tasks added. Click "+ Add Task" to add a new task item.
                   </td>
                 </tr>
               ) : (
@@ -390,6 +414,18 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                     {/* WO Instructions (ReadOnly label) */}
                     <td className="py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400 max-w-[280px] truncate" title={task.woInstructions}>
                       {task.woInstructions || <span className="italic text-slate-400">None</span>}
+                    </td>
+
+                    {/* Delete action */}
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTask(index)}
+                        className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        title="Delete Task"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))
