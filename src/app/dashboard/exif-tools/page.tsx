@@ -414,28 +414,43 @@ export default function ExifToolsPage() {
             if (!exifObj["Exif"]) exifObj["Exif"] = {};
             if (!exifObj["GPS"]) exifObj["GPS"] = {};
             
+            // Clean unhandled / proprietary tags that cause piexif.dump to crash
+            delete exifObj["thumbnail"];
+            delete exifObj["1st"];
+            if (exifObj["Exif"]) {
+              delete exifObj["Exif"][37500]; // MakerNote
+              delete exifObj["Exif"][37510]; // UserComment
+            }
+            
             exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
             exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
             exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
             
+            let latRef = "N";
+            let lngRef = "E";
+            let latD = 0, latM = 0, latS = 0;
+            let lngD = 0, lngM = 0, lngS = 0;
+            
             if (effectiveGPS) {
-              const latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
-              const lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
+              latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
+              lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
               
               const absLat = Math.abs(effectiveGPS.latitude);
-              const latD = Math.floor(absLat);
-              const latM = Math.floor((absLat - latD) * 60);
-              const latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
+              latD = Math.floor(absLat);
+              latM = Math.floor((absLat - latD) * 60);
+              latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
               
               const absLng = Math.abs(effectiveGPS.longitude);
-              const lngD = Math.floor(absLng);
-              const lngM = Math.floor((absLng - lngD) * 60);
-              const lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
+              lngD = Math.floor(absLng);
+              lngM = Math.floor((absLng - lngD) * 60);
+              lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
               
               exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
               exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
               exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
               exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
+              exifObj["GPS"][piexif.GPSIFD.GPSDateStamp] = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())}`;
+              exifObj["GPS"][piexif.GPSIFD.GPSTimeStamp] = [[effectiveDate.getHours(), 1], [effectiveDate.getMinutes(), 1], [effectiveDate.getSeconds(), 1]];
               
               if (effectiveGPS.altitude !== undefined) {
                 exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] = effectiveGPS.altitude >= 0 ? 0 : 1;
@@ -443,7 +458,38 @@ export default function ExifToolsPage() {
               }
             }
             
-            const exifBytes = piexif.dump(exifObj);
+            let exifBytes: string;
+            try {
+              exifBytes = piexif.dump(exifObj);
+            } catch (dumpErr) {
+              console.warn("Merged EXIF dump failed, creating clean standard EXIF", dumpErr);
+              const cleanExif: any = {
+                "0th": {
+                  [piexif.ImageIFD.DateTime]: exifDateStr,
+                  [piexif.ImageIFD.Orientation]: 1,
+                  [piexif.ImageIFD.Software]: "PropertyPreserve App",
+                },
+                "Exif": {
+                  [piexif.ExifIFD.DateTimeOriginal]: exifDateStr,
+                  [piexif.ExifIFD.DateTimeDigitized]: exifDateStr,
+                  [piexif.ExifIFD.ExifVersion]: "0232",
+                },
+                "GPS": {}
+              };
+              if (exifObj["0th"]?.[piexif.ImageIFD.Make]) cleanExif["0th"][piexif.ImageIFD.Make] = exifObj["0th"][piexif.ImageIFD.Make];
+              if (exifObj["0th"]?.[piexif.ImageIFD.Model]) cleanExif["0th"][piexif.ImageIFD.Model] = exifObj["0th"][piexif.ImageIFD.Model];
+              
+              if (effectiveGPS) {
+                cleanExif["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
+                cleanExif["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
+                cleanExif["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
+                cleanExif["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
+                cleanExif["GPS"][piexif.GPSIFD.GPSDateStamp] = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())}`;
+                cleanExif["GPS"][piexif.GPSIFD.GPSTimeStamp] = [[effectiveDate.getHours(), 1], [effectiveDate.getMinutes(), 1], [effectiveDate.getSeconds(), 1]];
+              }
+              exifBytes = piexif.dump(cleanExif);
+            }
+            
             finalJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
           }
           
@@ -465,7 +511,7 @@ export default function ExifToolsPage() {
           // Generate a filename based on original or index
           const originalName = p.file.name.replace(/\.[^/.]+$/, "");
           const ext = "jpg";
-          zip.file(`${originalName}_stamped.${ext}`, finalBlob);
+          zip.file(`${originalName}_stamped.${ext}`, finalBlob, { date: effectiveDate });
         }
       }
       
