@@ -260,7 +260,6 @@ export default function ExifToolsPage() {
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
     const defaultDate = photo.exifData?.dateTime || new Date(photo.file.lastModified);
-    if (downloadMode !== "custom") return defaultDate;
 
     // ── Parse custom date ────────────────────────────────────────────────────
     let year: number, month: number, day: number;
@@ -290,62 +289,61 @@ export default function ExifToolsPage() {
         : a.id.localeCompare(b.id);
 
     // ════════════════════════════════════════════════════════════════════════
-    // GENERAL MODE — Single continuous timeline across all photos
+    // CATEGORY MODE — Separate ranges with hard non-overlapping boundaries
     // ════════════════════════════════════════════════════════════════════════
-    if (!useCategorizedRanges) {
-      const userStart = parseTimeToMinutes(customTimeStart);
-      const gS = userStart >= 0 ? userStart : 600; // Default 10:00 AM if unconfigured
-      
-      let userEnd = parseTimeToMinutes(customTimeEnd);
-      let gE = userEnd;
-      if (userStart >= 0 && gE >= 0 && gE < gS) {
-        gE += 1440; // midnight crossing
-      }
+    if (useCategorizedRanges) {
+      const categorizedMinute = categorizedTimeline.photoMinutes.get(photo.id);
+      if (categorizedMinute !== undefined) return buildDate(categorizedMinute);
 
-      const sel = (cat: string) =>
-        photos.filter(p => p.category === cat).sort(byMod);
+      const lastSectionEnd = categorizedTimeline.sections.after?.end 
+        ?? categorizedTimeline.sections.during?.end 
+        ?? categorizedTimeline.sections.before?.end 
+        ?? 720;
 
-      // STRICT TIMELINE ORDER:
-      // 1. All Before photos
-      // 2. All During photos
-      // 3. All After photos
-      // 4. All Uncategorized photos
-      const timeline = [
-        ...sel("before"),
-        ...sel("during"),
-        ...sel("after"),
-        ...photos.filter(p => p.category === "none").sort(byMod),
-      ];
-
-      const idx = timeline.findIndex(p => p.id === photo.id);
-      if (idx === -1) return buildDate(gS);
-      if (timeline.length <= 1) return buildDate(gS);
-
-      if (gE < 0 || gE <= gS) {
-        // No end time provided: increment by 1 minute per photo sequentially
-        return buildDate(gS + idx);
-      }
-
-      // Even distribution across entire range
-      const step = (gE - gS) / (timeline.length - 1);
-      return buildDate(gS + idx * step);
+      const uncatPhotos = photos.filter(p => p.category === "none").sort(byMod);
+      const uncatIdx = uncatPhotos.findIndex(p => p.id === photo.id);
+      return buildDate(lastSectionEnd + 1 + Math.max(uncatIdx, 0));
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // CATEGORY MODE — Separate ranges with hard non-overlapping boundaries
+    // GENERAL MODE — Single continuous timeline across all photos
     // ════════════════════════════════════════════════════════════════════════
-    const categorizedMinute = categorizedTimeline.photoMinutes.get(photo.id);
-    if (categorizedMinute !== undefined) return buildDate(categorizedMinute);
+    const userStart = parseTimeToMinutes(customTimeStart);
+    const gS = userStart >= 0 ? userStart : 600; // Default 10:00 AM
+    
+    let userEnd = parseTimeToMinutes(customTimeEnd);
+    let gE = userEnd;
+    if (userStart >= 0 && gE >= 0 && gE < gS) {
+      gE += 1440; // midnight crossing
+    }
 
-    // Uncategorized photos in Category Mode → continue sequentially after the last section
-    const lastSectionEnd = categorizedTimeline.sections.after?.end 
-      ?? categorizedTimeline.sections.during?.end 
-      ?? categorizedTimeline.sections.before?.end 
-      ?? 720;
+    const sel = (cat: string) =>
+      photos.filter(p => p.category === cat).sort(byMod);
 
-    const uncatPhotos = photos.filter(p => p.category === "none").sort(byMod);
-    const uncatIdx = uncatPhotos.findIndex(p => p.id === photo.id);
-    return buildDate(lastSectionEnd + 1 + Math.max(uncatIdx, 0));
+    // STRICT TIMELINE ORDER:
+    // 1. All Before photos
+    // 2. All During photos
+    // 3. All After photos
+    // 4. All Uncategorized photos
+    const timeline = [
+      ...sel("before"),
+      ...sel("during"),
+      ...sel("after"),
+      ...photos.filter(p => p.category === "none").sort(byMod),
+    ];
+
+    const idx = timeline.findIndex(p => p.id === photo.id);
+    if (idx === -1) return buildDate(gS);
+    if (timeline.length <= 1) return buildDate(gS);
+
+    if (gE < 0 || gE <= gS) {
+      // No end time provided: increment by 1 minute per photo sequentially
+      return buildDate(gS + idx);
+    }
+
+    // Even distribution across entire range
+    const step = (gE - gS) / (timeline.length - 1);
+    return buildDate(gS + idx * step);
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
