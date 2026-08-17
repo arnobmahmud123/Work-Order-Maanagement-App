@@ -85,7 +85,6 @@ function cropAndResizeImage(
 
 export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
-  const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [customTimeStart, setCustomTimeStart] = useState("");
   const [customTimeEnd, setCustomTimeEnd] = useState("");
@@ -536,27 +535,11 @@ export default function ExifToolsPage() {
                 <div className="lg:col-span-1 space-y-4">
                   <div className="bg-surface p-5 rounded-2xl border border-border-medium shadow-sm space-y-5 sticky top-4">
                     <div>
-                      <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timestamp Settings</h3>
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
-                          <input type="radio" name="mode" checked={downloadMode === "date"} onChange={() => setDownloadMode("date")} className="text-cyan-500 focus:ring-cyan-500" />
-                          <span className="text-sm font-medium text-text-primary">EXIF Date Only</span>
-                        </label>
-                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
-                          <input type="radio" name="mode" checked={downloadMode === "datetime"} onChange={() => setDownloadMode("datetime")} className="text-cyan-500 focus:ring-cyan-500" />
-                          <span className="text-sm font-medium text-text-primary">EXIF Date & Time</span>
-                        </label>
-                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
-                          <input type="radio" name="mode" checked={downloadMode === "custom"} onChange={() => setDownloadMode("custom")} className="text-cyan-500 focus:ring-cyan-500" />
-                          <span className="text-sm font-medium text-text-primary">Custom Date/Time</span>
-                        </label>
-                      </div>
-                    </div>
-                    
-                    {downloadMode === "custom" && (
+                      <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timeline Configuration</h3>
+                      
                       <div className="space-y-4 p-4 bg-background rounded-xl border border-border-subtle">
                         <div>
-                          <label className="block text-xs font-bold text-text-secondary mb-1">Date</label>
+                          <label className="block text-xs font-bold text-text-secondary mb-1">Work Order Date</label>
                           <input 
                             type="date" 
                             value={customDate} 
@@ -568,7 +551,7 @@ export default function ExifToolsPage() {
                         {/* Continuous Job Timeline Range */}
                         <div className="space-y-3 pt-1">
                           <div>
-                            <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">Continuous Job Time Range</label>
+                            <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">Continuous Clock Window</label>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <span className="text-[9px] text-text-secondary block mb-0.5">Start Time</span>
@@ -599,7 +582,7 @@ export default function ExifToolsPage() {
                             <div className="space-y-2 pt-2 border-t border-border-subtle/50">
                               <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center justify-between">
                                 <span>Timeline Sequence</span>
-                                <span className="text-[9px] text-emerald-400 font-mono">1 Clock</span>
+                                <span className="text-[9px] text-emerald-400 font-mono font-bold">1 Continuous Clock</span>
                               </div>
 
                               <div className="space-y-1.5 text-xs font-mono">
@@ -639,7 +622,7 @@ export default function ExifToolsPage() {
                           )}
                         </div>
                       </div>
-                    )}
+                    </div>
                     
                     
                     <div className="pt-4 border-t border-border-subtle space-y-3">
@@ -903,12 +886,10 @@ export default function ExifToolsPage() {
                                   </div>
                                 )}
                               </div>
-                              {downloadMode !== "date" && (
-                                <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
-                                  <Clock className="h-3 w-3" />
-                                  {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
+                                <Clock className="h-3 w-3" />
+                                {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
+                              </div>
                               {effGPS ? (
                                 <div className="flex flex-col gap-0.5 text-[10px] font-mono text-emerald-400/80 mt-1">
                                   <div className="flex items-center gap-1.5" title={`${effGPS.latitude}, ${effGPS.longitude}`}>

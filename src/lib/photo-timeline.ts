@@ -104,9 +104,19 @@ export function buildContinuousPhotoTimeline(
   }
 
   // 3. PARSE START & END TIMES
-  const parsedStart = parseTimeString(options.startTimeStr || "");
-  const startHour = parsedStart ? parsedStart.hour : 10;
-  const startMinute = parsedStart ? parsedStart.minute : 0;
+  let startHour = 10;
+  let startMinute = 0;
+
+  if (options.startTimeStr) {
+    const parsedStart = parseTimeString(options.startTimeStr);
+    if (parsedStart) {
+      startHour = parsedStart.hour;
+      startMinute = parsedStart.minute;
+    }
+  } else if (options.defaultDate) {
+    startHour = options.defaultDate.getHours();
+    startMinute = options.defaultDate.getMinutes();
+  }
 
   const startDate = new Date(year, month - 1, day, startHour, startMinute, 0, 0);
 
@@ -134,6 +144,7 @@ export function buildContinuousPhotoTimeline(
     : (endDate.getTime() - startDate.getTime()) / (totalPhotos - 1);
 
   const orderedPhotos: TimedPhotoOutput[] = [];
+  let lastCategory: PhotoTimelineCategory | null = null;
 
   for (let i = 0; i < totalPhotos; i++) {
     let assignedMs: number;
@@ -141,15 +152,21 @@ export function buildContinuousPhotoTimeline(
       assignedMs = startDate.getTime();
     } else if (endDate && i === totalPhotos - 1) {
       assignedMs = endDate.getTime();
-    } else {
+    } else if (endDate) {
       assignedMs = Math.round(startDate.getTime() + i * stepMs);
+    } else {
+      assignedMs = startDate.getTime() + i * stepMs;
     }
 
     // Mathematical Dependency: next photo MUST be strictly after previous photo
     if (i > 0) {
       const prevMs = orderedPhotos[i - 1].timestamp.getTime();
-      if (assignedMs <= prevMs) {
-        assignedMs = prevMs + 60 * 1000;
+      const currentCat = sortedPhotos[i].category;
+      const isNewCategory = currentCat !== lastCategory && lastCategory !== null;
+      const minStep = isNewCategory ? 60 * 1000 : 60 * 1000;
+      
+      if (assignedMs < prevMs + minStep) {
+        assignedMs = prevMs + minStep;
       }
     }
 
@@ -162,6 +179,8 @@ export function buildContinuousPhotoTimeline(
         photoDate.setTime(prevDate.getTime() + 60 * 1000);
       }
     }
+
+    lastCategory = sortedPhotos[i].category;
 
     const output: TimedPhotoOutput = {
       id: sortedPhotos[i].id,
@@ -182,6 +201,31 @@ export function buildContinuousPhotoTimeline(
     if (curr.timestamp.getTime() <= prev.timestamp.getTime()) {
       throw new Error(
         `TIMELINE VALIDATION FAILED: Photo #${curr.timelineIndex + 1} (${curr.id} - ${curr.timeString12h}) is not later than Photo #${prev.timelineIndex + 1} (${prev.id} - ${prev.timeString12h})`
+      );
+    }
+  }
+
+  // Specific Category Transition Validation
+  const beforeList = orderedPhotos.filter(p => p.category === "before");
+  const duringList = orderedPhotos.filter(p => p.category === "during");
+  const afterList = orderedPhotos.filter(p => p.category === "after");
+
+  if (beforeList.length > 0 && duringList.length > 0) {
+    const lastBefore = beforeList[beforeList.length - 1];
+    const firstDuring = duringList[0];
+    if (firstDuring.timestamp.getTime() <= lastBefore.timestamp.getTime()) {
+      throw new Error(
+        `TIMELINE ERROR: First During photo (${firstDuring.timeString12h}) is not later than last Before photo (${lastBefore.timeString12h})`
+      );
+    }
+  }
+
+  if (duringList.length > 0 && afterList.length > 0) {
+    const lastDuring = duringList[duringList.length - 1];
+    const firstAfter = afterList[0];
+    if (firstAfter.timestamp.getTime() <= lastDuring.timestamp.getTime()) {
+      throw new Error(
+        `TIMELINE ERROR: First After photo (${firstAfter.timeString12h}) is not later than last During photo (${lastDuring.timeString12h})`
       );
     }
   }
