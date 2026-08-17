@@ -504,12 +504,18 @@ export default function ExifToolsPage() {
     ),
     [photos, beforeStart, beforeEnd, duringStart, duringEnd, afterStart, afterEnd]
   );
-  const derivedDuringStart = categorizedTimeline.sections.during?.start;
-  const derivedAfterStart = categorizedTimeline.sections.after?.start;
+  const duringSection = categorizedTimeline.sections.during;
+  const afterSection = categorizedTimeline.sections.after;
+  const derivedDuringStart = duringSection?.start;
+  const derivedAfterStart = afterSection?.start;
   const duringStartIsDerived = derivedDuringStart !== undefined && categorizedTimeline.sections.before !== undefined;
   const afterStartIsDerived = derivedAfterStart !== undefined && (
     categorizedTimeline.sections.before !== undefined || categorizedTimeline.sections.during !== undefined
   );
+  const duringEndWasCorrected = duringSection !== undefined &&
+    parseTimeToMinutes(duringEnd) >= 0 && parseTimeToMinutes(duringEnd) < duringSection.start;
+  const afterEndWasCorrected = afterSection !== undefined &&
+    parseTimeToMinutes(afterEnd) >= 0 && parseTimeToMinutes(afterEnd) < afterSection.start;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -676,8 +682,9 @@ export default function ExifToolsPage() {
                                 <input 
                                   type="time" 
                                   placeholder="End"
-                                  value={duringEnd} 
+                                  value={duringEndWasCorrected ? formatTimelineMinute(duringSection.end) : duringEnd}
                                   onChange={(e) => setDuringEnd(e.target.value)}
+                                  title={duringEndWasCorrected ? "Adjusted forward so During cannot overlap Before" : "Set the final During photo time"}
                                   className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none"
                                 />
                               </div>
@@ -699,8 +706,9 @@ export default function ExifToolsPage() {
                                 <input 
                                   type="time" 
                                   placeholder="End"
-                                  value={afterEnd} 
+                                  value={afterEndWasCorrected ? formatTimelineMinute(afterSection.end) : afterEnd}
                                   onChange={(e) => setAfterEnd(e.target.value)}
+                                  title={afterEndWasCorrected ? "Adjusted forward so After cannot overlap During" : "Set the final After photo time"}
                                   className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none"
                                 />
                               </div>

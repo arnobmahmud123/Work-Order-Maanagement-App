@@ -28,8 +28,9 @@ const CATEGORY_ORDER: TimedPhotoCategory[] = ["before", "during", "after"];
  * The first populated category uses its configured start. Every later populated
  * category starts exactly one minute after the prior populated category's final
  * assigned photo. A supplied end time is the section's final photo time; when it
- * is omitted, photos receive a one-minute cadence. End times before their start
- * are treated as a next-day time.
+ * is omitted, photos receive a one-minute cadence. An end time that is earlier
+ * than the derived start is corrected forward; it never rolls into an unseen
+ * next day and therefore can never make categories look out of order.
  */
 export function createContinuousPhotoTimeline(
   photos: TimelinePhoto[],
@@ -51,7 +52,6 @@ export function createContinuousPhotoTimeline(
     if (start < 0) continue;
 
     let end = configuredRange?.end ?? -1;
-    while (end >= 0 && end < start) end += 1440;
     if (end < start) end = start + categoryPhotos.length - 1;
 
     const step = categoryPhotos.length === 1 ? 0 : (end - start) / (categoryPhotos.length - 1);
