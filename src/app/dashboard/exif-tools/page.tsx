@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin, Crop, Maximize2, Sliders } from "lucide-react";
 import JSZip from "jszip";
 import * as piexif from "piexifjs";
 import { readEXIF, generatePhotoWithOverlay, GPSData } from "@/lib/exif";
+import { createContinuousPhotoTimeline, formatTimelineMinute } from "@/lib/photo-timeline";
 import { TopNav } from "@/components/layout/top-nav";
 
 interface ProcessedPhoto {
@@ -19,6 +20,12 @@ interface ProcessedPhoto {
   } | null;
   selected: boolean;
   category: "before" | "during" | "after" | "none";
+}
+
+function parseTimeToMinutes(time: string): number {
+  if (!time) return -1;
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
 }
 
 function cropAndResizeImage(
@@ -266,13 +273,6 @@ export default function ExifToolsPage() {
       day = defaultDate.getDate();
     }
 
-    // Convert "HH:MM" string → minutes since midnight. -1 = not set.
-    const toMins = (t: string): number => {
-      if (!t) return -1;
-      const [h, m] = t.split(":").map(Number);
-      return h * 60 + m;
-    };
-
     // Build a JS Date from absolute minutes (handles one or more midnight crossings).
     const buildDate = (absMins: number): Date => {
       const roundedMinutes = Math.round(absMins);
@@ -281,13 +281,6 @@ export default function ExifToolsPage() {
       const h = Math.floor(clamped / 60);
       const m = clamped % 60;
       return new Date(year, month - 1, day + dayOffset, h, m, 0, 0);
-    };
-
-    // Normalize [start, end] so end >= start. If end < start, it's next day.
-    const normPair = (s: number, e: number): [number, number] => {
-      if (e < 0) return [s, e];
-      while (e < s) e += 1440;
-      return [s, e];
     };
 
     // ── Sort within bucket by file.lastModified then id ──────────────────────
@@ -316,9 +309,9 @@ export default function ExifToolsPage() {
     // GENERAL MODE — Single continuous timeline across all photos
     // ════════════════════════════════════════════════════════════════════════
     if (!useCategorizedRanges) {
-      const gS = toMins(customTimeStart);
+      const gS = parseTimeToMinutes(customTimeStart);
       if (gS < 0) return defaultDate;
-      let gE = toMins(customTimeEnd);
+      let gE = parseTimeToMinutes(customTimeEnd);
       if (gE >= 0 && gE < gS) gE += 1440; // midnight crossing
 
       const sel = (cat: string) =>
@@ -339,51 +332,14 @@ export default function ExifToolsPage() {
       return assignTime(timeline, gS, gE);
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CATEGORY MODE — One continuous Before -> During -> After timeline.
-    // Each configured end is the final photo time for its section; the next
-    // section's start is derived from that actual final photo time plus one minute.
-    // ════════════════════════════════════════════════════════════════════════
-    type CategoryTimeline = { list: ProcessedPhoto[]; start: number; end: number; last: number };
-    const categoryPhotos = (category: ProcessedPhoto["category"]) =>
-      photos.filter((item) => item.category === category).sort(byMod);
-    const makeTimeline = (
-      list: ProcessedPhoto[],
-      configuredStart: number,
-      configuredEnd: number,
-      previousLast: number
-    ): CategoryTimeline => {
-      const start = previousLast >= 0 ? previousLast + 1 : configuredStart;
-      if (list.length === 0 || start < 0) return { list, start, end: -1, last: -1 };
-
-      let end = configuredEnd;
-      [end] = normPair(start, end);
-      // A one-photo section ends at that photo's start time. With no usable end,
-      // retain a one-minute cadence so every generated timestamp is chronological.
-      if (list.length === 1) end = start;
-      else if (end <= start) end = start + list.length - 1;
-
-      return { list, start, end, last: end };
-    };
-
-    const beforeTimeline = makeTimeline(categoryPhotos("before"), toMins(beforeStart), toMins(beforeEnd), -1);
-    const duringTimeline = makeTimeline(categoryPhotos("during"), toMins(duringStart), toMins(duringEnd), beforeTimeline.last);
-    const afterTimeline = makeTimeline(categoryPhotos("after"), toMins(afterStart), toMins(afterEnd), duringTimeline.last >= 0 ? duringTimeline.last : beforeTimeline.last);
-
-    const cat = photo.category || "none";
-    if (cat === "before" && beforeTimeline.start >= 0) {
-      return assignTime(beforeTimeline.list, beforeTimeline.start, beforeTimeline.end);
-    }
-    if (cat === "during" && duringTimeline.start >= 0) {
-      return assignTime(duringTimeline.list, duringTimeline.start, duringTimeline.end);
-    }
-    if (cat === "after" && afterTimeline.start >= 0) {
-      return assignTime(afterTimeline.list, afterTimeline.start, afterTimeline.end);
-    }
+    // CATEGORY MODE — All captions, previews, and downloaded EXIF timestamps
+    // use this same continuous timeline calculation.
+    const categorizedMinute = categorizedTimeline.photoMinutes.get(photo.id);
+    if (categorizedMinute !== undefined) return buildDate(categorizedMinute);
 
     // Uncategorized photos in Category Mode → fall back to general range
-    const gS2 = toMins(customTimeStart);
-    let gE2 = toMins(customTimeEnd);
+    const gS2 = parseTimeToMinutes(customTimeStart);
+    let gE2 = parseTimeToMinutes(customTimeEnd);
     if (gS2 >= 0 && gE2 >= 0 && gE2 < gS2) gE2 += 1440;
     const unc = photos.filter(p => p.category === "none").sort(byMod);
     return assignTime(unc, gS2, gE2);
@@ -530,6 +486,30 @@ export default function ExifToolsPage() {
       setIsProcessing(false);
     }
   };
+
+  // This is deliberately shared by the on-screen captions and the exported
+  // photos so the times a user sees are exactly the times that are written.
+  const categorizedTimeline = useMemo(
+    () => createContinuousPhotoTimeline(
+      photos.map((photo) => ({
+        id: photo.id,
+        category: photo.category,
+        sortValue: photo.file.lastModified,
+      })),
+      {
+        before: { start: parseTimeToMinutes(beforeStart), end: parseTimeToMinutes(beforeEnd) },
+        during: { start: parseTimeToMinutes(duringStart), end: parseTimeToMinutes(duringEnd) },
+        after: { start: parseTimeToMinutes(afterStart), end: parseTimeToMinutes(afterEnd) },
+      }
+    ),
+    [photos, beforeStart, beforeEnd, duringStart, duringEnd, afterStart, afterEnd]
+  );
+  const derivedDuringStart = categorizedTimeline.sections.during?.start;
+  const derivedAfterStart = categorizedTimeline.sections.after?.start;
+  const duringStartIsDerived = derivedDuringStart !== undefined && categorizedTimeline.sections.before !== undefined;
+  const afterStartIsDerived = derivedAfterStart !== undefined && (
+    categorizedTimeline.sections.before !== undefined || categorizedTimeline.sections.during !== undefined
+  );
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -687,9 +667,11 @@ export default function ExifToolsPage() {
                                 <input 
                                   type="time" 
                                   placeholder="Start"
-                                  value={duringStart} 
+                                  value={duringStartIsDerived ? formatTimelineMinute(derivedDuringStart) : duringStart}
                                   onChange={(e) => setDuringStart(e.target.value)}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none"
+                                  disabled={duringStartIsDerived}
+                                  title={duringStartIsDerived ? "Calculated from the final Before photo" : "Set the first During photo time"}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none disabled:cursor-not-allowed disabled:opacity-70"
                                 />
                                 <input 
                                   type="time" 
@@ -708,9 +690,11 @@ export default function ExifToolsPage() {
                                 <input 
                                   type="time" 
                                   placeholder="Start"
-                                  value={afterStart} 
+                                  value={afterStartIsDerived ? formatTimelineMinute(derivedAfterStart) : afterStart}
                                   onChange={(e) => setAfterStart(e.target.value)}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none"
+                                  disabled={afterStartIsDerived}
+                                  title={afterStartIsDerived ? "Calculated from the final Before or During photo" : "Set the first After photo time"}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none disabled:cursor-not-allowed disabled:opacity-70"
                                 />
                                 <input 
                                   type="time" 
