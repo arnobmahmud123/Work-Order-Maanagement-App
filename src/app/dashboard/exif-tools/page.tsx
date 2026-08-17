@@ -345,79 +345,131 @@ export default function ExifToolsPage() {
     // Parse base custom date into year/month/day
     const [year, month, day] = customDate.split("-").map(Number);
 
-    // Convert "HH:MM" string into total minutes since midnight
+    // Convert "HH:MM" to minutes since midnight. Returns -1 if empty.
     const toMins = (t: string): number => {
       if (!t) return -1;
       const [h, m] = t.split(":").map(Number);
       return h * 60 + m;
     };
 
-    // Build a Date from base date + total minutes (handles midnight crossing by adding a day)
-    const buildDate = (baseMins: number, extraDays: number): Date => {
-      const h = Math.floor(baseMins / 60) % 24;
-      const m = baseMins % 60;
-      const d = new Date(year, month - 1, day + extraDays, h, m, 0, 0);
-      return d;
+    // Build a Date from base date + minutes. dayOffset=1 means next calendar day.
+    const buildDate = (baseMins: number, dayOffset: number): Date => {
+      const clampedMins = Math.round(baseMins) % 1440;
+      const h = Math.floor(clampedMins / 60);
+      const m = clampedMins % 60;
+      return new Date(year, month - 1, day + dayOffset, h, m, 0, 0);
     };
 
-    const getDistributedTime = (
+    // Normalize a [start, end] pair so end is always >= start.
+    // If end < start, treat end as being on the next day (add 1440).
+    const normalizePair = (startMins: number, endMins: number): [number, number] => {
+      if (endMins >= 0 && endMins < startMins) return [startMins, endMins + 1440];
+      return [startMins, endMins];
+    };
+
+    // Compute chronologically-guaranteed ranges for Before, During, After.
+    // Even if user inputs conflict, this enforces: Before end < During start < During end < After start.
+    const resolveRanges = (): {
+      bS: number; bE: number;
+      dS: number; dE: number;
+      aS: number; aE: number;
+    } => {
+      const GAP = 2; // minimum minutes between categories
+      const MIN_SPAN = 5; // minimum span within a category
+
+      let bS = toMins(beforeStart);
+      let bE = toMins(beforeEnd);
+      let dS = toMins(duringStart);
+      let dE = toMins(duringEnd);
+      let aS = toMins(afterStart);
+      let aE = toMins(afterEnd);
+
+      // --- BEFORE ---
+      if (bS >= 0) {
+        [bS, bE] = normalizePair(bS, bE);
+        if (bE < 0) bE = bS + MIN_SPAN;         // no end? give it a span
+        if (bE <= bS) bE = bS + MIN_SPAN;        // end must be after start
+      }
+
+      // --- DURING: start must be strictly AFTER Before ends ---
+      if (dS >= 0) {
+        // If Before is set, push During start to be after Before end
+        if (bE >= 0 && dS <= bE) dS = bE + GAP;
+        [dS, dE] = normalizePair(dS, dE);
+        if (dE < 0) dE = dS + MIN_SPAN;
+        if (dE <= dS) dE = dS + MIN_SPAN;
+      }
+
+      // --- AFTER: start must be strictly AFTER During ends (or Before ends if no During) ---
+      if (aS >= 0) {
+        const mustBeAfter = dE >= 0 ? dE : (bE >= 0 ? bE : -1);
+        if (mustBeAfter >= 0 && aS <= mustBeAfter) aS = mustBeAfter + GAP;
+        [aS, aE] = normalizePair(aS, aE);
+        if (aE < 0) aE = aS + MIN_SPAN;
+        if (aE <= aS) aE = aS + MIN_SPAN;
+      }
+
+      return { bS, bE, dS, dE, aS, aE };
+    };
+
+    // Distribute targetPhoto evenly within [startMins, endMins] across photoList.
+    // All values are in "absolute minutes" (can exceed 1440 for midnight-crossing).
+    const distribute = (
       targetPhoto: ProcessedPhoto,
       photoList: ProcessedPhoto[],
-      startStr: string,
-      endStr: string
+      startMins: number,
+      endMins: number
     ): Date => {
-      // Sort photos chronologically by their original file modification time
+      if (startMins < 0) return buildDate(720, 0); // no start configured → fallback noon
+
       const sorted = [...photoList].sort((a, b) => a.file.lastModified - b.file.lastModified);
       const index = sorted.findIndex(p => p.id === targetPhoto.id);
-      if (index === -1) return buildDate(toMins(startStr) >= 0 ? toMins(startStr) : 720, 0);
+      if (index === -1) return buildDate(startMins % 1440, startMins >= 1440 ? 1 : 0);
 
-      const startMins = toMins(startStr);
-      if (startMins < 0) return buildDate(720, 0); // fallback noon if no start
-
-      // Handle midnight-crossing: if end time is earlier in the day than start, it means next day
-      let endMins = toMins(endStr);
-      let crossesMidnight = false;
-      if (endMins >= 0 && endMins < startMins) {
-        // End time is on the NEXT day (e.g. start=23:30, end=00:40)
-        endMins += 24 * 60;
-        crossesMidnight = true;
+      if (sorted.length <= 1 || endMins < 0 || endMins <= startMins) {
+        // Single photo or no valid range: use start time
+        return buildDate(startMins % 1440, startMins >= 1440 ? 1 : 0);
       }
 
-      // Single photo or no end time — just use start time
-      if (sorted.length <= 1 || endMins < 0) {
-        const dayOffset = 0; // start time is always on customDate
-        return buildDate(startMins % (24 * 60), dayOffset);
-      }
-
-      // Evenly distribute across the range
-      const totalSpanMins = endMins - startMins; // always positive now
-      const stepMins = totalSpanMins / (sorted.length - 1);
-      const targetMins = startMins + index * stepMins;
-
-      // If targetMins >= 1440, it rolled past midnight into the next day
-      const dayOffset = targetMins >= 24 * 60 ? 1 : 0;
-      return buildDate(Math.round(targetMins) % (24 * 60), dayOffset);
+      const span = endMins - startMins; // always positive
+      const step = span / (sorted.length - 1);
+      const targetMins = startMins + index * step;
+      const dayOffset = targetMins >= 1440 ? 1 : 0;
+      return buildDate(targetMins % 1440, dayOffset);
     };
 
-    if (useCategorizedRanges) {
-      const cat = photo.category || "none";
-      if (cat === "before") {
-        const list = photos.filter(p => p.selected && p.category === "before");
-        return getDistributedTime(photo, list, beforeStart, beforeEnd);
-      } else if (cat === "during") {
-        const list = photos.filter(p => p.selected && p.category === "during");
-        return getDistributedTime(photo, list, duringStart, duringEnd);
-      } else if (cat === "after") {
-        const list = photos.filter(p => p.selected && p.category === "after");
-        return getDistributedTime(photo, list, afterStart, afterEnd);
-      }
-      // uncategorized photos in category mode: use general range
-      const list = photos.filter(p => p.selected && p.category === "none");
-      return getDistributedTime(photo, list, customTimeStart, customTimeEnd);
+    // --- GENERAL MODE (no categories) ---
+    if (!useCategorizedRanges) {
+      const gS = toMins(customTimeStart);
+      let gE = toMins(customTimeEnd);
+      if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440; // midnight crossing
+      const generalList = photos.filter(p => p.selected);
+      return distribute(photo, generalList, gS, gE);
     }
 
-    const generalList = photos.filter(p => p.selected);
-    return getDistributedTime(photo, generalList, customTimeStart, customTimeEnd);
+    // --- CATEGORY MODE ---
+    const { bS, bE, dS, dE, aS, aE } = resolveRanges();
+    const cat = photo.category || "none";
+
+    if (cat === "before") {
+      const list = photos.filter(p => p.selected && p.category === "before");
+      return distribute(photo, list, bS, bE);
+    }
+    if (cat === "during") {
+      const list = photos.filter(p => p.selected && p.category === "during");
+      return distribute(photo, list, dS, dE);
+    }
+    if (cat === "after") {
+      const list = photos.filter(p => p.selected && p.category === "after");
+      return distribute(photo, list, aS, aE);
+    }
+
+    // Uncategorized photos in category mode → use general range
+    const gS = toMins(customTimeStart);
+    let gE = toMins(customTimeEnd);
+    if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440;
+    const uncatList = photos.filter(p => p.selected && p.category === "none");
+    return distribute(photo, uncatList, gS, gE);
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
