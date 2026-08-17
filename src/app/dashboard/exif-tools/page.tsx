@@ -149,46 +149,65 @@ export default function ExifToolsPage() {
   };
 
   // Enforce chronological progression: Before -> During -> After
+  // Handles midnight-crossing by treating times > 1440 as "next day"
   useEffect(() => {
     if (!useCategorizedRanges) return;
 
-    const bStart = parseTimeToMinutes(beforeStart);
-    let bEnd = parseTimeToMinutes(beforeEnd);
-    let dStart = parseTimeToMinutes(duringStart);
-    let dEnd = parseTimeToMinutes(duringEnd);
-    let aStart = parseTimeToMinutes(afterStart);
-    let aEnd = parseTimeToMinutes(afterEnd);
+    const p = parseTimeToMinutes;
 
-    // 1. Before End must be after Before Start (min 5 mins gap)
+    // Normalize: if end < start within a pair, end is on next day (add 1440)
+    const normalizeEnd = (start: string, end: string): number => {
+      const s = p(start);
+      let e = p(end);
+      if (s >= 0 && e >= 0 && e < s) e += 1440;
+      return e;
+    };
+
+    const bStart = p(beforeStart);
+    let bEnd = normalizeEnd(beforeStart, beforeEnd);
+    const rawDStart = p(duringStart);
+    let dStart = rawDStart;
+    let dEnd = normalizeEnd(duringStart, duringEnd);
+    const rawAStart = p(afterStart);
+    let aStart = rawAStart;
+    let aEnd = normalizeEnd(afterStart, afterEnd);
+
+    let changed = false;
+
+    // 1. Before End must be > Before Start (min 5 mins)
     if (beforeStart && beforeEnd && bEnd <= bStart) {
       bEnd = bStart + 5;
-      setBeforeEnd(minutesToTimeString(bEnd));
+      setBeforeEnd(minutesToTimeString(bEnd % 1440));
+      changed = true;
     }
 
-    // 2. During Start must be >= Before End (or Before Start)
-    const minDuringStart = beforeEnd ? bEnd : (beforeStart ? bStart : 0);
-    if (minDuringStart && dStart < minDuringStart) {
-      dStart = minDuringStart + 2; // 2 min gap
-      setDuringStart(minutesToTimeString(dStart));
+    // 2. During Start must be > Before End
+    const minDuring = beforeEnd ? bEnd : (beforeStart ? bStart : -1);
+    if (minDuring >= 0 && duringStart && dStart <= minDuring) {
+      dStart = minDuring + 2;
+      setDuringStart(minutesToTimeString(dStart % 1440));
+      changed = true;
     }
 
-    // 3. During End must be after During Start (min 5 mins gap)
+    // 3. During End must be > During Start (min 5 mins)
     if (duringStart && duringEnd && dEnd <= dStart) {
       dEnd = dStart + 5;
-      setDuringEnd(minutesToTimeString(dEnd));
+      setDuringEnd(minutesToTimeString(dEnd % 1440));
+      changed = true;
     }
 
-    // 4. After Start must be >= During End (or During Start)
-    const minAfterStart = duringEnd ? dEnd : (duringStart ? dStart : (beforeEnd ? bEnd : 0));
-    if (minAfterStart && aStart < minAfterStart) {
-      aStart = minAfterStart + 2; // 2 min gap
-      setAfterStart(minutesToTimeString(aStart));
+    // 4. After Start must be > During End
+    const minAfter = duringEnd ? dEnd : (duringStart ? dStart : (beforeEnd ? bEnd : -1));
+    if (minAfter >= 0 && afterStart && aStart <= minAfter) {
+      aStart = minAfter + 2;
+      setAfterStart(minutesToTimeString(aStart % 1440));
+      changed = true;
     }
 
-    // 5. After End must be after After Start (min 5 mins gap)
+    // 5. After End must be > After Start (min 5 mins)
     if (afterStart && afterEnd && aEnd <= aStart) {
       aEnd = aStart + 5;
-      setAfterEnd(minutesToTimeString(aEnd));
+      setAfterEnd(minutesToTimeString(aEnd % 1440));
     }
   }, [
     useCategorizedRanges,
@@ -323,9 +342,23 @@ export default function ExifToolsPage() {
       return defaultDate;
     }
 
-    // Parse base custom date
+    // Parse base custom date into year/month/day
     const [year, month, day] = customDate.split("-").map(Number);
-    const dateObj = new Date(year, month - 1, day, 12, 0, 0);
+
+    // Convert "HH:MM" string into total minutes since midnight
+    const toMins = (t: string): number => {
+      if (!t) return -1;
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    // Build a Date from base date + total minutes (handles midnight crossing by adding a day)
+    const buildDate = (baseMins: number, extraDays: number): Date => {
+      const h = Math.floor(baseMins / 60) % 24;
+      const m = baseMins % 60;
+      const d = new Date(year, month - 1, day + extraDays, h, m, 0, 0);
+      return d;
+    };
 
     const getDistributedTime = (
       targetPhoto: ProcessedPhoto,
@@ -333,43 +366,37 @@ export default function ExifToolsPage() {
       startStr: string,
       endStr: string
     ): Date => {
-      // Sort photoList chronologically by original lastModified to preserve sequence order
+      // Sort photos chronologically by their original file modification time
       const sorted = [...photoList].sort((a, b) => a.file.lastModified - b.file.lastModified);
       const index = sorted.findIndex(p => p.id === targetPhoto.id);
-      if (index === -1) return dateObj;
+      if (index === -1) return buildDate(toMins(startStr) >= 0 ? toMins(startStr) : 720, 0);
 
-      if (!startStr) return dateObj;
-      const [sh, sm] = startStr.split(":").map(Number);
-      const startTimeMs = (sh * 60 + sm) * 60 * 1000;
+      const startMins = toMins(startStr);
+      if (startMins < 0) return buildDate(720, 0); // fallback noon if no start
 
-      if (!endStr) {
-        const resDate = new Date(dateObj);
-        resDate.setHours(sh, sm, 0, 0);
-        return resDate;
+      // Handle midnight-crossing: if end time is earlier in the day than start, it means next day
+      let endMins = toMins(endStr);
+      let crossesMidnight = false;
+      if (endMins >= 0 && endMins < startMins) {
+        // End time is on the NEXT day (e.g. start=23:30, end=00:40)
+        endMins += 24 * 60;
+        crossesMidnight = true;
       }
 
-      const [eh, em] = endStr.split(":").map(Number);
-      const endTimeMs = (eh * 60 + em) * 60 * 1000;
-
-      const totalPhotos = sorted.length;
-      if (totalPhotos <= 1) {
-        const resDate = new Date(dateObj);
-        resDate.setHours(sh, sm, 0, 0);
-        return resDate;
+      // Single photo or no end time — just use start time
+      if (sorted.length <= 1 || endMins < 0) {
+        const dayOffset = 0; // start time is always on customDate
+        return buildDate(startMins % (24 * 60), dayOffset);
       }
 
-      const diffMs = endTimeMs - startTimeMs;
-      const stepMs = diffMs / (totalPhotos - 1);
-      const targetTimeMs = startTimeMs + index * stepMs;
+      // Evenly distribute across the range
+      const totalSpanMins = endMins - startMins; // always positive now
+      const stepMins = totalSpanMins / (sorted.length - 1);
+      const targetMins = startMins + index * stepMins;
 
-      const totalMinutes = Math.floor(targetTimeMs / (60 * 1000));
-      const hours = Math.floor(totalMinutes / 60) % 24;
-      const minutes = totalMinutes % 60;
-      const seconds = Math.floor((targetTimeMs % (60 * 1000)) / 1000);
-
-      const resDate = new Date(dateObj);
-      resDate.setHours(hours, minutes, seconds, 0);
-      return resDate;
+      // If targetMins >= 1440, it rolled past midnight into the next day
+      const dayOffset = targetMins >= 24 * 60 ? 1 : 0;
+      return buildDate(Math.round(targetMins) % (24 * 60), dayOffset);
     };
 
     if (useCategorizedRanges) {
@@ -384,9 +411,12 @@ export default function ExifToolsPage() {
         const list = photos.filter(p => p.selected && p.category === "after");
         return getDistributedTime(photo, list, afterStart, afterEnd);
       }
+      // uncategorized photos in category mode: use general range
+      const list = photos.filter(p => p.selected && p.category === "none");
+      return getDistributedTime(photo, list, customTimeStart, customTimeEnd);
     }
 
-    const generalList = photos.filter(p => p.selected && (!useCategorizedRanges || p.category === "none"));
+    const generalList = photos.filter(p => p.selected);
     return getDistributedTime(photo, generalList, customTimeStart, customTimeEnd);
   };
 
