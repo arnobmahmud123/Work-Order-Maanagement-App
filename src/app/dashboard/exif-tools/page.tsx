@@ -5,7 +5,7 @@ import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin, 
 import JSZip from "jszip";
 import * as piexif from "piexifjs";
 import { readEXIF, generatePhotoWithOverlay, GPSData } from "@/lib/exif";
-import { buildContinuousPhotoTimeline, formatTimelineMinute, formatTimelineMinute12h } from "@/lib/photo-timeline";
+import { buildContinuousPhotoTimeline, format12h } from "@/lib/photo-timeline";
 import { TopNav } from "@/components/layout/top-nav";
 
 interface ProcessedPhoto {
@@ -20,12 +20,6 @@ interface ProcessedPhoto {
   } | null;
   selected: boolean;
   category: "before" | "during" | "after" | "none";
-}
-
-function parseTimeToMinutes(time: string): number {
-  if (!time) return -1;
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
 }
 
 function cropAndResizeImage(
@@ -258,42 +252,20 @@ export default function ExifToolsPage() {
         sortValue: photo.file.lastModified,
       })),
       {
-        startTimeMinutes: parseTimeToMinutes(customTimeStart),
-        endTimeMinutes: customTimeEnd ? parseTimeToMinutes(customTimeEnd) : undefined,
+        customDateStr: customDate,
+        startTimeStr: customTimeStart,
+        endTimeStr: customTimeEnd,
+        defaultDate: photos[0]?.exifData?.dateTime || (photos[0]?.file ? new Date(photos[0].file.lastModified) : new Date()),
       }
     );
-  }, [photos, customTimeStart, customTimeEnd]);
+  }, [photos, customDate, customTimeStart, customTimeEnd]);
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
-    const defaultDate = photo.exifData?.dateTime || new Date(photo.file.lastModified);
-
-    // ── Parse custom date ────────────────────────────────────────────────────
-    let year: number, month: number, day: number;
-    if (customDate && customDate.includes("-")) {
-      const parts = customDate.split("-").map(Number);
-      year = parts[0]; month = parts[1]; day = parts[2];
-    } else {
-      year = defaultDate.getFullYear();
-      month = defaultDate.getMonth() + 1;
-      day = defaultDate.getDate();
+    const timedPhoto = photoTimeline.photoMap.get(photo.id);
+    if (timedPhoto) {
+      return timedPhoto.timestamp;
     }
-
-    // Build a JS Date from absolute minutes (handles one or more midnight crossings).
-    const buildDate = (absMins: number): Date => {
-      const roundedMinutes = Math.round(absMins);
-      const dayOffset = Math.floor(roundedMinutes / 1440);
-      const clamped = ((roundedMinutes % 1440) + 1440) % 1440;
-      const h = Math.floor(clamped / 60);
-      const m = clamped % 60;
-      return new Date(year, month - 1, day + dayOffset, h, m, 0, 0);
-    };
-
-    const assignedMinute = photoTimeline.photoMinutes.get(photo.id);
-    if (assignedMinute !== undefined) {
-      return buildDate(assignedMinute);
-    }
-
-    return defaultDate;
+    return photo.exifData?.dateTime || new Date(photo.file.lastModified);
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
@@ -634,28 +606,28 @@ export default function ExifToolsPage() {
                                 {photoTimeline.sections.before && (
                                   <div className="flex items-center justify-between p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
                                     <span className="font-bold uppercase text-[10px]">1. Before ({photoTimeline.sections.before.count})</span>
-                                    <span>{formatTimelineMinute12h(photoTimeline.sections.before.start)} – {formatTimelineMinute12h(photoTimeline.sections.before.end)}</span>
+                                    <span>{format12h(photoTimeline.sections.before.start)} – {format12h(photoTimeline.sections.before.end)}</span>
                                   </div>
                                 )}
 
                                 {photoTimeline.sections.during && (
                                   <div className="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
                                     <span className="font-bold uppercase text-[10px]">2. During ({photoTimeline.sections.during.count})</span>
-                                    <span>{formatTimelineMinute12h(photoTimeline.sections.during.start)} – {formatTimelineMinute12h(photoTimeline.sections.during.end)}</span>
+                                    <span>{format12h(photoTimeline.sections.during.start)} – {format12h(photoTimeline.sections.during.end)}</span>
                                   </div>
                                 )}
 
                                 {photoTimeline.sections.after && (
                                   <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                                     <span className="font-bold uppercase text-[10px]">3. After ({photoTimeline.sections.after.count})</span>
-                                    <span>{formatTimelineMinute12h(photoTimeline.sections.after.start)} – {formatTimelineMinute12h(photoTimeline.sections.after.end)}</span>
+                                    <span>{format12h(photoTimeline.sections.after.start)} – {format12h(photoTimeline.sections.after.end)}</span>
                                   </div>
                                 )}
 
                                 {photoTimeline.sections.none && (
                                   <div className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border-medium text-text-secondary">
                                     <span className="font-bold uppercase text-[10px]">Other ({photoTimeline.sections.none.count})</span>
-                                    <span>{formatTimelineMinute12h(photoTimeline.sections.none.start)} – {formatTimelineMinute12h(photoTimeline.sections.none.end)}</span>
+                                    <span>{format12h(photoTimeline.sections.none.start)} – {format12h(photoTimeline.sections.none.end)}</span>
                                   </div>
                                 )}
                               </div>

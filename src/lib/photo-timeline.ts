@@ -1,154 +1,206 @@
 export type PhotoTimelineCategory = "before" | "during" | "after" | "none";
-export type TimedPhotoCategory = Exclude<PhotoTimelineCategory, "none">;
 
-export interface TimelinePhoto {
+export interface TimelinePhotoInput {
   id: string;
   category: PhotoTimelineCategory;
-  /** A stable value used to preserve the capture/upload order within a category. */
   sortValue: number;
+  originalName?: string;
 }
 
-export interface TimelineRange {
-  start: number;
-  end: number;
+export interface TimedPhotoOutput {
+  id: string;
+  category: PhotoTimelineCategory;
+  timelineIndex: number;
+  timestamp: Date;
+  timeString12h: string;
+}
+
+export interface TimelineSectionSummary {
+  start: Date;
+  end: Date;
   count: number;
 }
 
-export interface ContinuousPhotoTimeline {
-  /** Timestamp for every photo, expressed as absolute minutes. */
-  photoMinutes: Map<string, number>;
-  /** The ordered list of all photos in chronological sequence */
-  orderedPhotos: TimelinePhoto[];
-  /** The calculated start, end, and photo count for each section. */
-  sections: Partial<Record<PhotoTimelineCategory, TimelineRange>>;
+export interface ContinuousTimelineResult {
+  orderedPhotos: TimedPhotoOutput[];
+  photoMap: Map<string, TimedPhotoOutput>;
+  sections: {
+    before?: TimelineSectionSummary;
+    during?: TimelineSectionSummary;
+    after?: TimelineSectionSummary;
+    none?: TimelineSectionSummary;
+  };
+}
+
+export function format12h(date: Date): string {
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const period = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  return `${hours}:${minutes.toString().padStart(2, "0")} ${period}`;
+}
+
+export function parseTimeString(timeStr: string): { hour: number; minute: number } | null {
+  if (!timeStr || !timeStr.includes(":")) return null;
+  const parts = timeStr.split(":").map(Number);
+  if (isNaN(parts[0]) || isNaN(parts[1])) return null;
+  return { hour: parts[0], minute: parts[1] };
 }
 
 /**
- * Builds ONE continuous chronological timeline across all photos.
+ * Builds ONE continuous, strictly forward chronological timeline across all photos.
  *
- * Strict Chronological Rules:
- * 1. Ordering: ALL Before photos -> ALL During photos -> ALL After photos -> ALL Uncategorized.
- * 2. Strict Monotonicity: Timestamp(Photo N+1) >= Timestamp(Photo N) + 1 minute.
- * 3. Before -> During transition: First During Photo >= Last Before Photo + 1 minute.
- * 4. During -> After transition: First After Photo >= Last During Photo + 1 minute.
- * 5. Hard Validation Pass: Guarantees zero backwards, duplicate, or overlapping timestamps.
+ * Fundamental Architecture:
+ * 1. Assemble ALL photos into ONE ordered list: Before -> During -> After -> None.
+ * 2. Generate timestamps using ONE sequential loop with real Date arithmetic.
+ * 3. Enforce strictly monotonic timestamps: T[i] >= T[i-1] + 1 minute.
+ * 4. Run hard validation before returning.
  */
 export function buildContinuousPhotoTimeline(
-  photos: TimelinePhoto[],
+  photos: TimelinePhotoInput[],
   options: {
-    startTimeMinutes: number; // e.g. 720 for 12:00 PM
-    endTimeMinutes?: number;   // e.g. 1080 for 6:00 PM
+    customDateStr?: string; // "YYYY-MM-DD"
+    startTimeStr?: string;  // "HH:MM"
+    endTimeStr?: string;    // "HH:MM"
+    defaultDate?: Date;
   }
-): ContinuousPhotoTimeline {
-  const photoMinutes = new Map<string, number>();
-  const sections: ContinuousPhotoTimeline["sections"] = {};
+): ContinuousTimelineResult {
+  const photoMap = new Map<string, TimedPhotoOutput>();
+  const sections: ContinuousTimelineResult["sections"] = {};
 
   if (photos.length === 0) {
-    return { photoMinutes, orderedPhotos: [], sections };
+    return { orderedPhotos: [], photoMap, sections };
   }
 
-  // 1. ORDER ALL PHOTOS BY CATEGORY: Before -> During -> After -> None
-  const bySortValue = (a: TimelinePhoto, b: TimelinePhoto) =>
-    a.sortValue !== b.sortValue ? a.sortValue - b.sortValue : a.id.localeCompare(b.id);
+  // 1. ORDER ALL PHOTOS: Before -> During -> After -> None
+  const categoryPriority: Record<PhotoTimelineCategory, number> = {
+    before: 0,
+    during: 1,
+    after: 2,
+    none: 3,
+  };
 
-  const beforePhotos = photos.filter((p) => p.category === "before").sort(bySortValue);
-  const duringPhotos = photos.filter((p) => p.category === "during").sort(bySortValue);
-  const afterPhotos = photos.filter((p) => p.category === "after").sort(bySortValue);
-  const nonePhotos = photos.filter((p) => p.category === "none").sort(bySortValue);
-
-  const orderedPhotos: TimelinePhoto[] = [
-    ...beforePhotos,
-    ...duringPhotos,
-    ...afterPhotos,
-    ...nonePhotos,
-  ];
-
-  const totalPhotos = orderedPhotos.length;
-  const startMin = options.startTimeMinutes >= 0 ? options.startTimeMinutes : 600; // Default 10:00 AM
-  let endMin = options.endTimeMinutes !== undefined && options.endTimeMinutes >= 0 
-    ? options.endTimeMinutes 
-    : -1;
-
-  if (endMin >= 0 && endMin < startMin) {
-    endMin += 1440; // Midnight crossing
-  }
-
-  // Ensure endMin allows at least 1 minute per photo
-  const minRequiredEnd = startMin + totalPhotos - 1;
-  if (endMin < minRequiredEnd) {
-    endMin = minRequiredEnd;
-  }
-
-  // 2. GENERATE CONTINUOUS TIMELINE (ONE CLOCK ACROSS ALL PHOTOS)
-  const step = totalPhotos <= 1 ? 0 : (endMin - startMin) / (totalPhotos - 1);
-  const generatedMinutes: number[] = [];
-
-  for (let i = 0; i < totalPhotos; i++) {
-    if (i === totalPhotos - 1) {
-      generatedMinutes.push(endMin);
-    } else {
-      generatedMinutes.push(Math.round(startMin + i * step));
-    }
-  }
-
-  // 3. HARD VALIDATION PASS (NON-NEGOTIABLE SAFETY CONSTRAINT)
-  // Every next photo MUST have a timestamp strictly greater than previous photo (+1 min minimum)
-  for (let i = 1; i < totalPhotos; i++) {
-    if (generatedMinutes[i] <= generatedMinutes[i - 1]) {
-      generatedMinutes[i] = generatedMinutes[i - 1] + 1;
-    }
-  }
-
-  // 4. MAP TO PHOTO IDS AND POPULATE SECTIONS
-  orderedPhotos.forEach((photo, index) => {
-    photoMinutes.set(photo.id, generatedMinutes[index]);
+  const sortedPhotos = [...photos].sort((a, b) => {
+    const catDiff = categoryPriority[a.category] - categoryPriority[b.category];
+    if (catDiff !== 0) return catDiff;
+    if (a.sortValue !== b.sortValue) return a.sortValue - b.sortValue;
+    return a.id.localeCompare(b.id);
   });
 
-  const getSectionRange = (catPhotos: TimelinePhoto[]) => {
+  // 2. PARSE BASE DATE (Year, Month, Day)
+  const baseDateObj = options.defaultDate || new Date();
+  let year = baseDateObj.getFullYear();
+  let month = baseDateObj.getMonth() + 1;
+  let day = baseDateObj.getDate();
+
+  if (options.customDateStr && options.customDateStr.includes("-")) {
+    const parts = options.customDateStr.split("-").map(Number);
+    if (!isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      year = parts[0];
+      month = parts[1];
+      day = parts[2];
+    }
+  }
+
+  // 3. PARSE START & END TIMES
+  const parsedStart = parseTimeString(options.startTimeStr || "");
+  const startHour = parsedStart ? parsedStart.hour : 10;
+  const startMinute = parsedStart ? parsedStart.minute : 0;
+
+  const startDate = new Date(year, month - 1, day, startHour, startMinute, 0, 0);
+
+  const parsedEnd = parseTimeString(options.endTimeStr || "");
+  let endDate: Date | null = null;
+  if (parsedEnd) {
+    endDate = new Date(year, month - 1, day, parsedEnd.hour, parsedEnd.minute, 0, 0);
+    if (endDate.getTime() <= startDate.getTime()) {
+      // Midnight crossing: advance end date to the next day
+      endDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+  }
+
+  const totalPhotos = sortedPhotos.length;
+
+  // Ensure endDate (if provided) allows at least 1 minute per photo
+  const minRequiredEndDate = new Date(startDate.getTime() + (totalPhotos - 1) * 60 * 1000);
+  if (endDate && endDate.getTime() < minRequiredEndDate.getTime()) {
+    endDate = minRequiredEndDate;
+  }
+
+  // 4. ONE SEQUENTIAL GENERATION LOOP
+  const stepMs = totalPhotos <= 1 || !endDate
+    ? 60 * 1000 // Default 1 minute step
+    : (endDate.getTime() - startDate.getTime()) / (totalPhotos - 1);
+
+  const orderedPhotos: TimedPhotoOutput[] = [];
+
+  for (let i = 0; i < totalPhotos; i++) {
+    let assignedMs: number;
+    if (i === 0) {
+      assignedMs = startDate.getTime();
+    } else if (endDate && i === totalPhotos - 1) {
+      assignedMs = endDate.getTime();
+    } else {
+      assignedMs = Math.round(startDate.getTime() + i * stepMs);
+    }
+
+    // Mathematical Dependency: next photo MUST be strictly after previous photo
+    if (i > 0) {
+      const prevMs = orderedPhotos[i - 1].timestamp.getTime();
+      if (assignedMs <= prevMs) {
+        assignedMs = prevMs + 60 * 1000;
+      }
+    }
+
+    const photoDate = new Date(assignedMs);
+    photoDate.setSeconds(0, 0);
+
+    if (i > 0) {
+      const prevDate = orderedPhotos[i - 1].timestamp;
+      if (photoDate.getTime() <= prevDate.getTime()) {
+        photoDate.setTime(prevDate.getTime() + 60 * 1000);
+      }
+    }
+
+    const output: TimedPhotoOutput = {
+      id: sortedPhotos[i].id,
+      category: sortedPhotos[i].category,
+      timelineIndex: i,
+      timestamp: photoDate,
+      timeString12h: format12h(photoDate),
+    };
+
+    orderedPhotos.push(output);
+    photoMap.set(output.id, output);
+  }
+
+  // 5. HARD VALIDATION PASS OVER THE COMPLETE ARRAY
+  for (let i = 1; i < orderedPhotos.length; i++) {
+    const prev = orderedPhotos[i - 1];
+    const curr = orderedPhotos[i];
+    if (curr.timestamp.getTime() <= prev.timestamp.getTime()) {
+      throw new Error(
+        `TIMELINE VALIDATION FAILED: Photo #${curr.timelineIndex + 1} (${curr.id} - ${curr.timeString12h}) is not later than Photo #${prev.timelineIndex + 1} (${prev.id} - ${prev.timeString12h})`
+      );
+    }
+  }
+
+  // 6. POPULATE SECTION SUMMARIES
+  const getSectionSummary = (cat: PhotoTimelineCategory): TimelineSectionSummary | undefined => {
+    const catPhotos = orderedPhotos.filter((p) => p.category === cat);
     if (catPhotos.length === 0) return undefined;
-    const firstId = catPhotos[0].id;
-    const lastId = catPhotos[catPhotos.length - 1].id;
     return {
-      start: photoMinutes.get(firstId)!,
-      end: photoMinutes.get(lastId)!,
+      start: catPhotos[0].timestamp,
+      end: catPhotos[catPhotos.length - 1].timestamp,
       count: catPhotos.length,
     };
   };
 
-  sections.before = getSectionRange(beforePhotos);
-  sections.during = getSectionRange(duringPhotos);
-  sections.after = getSectionRange(afterPhotos);
-  sections.none = getSectionRange(nonePhotos);
+  sections.before = getSectionSummary("before");
+  sections.during = getSectionSummary("during");
+  sections.after = getSectionSummary("after");
+  sections.none = getSectionSummary("none");
 
-  return { photoMinutes, orderedPhotos, sections };
-}
-
-// Backward compatibility alias for legacy callers
-export const createContinuousPhotoTimeline = (
-  photos: TimelinePhoto[],
-  ranges?: any
-) => {
-  const start = ranges?.before?.start ?? ranges?.during?.start ?? 600;
-  const end = ranges?.after?.end ?? ranges?.during?.end ?? ranges?.before?.end ?? -1;
-  return buildContinuousPhotoTimeline(photos, {
-    startTimeMinutes: start,
-    endTimeMinutes: end,
-  });
-};
-
-export function formatTimelineMinute(minutes: number): string {
-  const clockMinutes = ((minutes % 1440) + 1440) % 1440;
-  const hour = Math.floor(clockMinutes / 60);
-  const minute = clockMinutes % 60;
-  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
-}
-
-export function formatTimelineMinute12h(minutes: number): string {
-  const clockMinutes = ((minutes % 1440) + 1440) % 1440;
-  let hour = Math.floor(clockMinutes / 60);
-  const minute = clockMinutes % 60;
-  const period = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12;
-  if (hour === 0) hour = 12;
-  return `${hour}:${minute.toString().padStart(2, "0")} ${period}`;
+  return { orderedPhotos, photoMap, sections };
 }
