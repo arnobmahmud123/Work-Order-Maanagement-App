@@ -297,22 +297,62 @@ export default function ExifToolsPage() {
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
-    const targetPhotos = onlySelected ? photos.filter(p => p.selected) : photos;
-    if (targetPhotos.length === 0) return;
+    const targetOrdered = onlySelected 
+      ? photoTimeline.orderedPhotos.filter(tp => {
+          const original = photos.find(o => o.id === tp.id);
+          return original?.selected;
+        })
+      : photoTimeline.orderedPhotos;
+      
+    if (targetOrdered.length === 0) return;
     
     setIsProcessing(true);
     try {
+      // 1. Prepare Ordered Photos with strictly computed timestamps
+      const timelineItems = targetOrdered.map((tp, index) => {
+        const photoObj = photos.find(p => p.id === tp.id)!;
+        const effectiveDate = getEffectiveDateTime(photoObj);
+        return {
+          photo: photoObj,
+          index,
+          category: photoObj.category,
+          filename: photoObj.file.name,
+          timestamp: effectiveDate,
+        };
+      });
+
+      // 2. REQUIRED HARD VALIDATION (Rule 10 & 11)
+      for (let i = 1; i < timelineItems.length; i++) {
+        const prev = timelineItems[i - 1];
+        const curr = timelineItems[i];
+        if (curr.timestamp.getTime() <= prev.timestamp.getTime()) {
+          throw new Error(
+            `INVALID TIMELINE: Photo #${curr.index + 1} ${curr.filename} (${curr.timestamp.toLocaleTimeString()}) must be strictly later than Photo #${prev.index + 1} ${prev.filename} (${prev.timestamp.toLocaleTimeString()})`
+          );
+        }
+      }
+
+      // 3. REQUIRED DEBUG LOG OUTPUT (Rule 15)
+      console.log("=================== TIMELINE ===================");
+      timelineItems.forEach(({ index, category, filename, timestamp }) => {
+        const idxStr = (index + 1).toString().padStart(2, "0");
+        const catStr = category.toUpperCase().padEnd(7, " ");
+        const timeStr = timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+        console.log(`${idxStr} | ${catStr} | ${filename} | ${timeStr}`);
+      });
+      console.log("================================================");
+
       const zip = new JSZip();
       
-      for (let i = 0; i < targetPhotos.length; i++) {
-        const p = targetPhotos[i];
+      for (let i = 0; i < timelineItems.length; i++) {
+        const item = timelineItems[i];
+        const p = item.photo;
+        const effectiveDate = item.timestamp;
+        const effectiveGPS = getEffectiveGPS(p);
+        
         const img = new Image();
         img.src = p.previewUrl;
-        
         await new Promise((resolve) => { img.onload = resolve; });
-        
-        const effectiveDate = getEffectiveDateTime(p);
-        const effectiveGPS = getEffectiveGPS(p);
         
         // 1. Crop and Resize first
         const croppedCanvas = cropAndResizeImage(img, cropRatio, maxDimension);
@@ -323,13 +363,13 @@ export default function ExifToolsPage() {
           gps: effectiveGPS
         }, {
           showDate: printTimestamp,
-          showTime: printTimestamp && downloadMode !== "date",
+          showTime: printTimestamp,
           showGPS: false,
           showAddress: false,
           position: "bottom-right",
           fontColor: "#FFFF00", // Standard yellow for property preservation
           backgroundColor: "rgba(0,0,0,0)", // Transparent background
-          fontSize: Math.max(20, Math.floor(croppedCanvas.width * 0.03)), // Scale font size based on new image width
+          fontSize: Math.max(20, Math.floor(croppedCanvas.width * 0.03)),
           dateFormat: "MM/DD/YYYY",
           format: "12h"
         });
@@ -339,7 +379,7 @@ export default function ExifToolsPage() {
         const jpegDataUrl = canvas.toDataURL("image/jpeg", qualityDecimal);
         let finalBlob: Blob | null = null;
         
-        // 4. Load the original EXIF and merge date/time overrides to preserve GPS & camera metadata
+        // 4. Load original EXIF to preserve GPS & camera hardware tags
         let exifObj: any = { "0th": {}, "Exif": {}, "GPS": {} };
         try {
           const originalDataUrl = await new Promise<string>((resolve, reject) => {
@@ -353,116 +393,102 @@ export default function ExifToolsPage() {
           console.warn("Could not load original EXIF, creating fresh structure", e);
         }
         
-        try {
-          let finalJpegDataUrl = jpegDataUrl;
+        let finalJpegDataUrl = jpegDataUrl;
+        
+        if (!stripEXIF) {
+          // Format date for standard EXIF (YYYY:MM:DD HH:MM:SS)
+          const pad = (n: number) => n.toString().padStart(2, "0");
+          const exifDateStr = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())} ${pad(effectiveDate.getHours())}:${pad(effectiveDate.getMinutes())}:${pad(effectiveDate.getSeconds())}`;
           
-          if (!stripEXIF) {
-            // Format date for EXIF (YYYY:MM:DD HH:MM:SS)
-            const pad = (n: number) => n.toString().padStart(2, "0");
-            const exifDateStr = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())} ${pad(effectiveDate.getHours())}:${pad(effectiveDate.getMinutes())}:${pad(effectiveDate.getSeconds())}`;
+          if (!exifObj["0th"]) exifObj["0th"] = {};
+          if (!exifObj["Exif"]) exifObj["Exif"] = {};
+          if (!exifObj["GPS"]) exifObj["GPS"] = {};
+          
+          // Clean unhandled / proprietary tags that cause piexif.dump to crash
+          delete exifObj["thumbnail"];
+          delete exifObj["1st"];
+          if (exifObj["Exif"]) {
+            delete exifObj["Exif"][37500]; // MakerNote
+            delete exifObj["Exif"][37510]; // UserComment
+          }
+          
+          // Strict EXIF capture timestamps
+          exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
+          exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
+          exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
+          
+          if (effectiveGPS) {
+            const latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
+            const lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
             
-            if (!exifObj["0th"]) exifObj["0th"] = {};
-            if (!exifObj["Exif"]) exifObj["Exif"] = {};
-            if (!exifObj["GPS"]) exifObj["GPS"] = {};
+            const absLat = Math.abs(effectiveGPS.latitude);
+            const latD = Math.floor(absLat);
+            const latM = Math.floor((absLat - latD) * 60);
+            const latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
             
-            // Clean unhandled / proprietary tags that cause piexif.dump to crash
-            delete exifObj["thumbnail"];
-            delete exifObj["1st"];
-            if (exifObj["Exif"]) {
-              delete exifObj["Exif"][37500]; // MakerNote
-              delete exifObj["Exif"][37510]; // UserComment
-            }
+            const absLng = Math.abs(effectiveGPS.longitude);
+            const lngD = Math.floor(absLng);
+            const lngM = Math.floor((absLng - lngD) * 60);
+            const lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
             
-            exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
-            exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
-            exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
+            exifObj["GPS"][piexif.GPSIFD.GPSDateStamp] = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())}`;
+            exifObj["GPS"][piexif.GPSIFD.GPSTimeStamp] = [[effectiveDate.getHours(), 1], [effectiveDate.getMinutes(), 1], [effectiveDate.getSeconds(), 1]];
+          }
+          
+          let exifBytes: string;
+          try {
+            exifBytes = piexif.dump(exifObj);
+          } catch (dumpErr) {
+            console.warn("Merged EXIF dump failed, creating clean standard EXIF", dumpErr);
+            const cleanExif: any = {
+              "0th": {
+                [piexif.ImageIFD.DateTime]: exifDateStr,
+                [piexif.ImageIFD.Orientation]: 1,
+                [piexif.ImageIFD.Software]: "PropertyPreserve App",
+              },
+              "Exif": {
+                [piexif.ExifIFD.DateTimeOriginal]: exifDateStr,
+                [piexif.ExifIFD.DateTimeDigitized]: exifDateStr,
+                [piexif.ExifIFD.ExifVersion]: "0232",
+              },
+              "GPS": exifObj["GPS"] || {}
+            };
+            if (exifObj["0th"]?.[piexif.ImageIFD.Make]) cleanExif["0th"][piexif.ImageIFD.Make] = exifObj["0th"][piexif.ImageIFD.Make];
+            if (exifObj["0th"]?.[piexif.ImageIFD.Model]) cleanExif["0th"][piexif.ImageIFD.Model] = exifObj["0th"][piexif.ImageIFD.Model];
             
-            let latRef = "N";
-            let lngRef = "E";
-            let latD = 0, latM = 0, latS = 0;
-            let lngD = 0, lngM = 0, lngS = 0;
-            
-            if (effectiveGPS) {
-              latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
-              lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
-              
-              const absLat = Math.abs(effectiveGPS.latitude);
-              latD = Math.floor(absLat);
-              latM = Math.floor((absLat - latD) * 60);
-              latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
-              
-              const absLng = Math.abs(effectiveGPS.longitude);
-              lngD = Math.floor(absLng);
-              lngM = Math.floor((absLng - lngD) * 60);
-              lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
-              
-              exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
-              exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
-              exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
-              exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
-              exifObj["GPS"][piexif.GPSIFD.GPSDateStamp] = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())}`;
-              exifObj["GPS"][piexif.GPSIFD.GPSTimeStamp] = [[effectiveDate.getHours(), 1], [effectiveDate.getMinutes(), 1], [effectiveDate.getSeconds(), 1]];
-              
-              if (effectiveGPS.altitude !== undefined) {
-                exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] = effectiveGPS.altitude >= 0 ? 0 : 1;
-                exifObj["GPS"][piexif.GPSIFD.GPSAltitude] = [Math.round(Math.abs(effectiveGPS.altitude) * 100), 100];
-              }
-            }
-            
-            let exifBytes: string;
-            try {
-              exifBytes = piexif.dump(exifObj);
-            } catch (dumpErr) {
-              console.warn("Merged EXIF dump failed, creating clean standard EXIF", dumpErr);
-              const cleanExif: any = {
-                "0th": {
-                  [piexif.ImageIFD.DateTime]: exifDateStr,
-                  [piexif.ImageIFD.Orientation]: 1,
-                  [piexif.ImageIFD.Software]: "PropertyPreserve App",
-                },
-                "Exif": {
-                  [piexif.ExifIFD.DateTimeOriginal]: exifDateStr,
-                  [piexif.ExifIFD.DateTimeDigitized]: exifDateStr,
-                  [piexif.ExifIFD.ExifVersion]: "0232",
-                },
-                "GPS": {}
-              };
-              if (exifObj["0th"]?.[piexif.ImageIFD.Make]) cleanExif["0th"][piexif.ImageIFD.Make] = exifObj["0th"][piexif.ImageIFD.Make];
-              if (exifObj["0th"]?.[piexif.ImageIFD.Model]) cleanExif["0th"][piexif.ImageIFD.Model] = exifObj["0th"][piexif.ImageIFD.Model];
-              
-              if (effectiveGPS) {
-                cleanExif["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
-                cleanExif["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
-                cleanExif["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
-                cleanExif["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
-                cleanExif["GPS"][piexif.GPSIFD.GPSDateStamp] = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())}`;
-                cleanExif["GPS"][piexif.GPSIFD.GPSTimeStamp] = [[effectiveDate.getHours(), 1], [effectiveDate.getMinutes(), 1], [effectiveDate.getSeconds(), 1]];
-              }
-              exifBytes = piexif.dump(cleanExif);
-            }
-            
+            exifBytes = piexif.dump(cleanExif);
+          }
+          
+          try {
             finalJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
+            
+            // Post-write EXIF Verification (Rule 12)
+            const verifyExif = piexif.load(finalJpegDataUrl);
+            const writtenDate = verifyExif["Exif"]?.[piexif.ExifIFD.DateTimeOriginal];
+            if (writtenDate !== exifDateStr) {
+              console.warn(`EXIF post-validation mismatch for ${p.file.name}: expected ${exifDateStr}, got ${writtenDate}`);
+            }
+          } catch (insertErr) {
+            console.warn("piexif.insert failed, using canvas output", insertErr);
           }
-          
-          // Convert data URI back to Blob
-          const byteString = atob(finalJpegDataUrl.split(',')[1]);
-          const ab = new ArrayBuffer(byteString.length);
-          const ia = new Uint8Array(ab);
-          for (let k = 0; k < byteString.length; k++) {
-            ia[k] = byteString.charCodeAt(k);
-          }
-          finalBlob = new Blob([ab], { type: "image/jpeg" });
-        } catch (e) {
-          console.warn("Could not inject EXIF data", e);
-          // Fallback if piexif fails
-          finalBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', qualityDecimal));
         }
         
+        // Convert data URI back to Blob
+        const byteString = atob(finalJpegDataUrl.split(',')[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let k = 0; k < byteString.length; k++) {
+          ia[k] = byteString.charCodeAt(k);
+        }
+        finalBlob = new Blob([ab], { type: "image/jpeg" });
+        
         if (finalBlob) {
-          // Generate a filename based on original or index
           const originalName = p.file.name.replace(/\.[^/.]+$/, "");
-          const ext = "jpg";
-          zip.file(`${originalName}_stamped.${ext}`, finalBlob, { date: effectiveDate });
+          zip.file(`${originalName}_stamped.jpg`, finalBlob, { date: effectiveDate });
         }
       }
       
@@ -470,15 +496,15 @@ export default function ExifToolsPage() {
       const downloadUrl = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = downloadUrl;
-      a.download = `Bulk_Photos_${new Date().getTime()}.zip`;
+      a.download = `WorkOrder_Photos_${new Date().getTime()}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(downloadUrl);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error processing photos", err);
-      alert("An error occurred while processing the photos.");
+      alert(err?.message || "An error occurred while processing the photos.");
     } finally {
       setIsProcessing(false);
     }
@@ -812,12 +838,9 @@ export default function ExifToolsPage() {
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {[...photos].sort((a, b) => {
-                      const tA = getEffectiveDateTime(a).getTime();
-                      const tB = getEffectiveDateTime(b).getTime();
-                      if (tA !== tB) return tA - tB;
-                      return a.file.lastModified - b.file.lastModified;
-                    }).map((photo) => {
+                    {photoTimeline.orderedPhotos.map((tp, index) => {
+                      const photo = photos.find(p => p.id === tp.id);
+                      if (!photo) return null;
                       const effDate = getEffectiveDateTime(photo);
                       const effGPS = getEffectiveGPS(photo);
                       return (
@@ -830,9 +853,14 @@ export default function ExifToolsPage() {
                         >
                           <img src={photo.previewUrl} alt="Preview" className="w-full h-full object-cover" />
                           
-                          {/* Selection Indicator */}
-                          <div className="absolute top-2 left-2 w-5 h-5 rounded-md border-2 border-white bg-black/40 flex items-center justify-center backdrop-blur-sm">
-                            {photo.selected && <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />}
+                          {/* Selection Indicator & Timeline Sequence Index */}
+                          <div className="absolute top-2 left-2 flex items-center gap-1.5 z-20">
+                            <div className="w-5 h-5 rounded-md border-2 border-white bg-black/40 flex items-center justify-center backdrop-blur-sm">
+                              {photo.selected && <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />}
+                            </div>
+                            <span className="px-1.5 py-0.5 rounded bg-black/70 border border-white/20 text-[10px] font-mono font-bold text-white shadow backdrop-blur-sm">
+                              #{index + 1}
+                            </span>
                           </div>
  
                           {/* Category Toggles (Before/During/After) */}
