@@ -291,18 +291,19 @@ export default function ExifToolsPage() {
 
     // ── Distribute across sortedList ─────────────────────────────────────────
     const assignTime = (sortedList: ProcessedPhoto[], startMins: number, endMins: number): Date => {
-      if (startMins < 0) return defaultDate;
+      const fallbackMins = defaultDate.getHours() * 60 + defaultDate.getMinutes();
+      const s = startMins >= 0 ? startMins : fallbackMins;
       const idx = sortedList.findIndex(p => p.id === photo.id);
-      if (idx === -1) return buildDate(startMins);
-      if (sortedList.length <= 1) return buildDate(startMins);
+      if (idx === -1) return buildDate(s);
+      if (sortedList.length <= 1) return buildDate(s);
 
-      // If no valid end time provided, increment by 1 minute per photo
-      if (endMins < 0 || endMins <= startMins) {
-        return buildDate(startMins + idx);
+      // If no valid end time provided, increment by 1 minute per photo if start was configured
+      if (endMins < 0 || endMins <= s) {
+        return buildDate(startMins >= 0 ? s + idx : s);
       }
 
-      const step = (endMins - startMins) / (sortedList.length - 1);
-      return buildDate(startMins + idx * step);
+      const step = (endMins - s) / (sortedList.length - 1);
+      return buildDate(s + idx * step);
     };
 
     // ════════════════════════════════════════════════════════════════════════
@@ -310,9 +311,8 @@ export default function ExifToolsPage() {
     // ════════════════════════════════════════════════════════════════════════
     if (!useCategorizedRanges) {
       const gS = parseTimeToMinutes(customTimeStart);
-      if (gS < 0) return defaultDate;
       let gE = parseTimeToMinutes(customTimeEnd);
-      if (gE >= 0 && gE < gS) gE += 1440; // midnight crossing
+      if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440; // midnight crossing
 
       const sel = (cat: string) =>
         photos.filter(p => p.category === cat).sort(byMod);
@@ -375,8 +375,8 @@ export default function ExifToolsPage() {
           dateTime: effectiveDate,
           gps: effectiveGPS
         }, {
-          showDate: printTimestamp && (downloadMode !== "custom" || !!customDate),
-          showTime: printTimestamp && (downloadMode === "datetime" || (downloadMode === "custom" && (!!customTimeStart || useCategorizedRanges))),
+          showDate: printTimestamp,
+          showTime: printTimestamp && downloadMode !== "date",
           showGPS: false,
           showAddress: false,
           position: "bottom-right",
