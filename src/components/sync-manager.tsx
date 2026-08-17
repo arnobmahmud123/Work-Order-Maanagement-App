@@ -34,10 +34,11 @@ export function SyncManager() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Register Service Worker
+    // Register and update Service Worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").then((reg) => {
-        console.log("Service Worker registered:", reg.scope);
+        reg.update();
+        console.log("Service Worker registered and updated:", reg.scope);
       }).catch((err) => {
         console.error("Service Worker registration failed:", err);
       });
