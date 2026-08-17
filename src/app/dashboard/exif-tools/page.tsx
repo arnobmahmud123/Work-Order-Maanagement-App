@@ -338,162 +338,129 @@ export default function ExifToolsPage() {
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
     const defaultDate = photo.exifData?.dateTime || new Date(photo.file.lastModified);
-    if (downloadMode !== "custom") {
-      return defaultDate;
-    }
+    if (downloadMode !== "custom") return defaultDate;
 
-    // Determine base custom date (fallback to photo's defaultDate or today if not set)
+    // ── Parse custom date ────────────────────────────────────────────────────
     let year: number, month: number, day: number;
     if (customDate && customDate.includes("-")) {
       const parts = customDate.split("-").map(Number);
-      year = parts[0];
-      month = parts[1];
-      day = parts[2];
+      year = parts[0]; month = parts[1]; day = parts[2];
     } else {
       year = defaultDate.getFullYear();
       month = defaultDate.getMonth() + 1;
       day = defaultDate.getDate();
     }
 
-    // Convert "HH:MM" to minutes since midnight. Returns -1 if empty.
+    // Convert "HH:MM" string → minutes since midnight. -1 = not set.
     const toMins = (t: string): number => {
       if (!t) return -1;
       const [h, m] = t.split(":").map(Number);
       return h * 60 + m;
     };
 
-    // Build a Date from base date + minutes. dayOffset=1 means next calendar day.
-    const buildDate = (baseMins: number, dayOffset: number): Date => {
-      const clampedMins = Math.round(baseMins) % 1440;
-      const h = Math.floor(clampedMins / 60);
-      const m = clampedMins % 60;
+    // Build a JS Date from absolute minutes (handles midnight crossing: >1440 = next day).
+    const buildDate = (absMins: number): Date => {
+      const dayOffset = absMins >= 1440 ? 1 : 0;
+      const clamped = Math.round(absMins) % 1440;
+      const h = Math.floor(clamped / 60);
+      const m = clamped % 60;
       return new Date(year, month - 1, day + dayOffset, h, m, 0, 0);
     };
 
-    // Normalize a [start, end] pair so end is always >= start.
-    // If end < start, treat end as being on the next day (add 1440).
-    const normalizePair = (startMins: number, endMins: number): [number, number] => {
-      if (endMins >= 0 && endMins < startMins) return [startMins, endMins + 1440];
-      return [startMins, endMins];
+    // Normalize [start, end] so end >= start. If end < start, it's next day.
+    const normPair = (s: number, e: number): [number, number] =>
+      (e >= 0 && e < s) ? [s, e + 1440] : [s, e];
+
+    // ── Sort key ─────────────────────────────────────────────────────────────
+    // Priority: before=0 → during=1 → after=2 → none=3
+    // Tie-break: file.lastModified asc, then id asc (stable)
+    const CAT: Record<string, number> = { before: 0, during: 1, after: 2, none: 3 };
+    const byTimeline = (a: ProcessedPhoto, b: ProcessedPhoto): number => {
+      const ca = CAT[a.category] ?? 3, cb = CAT[b.category] ?? 3;
+      if (ca !== cb) return ca - cb;
+      if (a.file.lastModified !== b.file.lastModified)
+        return a.file.lastModified - b.file.lastModified;
+      return a.id.localeCompare(b.id);
     };
 
-    // Compute chronologically-guaranteed ranges for Before, During, After.
-    // Even if user inputs conflict, this enforces: Before end < During start < During end < After start.
-    const resolveRanges = (): {
-      bS: number; bE: number;
-      dS: number; dE: number;
-      aS: number; aE: number;
-    } => {
-      const GAP = 2; // minimum minutes between categories
-      const MIN_SPAN = 5; // minimum span within a category
-
-      let bS = toMins(beforeStart);
-      let bE = toMins(beforeEnd);
-      let dS = toMins(duringStart);
-      let dE = toMins(duringEnd);
-      let aS = toMins(afterStart);
-      let aE = toMins(afterEnd);
-
-      // --- BEFORE ---
-      if (bS >= 0) {
-        [bS, bE] = normalizePair(bS, bE);
-        if (bE < 0) bE = bS + MIN_SPAN;         // no end? give it a span
-        if (bE <= bS) bE = bS + MIN_SPAN;        // end must be after start
-      }
-
-      // --- DURING: start must be strictly AFTER Before ends ---
-      if (dS >= 0) {
-        // If Before is set, push During start to be after Before end
-        if (bE >= 0 && dS <= bE) dS = bE + GAP;
-        [dS, dE] = normalizePair(dS, dE);
-        if (dE < 0) dE = dS + MIN_SPAN;
-        if (dE <= dS) dE = dS + MIN_SPAN;
-      }
-
-      // --- AFTER: start must be strictly AFTER During ends (or Before ends if no During) ---
-      if (aS >= 0) {
-        const mustBeAfter = dE >= 0 ? dE : (bE >= 0 ? bE : -1);
-        if (mustBeAfter >= 0 && aS <= mustBeAfter) aS = mustBeAfter + GAP;
-        [aS, aE] = normalizePair(aS, aE);
-        if (aE < 0) aE = aS + MIN_SPAN;
-        if (aE <= aS) aE = aS + MIN_SPAN;
-      }
-
-      return { bS, bE, dS, dE, aS, aE };
+    // ── Distribute ───────────────────────────────────────────────────────────
+    // Find this photo's index in sortedList, then assign an evenly-spaced time
+    // from startMins to endMins. Only SELECTED photos should be in sortedList.
+    const assignTime = (sortedList: ProcessedPhoto[], startMins: number, endMins: number): Date => {
+      if (startMins < 0) return defaultDate;
+      const idx = sortedList.findIndex(p => p.id === photo.id);
+      if (idx === -1) return buildDate(startMins);
+      if (sortedList.length <= 1 || endMins < 0 || endMins <= startMins)
+        return buildDate(startMins);
+      const step = (endMins - startMins) / (sortedList.length - 1);
+      return buildDate(startMins + idx * step);
     };
 
-    // Sort helpers: stable sorting by file.lastModified, then id
-    const byLastModified = (a: ProcessedPhoto, b: ProcessedPhoto) =>
-      (a.file.lastModified - b.file.lastModified) || a.id.localeCompare(b.id);
-
-    // Category priority: before=0, during=1, after=2, none=3
-    const catPriority = (c: string | undefined) =>
-      c === "before" ? 0 : c === "during" ? 1 : c === "after" ? 2 : 3;
-
-    // Distribute targetPhoto evenly within [startMins, endMins] across an ALREADY-SORTED list.
-    // caller is responsible for sorting — this function just uses the index.
-    const distribute = (
-      targetPhoto: ProcessedPhoto,
-      sortedList: ProcessedPhoto[],
-      startMins: number,
-      endMins: number
-    ): Date => {
-      if (startMins < 0) return buildDate(720, 0); // fallback noon if no start
-
-      const index = sortedList.findIndex(p => p.id === targetPhoto.id);
-      if (index === -1) return buildDate(startMins % 1440, startMins >= 1440 ? 1 : 0);
-
-      if (sortedList.length <= 1 || endMins < 0 || endMins <= startMins) {
-        return buildDate(startMins % 1440, startMins >= 1440 ? 1 : 0);
-      }
-
-      const span = endMins - startMins; // always positive
-      const step = span / (sortedList.length - 1);
-      const targetMins = startMins + index * step;
-      const dayOffset = targetMins >= 1440 ? 1 : 0;
-      return buildDate(targetMins % 1440, dayOffset);
-    };
-
-    // --- GENERAL MODE (no categories) ---
-    // Sort by category order FIRST (Before → During → After → none), then by lastModified.
-    // This ensures Before photos always get earlier times than During, and During before After,
-    // regardless of the original file modification timestamps.
+    // ════════════════════════════════════════════════════════════════════════
+    // GENERAL MODE — Single continuous timeline
+    //
+    //   Start ──► [All Before photos] ──► [All During photos] ──► [All After photos] ──► End
+    //
+    // The full selected photo set is sorted Before→During→After→None, then
+    // distributed evenly from customTimeStart to customTimeEnd.
+    // The boundary between categories is automatic — no manual sub-ranges needed.
+    // ════════════════════════════════════════════════════════════════════════
     if (!useCategorizedRanges) {
       const gS = toMins(customTimeStart);
+      if (gS < 0) return defaultDate; // no start time → return original
       let gE = toMins(customTimeEnd);
-      if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440; // midnight crossing
-      const generalList = [...photos].sort((a, b) => {
-        const pa = catPriority(a.category);
-        const pb = catPriority(b.category);
-        return pa !== pb ? pa - pb : byLastModified(a, b);
-      });
-      return distribute(photo, generalList, gS, gE);
+      if (gE >= 0 && gE < gS) gE += 1440; // midnight crossing (e.g. 11PM → 1AM)
+
+      // Build timeline from ONLY selected photos, sorted by category then lastModified
+      const timeline = photos.filter(p => p.selected).sort(byTimeline);
+      return assignTime(timeline, gS, gE);
     }
 
-    // --- CATEGORY MODE ---
-    // resolveRanges() enforces Before end < During start < During end < After start.
-    const { bS, bE, dS, dE, aS, aE } = resolveRanges();
+    // ════════════════════════════════════════════════════════════════════════
+    // CATEGORY MODE — Each category has its own independent time range
+    //
+    // Enforces chronological order: Before end < During start < During end < After start
+    // ════════════════════════════════════════════════════════════════════════
+    const GAP = 1;      // 1-minute minimum gap between category boundaries
+    const SPAN = 5;     // 5-minute minimum span within a category
+
+    let bS = toMins(beforeStart), bE = toMins(beforeEnd);
+    let dS = toMins(duringStart), dE = toMins(duringEnd);
+    let aS = toMins(afterStart),  aE = toMins(afterEnd);
+
+    if (bS >= 0) { [bS, bE] = normPair(bS, bE); if (bE < 0 || bE <= bS) bE = bS + SPAN; }
+    if (dS >= 0) {
+      if (bE >= 0 && dS <= bE) dS = bE + GAP;
+      [dS, dE] = normPair(dS, dE);
+      if (dE < 0 || dE <= dS) dE = dS + SPAN;
+    }
+    if (aS >= 0) {
+      const floor = dE >= 0 ? dE : (bE >= 0 ? bE : -1);
+      if (floor >= 0 && aS <= floor) aS = floor + GAP;
+      [aS, aE] = normPair(aS, aE);
+      if (aE < 0 || aE <= aS) aE = aS + SPAN;
+    }
+
     const cat = photo.category || "none";
+    if (cat === "before" && bS >= 0) {
+      const list = photos.filter(p => p.selected && p.category === "before").sort(byTimeline);
+      return assignTime(list, bS, bE);
+    }
+    if (cat === "during" && dS >= 0) {
+      const list = photos.filter(p => p.selected && p.category === "during").sort(byTimeline);
+      return assignTime(list, dS, dE);
+    }
+    if (cat === "after" && aS >= 0) {
+      const list = photos.filter(p => p.selected && p.category === "after").sort(byTimeline);
+      return assignTime(list, aS, aE);
+    }
 
-    if (cat === "before") {
-      const list = photos.filter(p => p.category === "before").sort(byLastModified);
-      return distribute(photo, list, bS, bE);
-    }
-    if (cat === "during") {
-      const list = photos.filter(p => p.category === "during").sort(byLastModified);
-      return distribute(photo, list, dS, dE);
-    }
-    if (cat === "after") {
-      const list = photos.filter(p => p.category === "after").sort(byLastModified);
-      return distribute(photo, list, aS, aE);
-    }
-
-    // Uncategorized photos in category mode → use general range
-    const gS = toMins(customTimeStart);
-    let gE = toMins(customTimeEnd);
-    if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440;
-    const uncatList = photos.filter(p => p.category === "none").sort(byLastModified);
-    return distribute(photo, uncatList, gS, gE);
+    // Uncategorized photos in Category Mode → fall back to general range
+    const gS2 = toMins(customTimeStart);
+    let gE2 = toMins(customTimeEnd);
+    if (gS2 >= 0 && gE2 >= 0 && gE2 < gS2) gE2 += 1440;
+    const unc = photos.filter(p => p.selected && p.category === "none").sort(byTimeline);
+    return assignTime(unc, gS2, gE2);
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
