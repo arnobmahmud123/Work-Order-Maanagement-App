@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin, Crop, Maximize2, Sliders } from "lucide-react";
 import JSZip from "jszip";
 import * as piexif from "piexifjs";
@@ -90,11 +90,38 @@ export default function ExifToolsPage() {
   const [cropRatio, setCropRatio] = useState<"none" | "4:3" | "16:9" | "1:1">("none");
   const [maxDimension, setMaxDimension] = useState<"none" | "1200" | "1600" | "1920">("1600");
   const [compressionQuality, setCompressionQuality] = useState<number>(50);
+  
+  const [overrideGPS, setOverrideGPS] = useState(false);
+  const [customLatitude, setCustomLatitude] = useState("");
+  const [customLongitude, setCustomLongitude] = useState("");
+
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
-
   const [isDragging, setIsDragging] = useState(false);
+
+  // Pre-populate GPS fields if one of the uploaded photos contains GPS data
+  useEffect(() => {
+    if (photos.length > 0 && !customLatitude && !customLongitude) {
+      const photoWithGps = photos.find(p => p.exifData?.gps);
+      if (photoWithGps?.exifData?.gps) {
+        setCustomLatitude(photoWithGps.exifData.gps.latitude.toString());
+        setCustomLongitude(photoWithGps.exifData.gps.longitude.toString());
+        setOverrideGPS(true);
+      }
+    }
+  }, [photos, customLatitude, customLongitude]);
+
+  const getEffectiveGPS = (photo: ProcessedPhoto): GPSData | undefined => {
+    if (overrideGPS && customLatitude && customLongitude) {
+      const lat = parseFloat(customLatitude);
+      const lng = parseFloat(customLongitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { latitude: lat, longitude: lng };
+      }
+    }
+    return photo.exifData?.gps || undefined;
+  };
 
   const processFiles = async (files: File[]) => {
     const newPhotos: ProcessedPhoto[] = [];
@@ -229,6 +256,7 @@ export default function ExifToolsPage() {
         await new Promise((resolve) => { img.onload = resolve; });
         
         const effectiveDate = getEffectiveDateTime(p);
+        const effectiveGPS = getEffectiveGPS(p);
         
         // 1. Crop and Resize first
         const croppedCanvas = cropAndResizeImage(img, cropRatio, maxDimension);
@@ -236,7 +264,7 @@ export default function ExifToolsPage() {
         // 2. Generate yellow timestamp overlay on top of the cropped & resized canvas
         const canvas = generatePhotoWithOverlay(croppedCanvas, {
           dateTime: effectiveDate,
-          gps: p.exifData?.gps
+          gps: effectiveGPS
         }, {
           showDate: printTimestamp && (downloadMode !== "custom" || !!customDate),
           showTime: printTimestamp && (downloadMode === "datetime" || (downloadMode === "custom" && !!customTime)),
@@ -276,10 +304,36 @@ export default function ExifToolsPage() {
           
           if (!exifObj["0th"]) exifObj["0th"] = {};
           if (!exifObj["Exif"]) exifObj["Exif"] = {};
+          if (!exifObj["GPS"]) exifObj["GPS"] = {};
           
           exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
           exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
           exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
+          
+          if (effectiveGPS) {
+            const latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
+            const lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
+            
+            const absLat = Math.abs(effectiveGPS.latitude);
+            const latD = Math.floor(absLat);
+            const latM = Math.floor((absLat - latD) * 60);
+            const latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
+            
+            const absLng = Math.abs(effectiveGPS.longitude);
+            const lngD = Math.floor(absLng);
+            const lngM = Math.floor((absLng - lngD) * 60);
+            const lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
+            
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
+            
+            if (effectiveGPS.altitude !== undefined) {
+              exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] = effectiveGPS.altitude >= 0 ? 0 : 1;
+              exifObj["GPS"][piexif.GPSIFD.GPSAltitude] = [Math.round(Math.abs(effectiveGPS.altitude) * 100), 100];
+            }
+          }
           
           const exifBytes = piexif.dump(exifObj);
           const newJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
@@ -433,6 +487,52 @@ export default function ExifToolsPage() {
                       </label>
                     </div>
 
+                    {/* GPS Coordinates Override */}
+                    <div className="pt-4 border-t border-border-subtle space-y-4">
+                      <div>
+                        <label className="flex items-center gap-2 cursor-pointer group mb-1.5">
+                          <input 
+                            type="checkbox" 
+                            checked={overrideGPS}
+                            onChange={(e) => setOverrideGPS(e.target.checked)}
+                            className="rounded border-border-medium text-cyan-500 focus:ring-cyan-500"
+                          />
+                          <span className="text-sm font-black text-text-primary uppercase tracking-widest flex items-center gap-1.5 group-hover:text-cyan-600 transition-colors">
+                            <MapPin className="h-4 w-4 text-cyan-500" />
+                            GPS Override
+                          </span>
+                        </label>
+                        <p className="text-[10px] text-text-secondary leading-relaxed">
+                          Bulk overwrite/inject custom coordinates on all photo downloads.
+                        </p>
+                      </div>
+
+                      {overrideGPS && (
+                        <div className="space-y-3 p-4 bg-background rounded-xl border border-border-subtle">
+                          <div>
+                            <label className="block text-xs font-bold text-text-secondary mb-1">Latitude</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. 37.7749"
+                              value={customLatitude} 
+                              onChange={(e) => setCustomLatitude(e.target.value)}
+                              className="w-full px-3 py-2 bg-surface rounded-lg border border-border-medium text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-text-secondary mb-1">Longitude</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. -122.4194"
+                              value={customLongitude} 
+                              onChange={(e) => setCustomLongitude(e.target.value)}
+                              className="w-full px-3 py-2 bg-surface rounded-lg border border-border-medium text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Crop & Scale Settings */}
                     <div className="pt-4 border-t border-border-subtle space-y-4">
                       <div>
@@ -525,6 +625,7 @@ export default function ExifToolsPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {photos.map((photo) => {
                       const effDate = getEffectiveDateTime(photo);
+                      const effGPS = getEffectiveGPS(photo);
                       return (
                         <div 
                           key={photo.id} 
@@ -539,7 +640,7 @@ export default function ExifToolsPage() {
                           <div className="absolute top-2 left-2 w-5 h-5 rounded-md border-2 border-white bg-black/40 flex items-center justify-center backdrop-blur-sm">
                             {photo.selected && <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />}
                           </div>
-
+ 
                           {/* Delete Button */}
                           <button
                             onClick={(e) => { e.stopPropagation(); removePhoto(photo.id); }}
@@ -547,7 +648,7 @@ export default function ExifToolsPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-
+ 
                           {/* Metadata Overlay Preview */}
                           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3 pt-8">
                             <div className="space-y-1">
@@ -561,16 +662,25 @@ export default function ExifToolsPage() {
                                   {effDate ? effDate.toLocaleTimeString([], { hour12: false }) : "--:--"}
                                 </div>
                               )}
-                              {photo.exifData?.gps && (
-                                <div className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400/80 mt-1">
-                                  <MapPin className="h-3 w-3" />
-                                  GPS Found
+                              {effGPS ? (
+                                <div className="flex flex-col gap-0.5 text-[10px] font-mono text-emerald-400/80 mt-1">
+                                  <div className="flex items-center gap-1.5" title={`${effGPS.latitude}, ${effGPS.longitude}`}>
+                                    <MapPin className="h-3 w-3 flex-shrink-0" />
+                                    <span>Lat: {effGPS.latitude.toFixed(5)}</span>
+                                  </div>
+                                  <div className="pl-[18px]">
+                                    <span>Lng: {effGPS.longitude.toFixed(5)}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-[10px] font-mono text-text-secondary/60 mt-1">
+                                  No GPS data
                                 </div>
                               )}
                             </div>
                           </div>
                         </div>
-                      )
+                      );
                     })}
                   </div>
                 </div>
