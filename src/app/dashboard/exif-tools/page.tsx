@@ -134,6 +134,72 @@ export default function ExifToolsPage() {
     }
   }, [photos, customLatitude, customLongitude]);
 
+  // Helper to parse time string (HH:MM) to minutes since midnight
+  const parseTimeToMinutes = (timeStr: string): number => {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(":").map(Number);
+    return h * 60 + m;
+  };
+
+  // Helper to format minutes since midnight to time string (HH:MM)
+  const minutesToTimeString = (minutes: number): string => {
+    const h = Math.floor(minutes / 60) % 24;
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+  };
+
+  // Enforce chronological progression: Before -> During -> After
+  useEffect(() => {
+    if (!useCategorizedRanges) return;
+
+    const bStart = parseTimeToMinutes(beforeStart);
+    let bEnd = parseTimeToMinutes(beforeEnd);
+    let dStart = parseTimeToMinutes(duringStart);
+    let dEnd = parseTimeToMinutes(duringEnd);
+    let aStart = parseTimeToMinutes(afterStart);
+    let aEnd = parseTimeToMinutes(afterEnd);
+
+    // 1. Before End must be after Before Start (min 5 mins gap)
+    if (beforeStart && beforeEnd && bEnd <= bStart) {
+      bEnd = bStart + 5;
+      setBeforeEnd(minutesToTimeString(bEnd));
+    }
+
+    // 2. During Start must be >= Before End (or Before Start)
+    const minDuringStart = beforeEnd ? bEnd : (beforeStart ? bStart : 0);
+    if (minDuringStart && dStart < minDuringStart) {
+      dStart = minDuringStart + 2; // 2 min gap
+      setDuringStart(minutesToTimeString(dStart));
+    }
+
+    // 3. During End must be after During Start (min 5 mins gap)
+    if (duringStart && duringEnd && dEnd <= dStart) {
+      dEnd = dStart + 5;
+      setDuringEnd(minutesToTimeString(dEnd));
+    }
+
+    // 4. After Start must be >= During End (or During Start)
+    const minAfterStart = duringEnd ? dEnd : (duringStart ? dStart : (beforeEnd ? bEnd : 0));
+    if (minAfterStart && aStart < minAfterStart) {
+      aStart = minAfterStart + 2; // 2 min gap
+      setAfterStart(minutesToTimeString(aStart));
+    }
+
+    // 5. After End must be after After Start (min 5 mins gap)
+    if (afterStart && afterEnd && aEnd <= aStart) {
+      aEnd = aStart + 5;
+      setAfterEnd(minutesToTimeString(aEnd));
+    }
+  }, [
+    useCategorizedRanges,
+    beforeStart,
+    beforeEnd,
+    duringStart,
+    duringEnd,
+    afterStart,
+    afterEnd
+  ]);
+
   const getEffectiveGPS = (photo: ProcessedPhoto): GPSData | undefined => {
     if (overrideGPS && customLatitude && customLongitude) {
       const lat = parseFloat(customLatitude);
@@ -656,6 +722,10 @@ export default function ExifToolsPage() {
                                 />
                               </div>
                             </div>
+                            {/* Chronological Adjuster Info Note */}
+                            <p className="text-[9px] text-cyan-500/90 font-medium leading-normal bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
+                              ⚡ Times automatically adjust to maintain chronological sequence: Before ➔ During ➔ After.
+                            </p>
                           </div>
                         )}
                       </div>
