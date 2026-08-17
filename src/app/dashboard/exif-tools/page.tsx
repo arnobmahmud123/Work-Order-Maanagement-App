@@ -134,91 +134,6 @@ export default function ExifToolsPage() {
     }
   }, [photos, customLatitude, customLongitude]);
 
-  // Helper to parse time string (HH:MM) to minutes since midnight
-  const parseTimeToMinutes = (timeStr: string): number => {
-    if (!timeStr) return 0;
-    const [h, m] = timeStr.split(":").map(Number);
-    return h * 60 + m;
-  };
-
-  // Helper to format minutes since midnight to time string (HH:MM)
-  const minutesToTimeString = (minutes: number): string => {
-    const h = Math.floor(minutes / 60) % 24;
-    const m = minutes % 60;
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-  };
-
-  // Enforce chronological progression: Before -> During -> After
-  // Handles midnight-crossing by treating times > 1440 as "next day"
-  useEffect(() => {
-    if (!useCategorizedRanges) return;
-
-    const p = parseTimeToMinutes;
-
-    // Normalize: if end < start within a pair, end is on next day (add 1440)
-    const normalizeEnd = (start: string, end: string): number => {
-      const s = p(start);
-      let e = p(end);
-      if (s >= 0 && e >= 0 && e < s) e += 1440;
-      return e;
-    };
-
-    const bStart = p(beforeStart);
-    let bEnd = normalizeEnd(beforeStart, beforeEnd);
-    const rawDStart = p(duringStart);
-    let dStart = rawDStart;
-    let dEnd = normalizeEnd(duringStart, duringEnd);
-    const rawAStart = p(afterStart);
-    let aStart = rawAStart;
-    let aEnd = normalizeEnd(afterStart, afterEnd);
-
-    let changed = false;
-
-    // 1. Before End must be > Before Start (min 5 mins)
-    if (beforeStart && beforeEnd && bEnd <= bStart) {
-      bEnd = bStart + 5;
-      setBeforeEnd(minutesToTimeString(bEnd % 1440));
-      changed = true;
-    }
-
-    // 2. During Start must be > Before End
-    const minDuring = beforeEnd ? bEnd : (beforeStart ? bStart : -1);
-    if (minDuring >= 0 && duringStart && dStart <= minDuring) {
-      dStart = minDuring + 2;
-      setDuringStart(minutesToTimeString(dStart % 1440));
-      changed = true;
-    }
-
-    // 3. During End must be > During Start (min 5 mins)
-    if (duringStart && duringEnd && dEnd <= dStart) {
-      dEnd = dStart + 5;
-      setDuringEnd(minutesToTimeString(dEnd % 1440));
-      changed = true;
-    }
-
-    // 4. After Start must be > During End
-    const minAfter = duringEnd ? dEnd : (duringStart ? dStart : (beforeEnd ? bEnd : -1));
-    if (minAfter >= 0 && afterStart && aStart <= minAfter) {
-      aStart = minAfter + 2;
-      setAfterStart(minutesToTimeString(aStart % 1440));
-      changed = true;
-    }
-
-    // 5. After End must be > After Start (min 5 mins)
-    if (afterStart && afterEnd && aEnd <= aStart) {
-      aEnd = aStart + 5;
-      setAfterEnd(minutesToTimeString(aEnd % 1440));
-    }
-  }, [
-    useCategorizedRanges,
-    beforeStart,
-    beforeEnd,
-    duringStart,
-    duringEnd,
-    afterStart,
-    afterEnd
-  ]);
-
   const getEffectiveGPS = (photo: ProcessedPhoto): GPSData | undefined => {
     if (overrideGPS && customLatitude && customLongitude) {
       const lat = parseFloat(customLatitude);
@@ -358,18 +273,22 @@ export default function ExifToolsPage() {
       return h * 60 + m;
     };
 
-    // Build a JS Date from absolute minutes (handles midnight crossing: >1440 = next day).
+    // Build a JS Date from absolute minutes (handles one or more midnight crossings).
     const buildDate = (absMins: number): Date => {
-      const dayOffset = absMins >= 1440 ? 1 : 0;
-      const clamped = Math.round(absMins) % 1440;
+      const roundedMinutes = Math.round(absMins);
+      const dayOffset = Math.floor(roundedMinutes / 1440);
+      const clamped = ((roundedMinutes % 1440) + 1440) % 1440;
       const h = Math.floor(clamped / 60);
       const m = clamped % 60;
       return new Date(year, month - 1, day + dayOffset, h, m, 0, 0);
     };
 
     // Normalize [start, end] so end >= start. If end < start, it's next day.
-    const normPair = (s: number, e: number): [number, number] =>
-      (e >= 0 && e < s) ? [s, e + 1440] : [s, e];
+    const normPair = (s: number, e: number): [number, number] => {
+      if (e < 0) return [s, e];
+      while (e < s) e += 1440;
+      return [s, e];
+    };
 
     // ── Sort within bucket by file.lastModified then id ──────────────────────
     const byMod = (a: ProcessedPhoto, b: ProcessedPhoto) =>
@@ -421,40 +340,45 @@ export default function ExifToolsPage() {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // CATEGORY MODE — Separate per-category ranges with auto-gap enforcement
+    // CATEGORY MODE — One continuous Before -> During -> After timeline.
+    // Each configured end is the final photo time for its section; the next
+    // section's start is derived from that actual final photo time plus one minute.
     // ════════════════════════════════════════════════════════════════════════
-    const GAP = 1;
-    const SPAN = 5;
+    type CategoryTimeline = { list: ProcessedPhoto[]; start: number; end: number; last: number };
+    const categoryPhotos = (category: ProcessedPhoto["category"]) =>
+      photos.filter((item) => item.category === category).sort(byMod);
+    const makeTimeline = (
+      list: ProcessedPhoto[],
+      configuredStart: number,
+      configuredEnd: number,
+      previousLast: number
+    ): CategoryTimeline => {
+      const start = previousLast >= 0 ? previousLast + 1 : configuredStart;
+      if (list.length === 0 || start < 0) return { list, start, end: -1, last: -1 };
 
-    let bS = toMins(beforeStart), bE = toMins(beforeEnd);
-    let dS = toMins(duringStart), dE = toMins(duringEnd);
-    let aS = toMins(afterStart),  aE = toMins(afterEnd);
+      let end = configuredEnd;
+      [end] = normPair(start, end);
+      // A one-photo section ends at that photo's start time. With no usable end,
+      // retain a one-minute cadence so every generated timestamp is chronological.
+      if (list.length === 1) end = start;
+      else if (end <= start) end = start + list.length - 1;
 
-    if (bS >= 0) { [bS, bE] = normPair(bS, bE); if (bE < 0 || bE <= bS) bE = bS + SPAN; }
-    if (dS >= 0) {
-      if (bE >= 0 && dS <= bE) dS = bE + GAP;
-      [dS, dE] = normPair(dS, dE);
-      if (dE < 0 || dE <= dS) dE = dS + SPAN;
-    }
-    if (aS >= 0) {
-      const floor = dE >= 0 ? dE : (bE >= 0 ? bE : -1);
-      if (floor >= 0 && aS <= floor) aS = floor + GAP;
-      [aS, aE] = normPair(aS, aE);
-      if (aE < 0 || aE <= aS) aE = aS + SPAN;
-    }
+      return { list, start, end, last: end };
+    };
+
+    const beforeTimeline = makeTimeline(categoryPhotos("before"), toMins(beforeStart), toMins(beforeEnd), -1);
+    const duringTimeline = makeTimeline(categoryPhotos("during"), toMins(duringStart), toMins(duringEnd), beforeTimeline.last);
+    const afterTimeline = makeTimeline(categoryPhotos("after"), toMins(afterStart), toMins(afterEnd), duringTimeline.last >= 0 ? duringTimeline.last : beforeTimeline.last);
 
     const cat = photo.category || "none";
-    if (cat === "before" && bS >= 0) {
-      const list = photos.filter(p => p.category === "before").sort(byMod);
-      return assignTime(list, bS, bE);
+    if (cat === "before" && beforeTimeline.start >= 0) {
+      return assignTime(beforeTimeline.list, beforeTimeline.start, beforeTimeline.end);
     }
-    if (cat === "during" && dS >= 0) {
-      const list = photos.filter(p => p.category === "during").sort(byMod);
-      return assignTime(list, dS, dE);
+    if (cat === "during" && duringTimeline.start >= 0) {
+      return assignTime(duringTimeline.list, duringTimeline.start, duringTimeline.end);
     }
-    if (cat === "after" && aS >= 0) {
-      const list = photos.filter(p => p.category === "after").sort(byMod);
-      return assignTime(list, aS, aE);
+    if (cat === "after" && afterTimeline.start >= 0) {
+      return assignTime(afterTimeline.list, afterTimeline.start, afterTimeline.end);
     }
 
     // Uncategorized photos in Category Mode → fall back to general range
@@ -799,7 +723,7 @@ export default function ExifToolsPage() {
                             </div>
                             {/* Chronological Adjuster Info Note */}
                             <p className="text-[9px] text-cyan-500/90 font-medium leading-normal bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
-                              ⚡ Times automatically adjust to maintain chronological sequence: Before ➔ During ➔ After.
+                              ⚡ Before, During, and After are one continuous timeline. Each non-empty section starts exactly one minute after the prior section&apos;s last photo; its Start field is used only when there is no earlier section with photos.
                             </p>
                           </div>
                         )}
