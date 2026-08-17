@@ -407,12 +407,28 @@ export default function ExifToolsPage() {
     // ════════════════════════════════════════════════════════════════════════
     if (!useCategorizedRanges) {
       const gS = toMins(customTimeStart);
-      if (gS < 0) return defaultDate; // no start time → return original
+      if (gS < 0) return defaultDate;
       let gE = toMins(customTimeEnd);
-      if (gE >= 0 && gE < gS) gE += 1440; // midnight crossing (e.g. 11PM → 1AM)
+      if (gE >= 0 && gE < gS) gE += 1440; // midnight crossing
 
-      // Build timeline from ONLY selected photos, sorted by category then lastModified
-      const timeline = photos.filter(p => p.selected).sort(byTimeline);
+      // Sort within each category bucket by file.lastModified then id (stable)
+      const byMod = (a: ProcessedPhoto, b: ProcessedPhoto) =>
+        a.file.lastModified !== b.file.lastModified
+          ? a.file.lastModified - b.file.lastModified
+          : a.id.localeCompare(b.id);
+
+      const sel = (cat: string) =>
+        photos.filter(p => p.selected && p.category === cat).sort(byMod);
+
+      // GUARANTEED ORDER: Before → During → After → Uncategorized
+      // Each category is filtered separately so they CANNOT mix.
+      const timeline = [
+        ...sel("before"),
+        ...sel("during"),
+        ...sel("after"),
+        ...photos.filter(p => p.selected && p.category === "none").sort(byMod),
+      ];
+
       return assignTime(timeline, gS, gE);
     }
 
