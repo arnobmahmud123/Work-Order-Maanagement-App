@@ -412,55 +412,77 @@ export default function ExifToolsPage() {
       return { bS, bE, dS, dE, aS, aE };
     };
 
-    // Distribute targetPhoto evenly within [startMins, endMins] across photoList.
-    // All values are in "absolute minutes" (can exceed 1440 for midnight-crossing).
+    // Sort helpers
+    const byLastModified = (a: ProcessedPhoto, b: ProcessedPhoto) =>
+      a.file.lastModified - b.file.lastModified;
+
+    // Category priority: before=0, during=1, after=2, none=3
+    const catPriority = (c: string | undefined) =>
+      c === "before" ? 0 : c === "during" ? 1 : c === "after" ? 2 : 3;
+
+    // Distribute targetPhoto evenly within [startMins, endMins] across an ALREADY-SORTED list.
+    // caller is responsible for sorting — this function just uses the index.
     const distribute = (
       targetPhoto: ProcessedPhoto,
-      photoList: ProcessedPhoto[],
+      sortedList: ProcessedPhoto[],
       startMins: number,
       endMins: number
     ): Date => {
-      if (startMins < 0) return buildDate(720, 0); // no start configured → fallback noon
+      if (startMins < 0) return buildDate(720, 0); // fallback noon if no start
 
-      const sorted = [...photoList].sort((a, b) => a.file.lastModified - b.file.lastModified);
-      const index = sorted.findIndex(p => p.id === targetPhoto.id);
+      const index = sortedList.findIndex(p => p.id === targetPhoto.id);
       if (index === -1) return buildDate(startMins % 1440, startMins >= 1440 ? 1 : 0);
 
-      if (sorted.length <= 1 || endMins < 0 || endMins <= startMins) {
-        // Single photo or no valid range: use start time
+      if (sortedList.length <= 1 || endMins < 0 || endMins <= startMins) {
         return buildDate(startMins % 1440, startMins >= 1440 ? 1 : 0);
       }
 
       const span = endMins - startMins; // always positive
-      const step = span / (sorted.length - 1);
+      const step = span / (sortedList.length - 1);
       const targetMins = startMins + index * step;
       const dayOffset = targetMins >= 1440 ? 1 : 0;
       return buildDate(targetMins % 1440, dayOffset);
     };
 
     // --- GENERAL MODE (no categories) ---
+    // Sort by category order FIRST (Before → During → After → none), then by lastModified.
+    // This ensures Before photos always get earlier times than During, and During before After,
+    // regardless of the original file modification timestamps.
     if (!useCategorizedRanges) {
       const gS = toMins(customTimeStart);
       let gE = toMins(customTimeEnd);
       if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440; // midnight crossing
-      const generalList = photos.filter(p => p.selected);
+      const generalList = photos
+        .filter(p => p.selected)
+        .sort((a, b) => {
+          const pa = catPriority(a.category);
+          const pb = catPriority(b.category);
+          return pa !== pb ? pa - pb : byLastModified(a, b);
+        });
       return distribute(photo, generalList, gS, gE);
     }
 
     // --- CATEGORY MODE ---
+    // resolveRanges() enforces Before end < During start < During end < After start.
     const { bS, bE, dS, dE, aS, aE } = resolveRanges();
     const cat = photo.category || "none";
 
     if (cat === "before") {
-      const list = photos.filter(p => p.selected && p.category === "before");
+      const list = photos
+        .filter(p => p.selected && p.category === "before")
+        .sort(byLastModified);
       return distribute(photo, list, bS, bE);
     }
     if (cat === "during") {
-      const list = photos.filter(p => p.selected && p.category === "during");
+      const list = photos
+        .filter(p => p.selected && p.category === "during")
+        .sort(byLastModified);
       return distribute(photo, list, dS, dE);
     }
     if (cat === "after") {
-      const list = photos.filter(p => p.selected && p.category === "after");
+      const list = photos
+        .filter(p => p.selected && p.category === "after")
+        .sort(byLastModified);
       return distribute(photo, list, aS, aE);
     }
 
@@ -468,7 +490,9 @@ export default function ExifToolsPage() {
     const gS = toMins(customTimeStart);
     let gE = toMins(customTimeEnd);
     if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440;
-    const uncatList = photos.filter(p => p.selected && p.category === "none");
+    const uncatList = photos
+      .filter(p => p.selected && p.category === "none")
+      .sort(byLastModified);
     return distribute(photo, uncatList, gS, gE);
   };
 
