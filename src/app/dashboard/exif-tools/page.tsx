@@ -85,7 +85,7 @@ function cropAndResizeImage(
 export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
-  const [customDate, setCustomDate] = useState("");
+  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [customTimeStart, setCustomTimeStart] = useState("");
   const [customTimeEnd, setCustomTimeEnd] = useState("");
   
@@ -338,12 +338,22 @@ export default function ExifToolsPage() {
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
     const defaultDate = photo.exifData?.dateTime || new Date(photo.file.lastModified);
-    if (downloadMode !== "custom" || !customDate) {
+    if (downloadMode !== "custom") {
       return defaultDate;
     }
 
-    // Parse base custom date into year/month/day
-    const [year, month, day] = customDate.split("-").map(Number);
+    // Determine base custom date (fallback to photo's defaultDate or today if not set)
+    let year: number, month: number, day: number;
+    if (customDate && customDate.includes("-")) {
+      const parts = customDate.split("-").map(Number);
+      year = parts[0];
+      month = parts[1];
+      day = parts[2];
+    } else {
+      year = defaultDate.getFullYear();
+      month = defaultDate.getMonth() + 1;
+      day = defaultDate.getDate();
+    }
 
     // Convert "HH:MM" to minutes since midnight. Returns -1 if empty.
     const toMins = (t: string): number => {
@@ -412,9 +422,9 @@ export default function ExifToolsPage() {
       return { bS, bE, dS, dE, aS, aE };
     };
 
-    // Sort helpers
+    // Sort helpers: stable sorting by file.lastModified, then id
     const byLastModified = (a: ProcessedPhoto, b: ProcessedPhoto) =>
-      a.file.lastModified - b.file.lastModified;
+      (a.file.lastModified - b.file.lastModified) || a.id.localeCompare(b.id);
 
     // Category priority: before=0, during=1, after=2, none=3
     const catPriority = (c: string | undefined) =>
@@ -452,13 +462,11 @@ export default function ExifToolsPage() {
       const gS = toMins(customTimeStart);
       let gE = toMins(customTimeEnd);
       if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440; // midnight crossing
-      const generalList = photos
-        .filter(p => p.selected)
-        .sort((a, b) => {
-          const pa = catPriority(a.category);
-          const pb = catPriority(b.category);
-          return pa !== pb ? pa - pb : byLastModified(a, b);
-        });
+      const generalList = [...photos].sort((a, b) => {
+        const pa = catPriority(a.category);
+        const pb = catPriority(b.category);
+        return pa !== pb ? pa - pb : byLastModified(a, b);
+      });
       return distribute(photo, generalList, gS, gE);
     }
 
@@ -468,21 +476,15 @@ export default function ExifToolsPage() {
     const cat = photo.category || "none";
 
     if (cat === "before") {
-      const list = photos
-        .filter(p => p.selected && p.category === "before")
-        .sort(byLastModified);
+      const list = photos.filter(p => p.category === "before").sort(byLastModified);
       return distribute(photo, list, bS, bE);
     }
     if (cat === "during") {
-      const list = photos
-        .filter(p => p.selected && p.category === "during")
-        .sort(byLastModified);
+      const list = photos.filter(p => p.category === "during").sort(byLastModified);
       return distribute(photo, list, dS, dE);
     }
     if (cat === "after") {
-      const list = photos
-        .filter(p => p.selected && p.category === "after")
-        .sort(byLastModified);
+      const list = photos.filter(p => p.category === "after").sort(byLastModified);
       return distribute(photo, list, aS, aE);
     }
 
@@ -490,9 +492,7 @@ export default function ExifToolsPage() {
     const gS = toMins(customTimeStart);
     let gE = toMins(customTimeEnd);
     if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440;
-    const uncatList = photos
-      .filter(p => p.selected && p.category === "none")
-      .sort(byLastModified);
+    const uncatList = photos.filter(p => p.category === "none").sort(byLastModified);
     return distribute(photo, uncatList, gS, gE);
   };
 
