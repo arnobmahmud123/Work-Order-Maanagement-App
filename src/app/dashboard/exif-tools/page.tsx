@@ -332,18 +332,21 @@ export default function ExifToolsPage() {
       ...photos.filter(p => p.category === "none").sort(byMod),
     ];
 
+    const totalCount = timeline.length;
     const idx = timeline.findIndex(p => p.id === photo.id);
     if (idx === -1) return buildDate(gS);
-    if (timeline.length <= 1) return buildDate(gS);
+    if (totalCount <= 1) return buildDate(gS);
 
-    if (gE < 0 || gE <= gS) {
-      // No end time provided: increment by 1 minute per photo sequentially
-      return buildDate(gS + idx);
+    // End must allow at least 1 minute per photo so no photos share duplicate timestamps
+    const minRequiredEnd = gS + totalCount - 1;
+    if (gE < minRequiredEnd) {
+      gE = minRequiredEnd;
     }
 
-    // Even distribution across entire range
-    const step = (gE - gS) / (timeline.length - 1);
-    return buildDate(gS + idx * step);
+    // Monotonic minute progression across entire timeline
+    const step = (gE - gS) / (totalCount - 1);
+    const photoMinute = idx === totalCount - 1 ? gE : Math.round(gS + idx * step);
+    return buildDate(photoMinute);
   };
 
   const processAndDownload = async (onlySelected: boolean) => {

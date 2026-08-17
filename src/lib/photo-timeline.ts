@@ -47,10 +47,11 @@ export function createContinuousPhotoTimeline(
 
     if (categoryPhotos.length === 0) continue;
 
+    const count = categoryPhotos.length;
     const configuredRange = ranges[category];
     let start = configuredRange?.start ?? -1;
 
-    // Hard boundary enforcement: start must be strictly AFTER previous category's end
+    // Hard boundary enforcement: start must be strictly AFTER previous category's final photo
     if (previousLast >= 0) {
       if (start < 0 || start <= previousLast) {
         start = previousLast + 1;
@@ -58,19 +59,21 @@ export function createContinuousPhotoTimeline(
     }
 
     if (start < 0) {
-      start = 720; // Default to 12:00 PM if unconfigured
+      start = 600; // Default to 10:00 AM if unconfigured
     }
 
     let end = configuredRange?.end ?? -1;
-    // End must be >= start
-    if (end < start) {
-      end = start + Math.max(categoryPhotos.length - 1, 0);
+    // End must allow at least 1 minute per photo so no photos share duplicate timestamps
+    const minRequiredEnd = start + count - 1;
+    if (end < minRequiredEnd) {
+      end = minRequiredEnd;
     }
 
-    const step = categoryPhotos.length <= 1 ? 0 : (end - start) / (categoryPhotos.length - 1);
+    const step = count <= 1 ? 0 : (end - start) / (count - 1);
     categoryPhotos.forEach((photo, index) => {
-      const minute = index === categoryPhotos.length - 1 ? end : start + index * step;
-      photoMinutes.set(photo.id, Math.round(minute));
+      // Use monotonic minute progression
+      const minute = index === count - 1 ? end : Math.round(start + index * step);
+      photoMinutes.set(photo.id, minute);
     });
 
     previousLast = end;
