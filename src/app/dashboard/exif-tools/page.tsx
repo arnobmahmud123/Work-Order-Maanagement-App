@@ -5,7 +5,7 @@ import { Download, Upload, Trash2, Calendar, Clock, Image as ImageIcon, MapPin, 
 import JSZip from "jszip";
 import * as piexif from "piexifjs";
 import { readEXIF, generatePhotoWithOverlay, GPSData } from "@/lib/exif";
-import { createContinuousPhotoTimeline, formatTimelineMinute } from "@/lib/photo-timeline";
+import { buildContinuousPhotoTimeline, formatTimelineMinute, formatTimelineMinute12h } from "@/lib/photo-timeline";
 import { TopNav } from "@/components/layout/top-nav";
 
 interface ProcessedPhoto {
@@ -96,14 +96,6 @@ export default function ExifToolsPage() {
   const [customTimeStart, setCustomTimeStart] = useState("");
   const [customTimeEnd, setCustomTimeEnd] = useState("");
   
-  const [useCategorizedRanges, setUseCategorizedRanges] = useState(false);
-  const [beforeStart, setBeforeStart] = useState("");
-  const [beforeEnd, setBeforeEnd] = useState("");
-  const [duringStart, setDuringStart] = useState("");
-  const [duringEnd, setDuringEnd] = useState("");
-  const [afterStart, setAfterStart] = useState("");
-  const [afterEnd, setAfterEnd] = useState("");
-
   const [printTimestamp, setPrintTimestamp] = useState(true);
   const [cropRatio, setCropRatio] = useState<"none" | "4:3" | "16:9" | "1:1">("none");
   const [maxDimension, setMaxDimension] = useState<"none" | "1200" | "1600" | "1920">("1600");
@@ -258,6 +250,20 @@ export default function ExifToolsPage() {
     setPhotos(prev => prev.map(p => ({ ...p, selected: !allSelected })));
   };
 
+  const photoTimeline = useMemo(() => {
+    return buildContinuousPhotoTimeline(
+      photos.map((photo) => ({
+        id: photo.id,
+        category: photo.category,
+        sortValue: photo.file.lastModified,
+      })),
+      {
+        startTimeMinutes: parseTimeToMinutes(customTimeStart),
+        endTimeMinutes: customTimeEnd ? parseTimeToMinutes(customTimeEnd) : undefined,
+      }
+    );
+  }, [photos, customTimeStart, customTimeEnd]);
+
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
     const defaultDate = photo.exifData?.dateTime || new Date(photo.file.lastModified);
 
@@ -282,71 +288,12 @@ export default function ExifToolsPage() {
       return new Date(year, month - 1, day + dayOffset, h, m, 0, 0);
     };
 
-    // ── Sort within bucket by file.lastModified then id ──────────────────────
-    const byMod = (a: ProcessedPhoto, b: ProcessedPhoto) =>
-      a.file.lastModified !== b.file.lastModified
-        ? a.file.lastModified - b.file.lastModified
-        : a.id.localeCompare(b.id);
-
-    // ════════════════════════════════════════════════════════════════════════
-    // CATEGORY MODE — Separate ranges with hard non-overlapping boundaries
-    // ════════════════════════════════════════════════════════════════════════
-    if (useCategorizedRanges) {
-      const categorizedMinute = categorizedTimeline.photoMinutes.get(photo.id);
-      if (categorizedMinute !== undefined) return buildDate(categorizedMinute);
-
-      const lastSectionEnd = categorizedTimeline.sections.after?.end 
-        ?? categorizedTimeline.sections.during?.end 
-        ?? categorizedTimeline.sections.before?.end 
-        ?? 720;
-
-      const uncatPhotos = photos.filter(p => p.category === "none").sort(byMod);
-      const uncatIdx = uncatPhotos.findIndex(p => p.id === photo.id);
-      return buildDate(lastSectionEnd + 1 + Math.max(uncatIdx, 0));
+    const assignedMinute = photoTimeline.photoMinutes.get(photo.id);
+    if (assignedMinute !== undefined) {
+      return buildDate(assignedMinute);
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // GENERAL MODE — Single continuous timeline across all photos
-    // ════════════════════════════════════════════════════════════════════════
-    const userStart = parseTimeToMinutes(customTimeStart);
-    const gS = userStart >= 0 ? userStart : 600; // Default 10:00 AM
-    
-    let userEnd = parseTimeToMinutes(customTimeEnd);
-    let gE = userEnd;
-    if (userStart >= 0 && gE >= 0 && gE < gS) {
-      gE += 1440; // midnight crossing
-    }
-
-    const sel = (cat: string) =>
-      photos.filter(p => p.category === cat).sort(byMod);
-
-    // STRICT TIMELINE ORDER:
-    // 1. All Before photos
-    // 2. All During photos
-    // 3. All After photos
-    // 4. All Uncategorized photos
-    const timeline = [
-      ...sel("before"),
-      ...sel("during"),
-      ...sel("after"),
-      ...photos.filter(p => p.category === "none").sort(byMod),
-    ];
-
-    const totalCount = timeline.length;
-    const idx = timeline.findIndex(p => p.id === photo.id);
-    if (idx === -1) return buildDate(gS);
-    if (totalCount <= 1) return buildDate(gS);
-
-    // End must allow at least 1 minute per photo so no photos share duplicate timestamps
-    const minRequiredEnd = gS + totalCount - 1;
-    if (gE < minRequiredEnd) {
-      gE = minRequiredEnd;
-    }
-
-    // Monotonic minute progression across entire timeline
-    const step = (gE - gS) / (totalCount - 1);
-    const photoMinute = idx === totalCount - 1 ? gE : Math.round(gS + idx * step);
-    return buildDate(photoMinute);
+    return defaultDate;
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
@@ -537,36 +484,6 @@ export default function ExifToolsPage() {
     }
   };
 
-  // This is deliberately shared by the on-screen captions and the exported
-  // photos so the times a user sees are exactly the times that are written.
-  const categorizedTimeline = useMemo(
-    () => createContinuousPhotoTimeline(
-      photos.map((photo) => ({
-        id: photo.id,
-        category: photo.category,
-        sortValue: photo.file.lastModified,
-      })),
-      {
-        before: { start: parseTimeToMinutes(beforeStart), end: parseTimeToMinutes(beforeEnd) },
-        during: { start: parseTimeToMinutes(duringStart), end: parseTimeToMinutes(duringEnd) },
-        after: { start: parseTimeToMinutes(afterStart), end: parseTimeToMinutes(afterEnd) },
-      }
-    ),
-    [photos, beforeStart, beforeEnd, duringStart, duringEnd, afterStart, afterEnd]
-  );
-  const duringSection = categorizedTimeline.sections.during;
-  const afterSection = categorizedTimeline.sections.after;
-  const derivedDuringStart = duringSection?.start;
-  const derivedAfterStart = afterSection?.start;
-  const duringStartIsDerived = derivedDuringStart !== undefined && categorizedTimeline.sections.before !== undefined;
-  const afterStartIsDerived = derivedAfterStart !== undefined && (
-    categorizedTimeline.sections.before !== undefined || categorizedTimeline.sections.during !== undefined
-  );
-  const duringEndWasCorrected = duringSection !== undefined &&
-    parseTimeToMinutes(duringEnd) >= 0 && parseTimeToMinutes(duringEnd) < duringSection.start;
-  const afterEndWasCorrected = afterSection !== undefined &&
-    parseTimeToMinutes(afterEnd) >= 0 && parseTimeToMinutes(afterEnd) < afterSection.start;
-
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <main className="flex-1 flex flex-col min-w-0">
@@ -650,125 +567,79 @@ export default function ExifToolsPage() {
                           />
                         </div>
 
-                        {/* Toggle categorized ranges */}
-                        <div className="flex items-center gap-2 py-1.5 border-t border-b border-border-subtle/50">
-                          <input 
-                            type="checkbox" 
-                            id="use-cat-ranges"
-                            checked={useCategorizedRanges}
-                            onChange={(e) => setUseCategorizedRanges(e.target.checked)}
-                            className="rounded border-border-medium text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5"
-                          />
-                          <label htmlFor="use-cat-ranges" className="text-[11px] font-bold text-text-primary uppercase tracking-wider cursor-pointer">
-                            Use Category Ranges
-                          </label>
-                        </div>
-
-                        {!useCategorizedRanges ? (
-                          <div className="space-y-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">General Time Range</label>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <span className="text-[9px] text-text-secondary block mb-0.5">Start Time</span>
-                                  <input 
-                                    type="time" 
-                                    value={customTimeStart} 
-                                    onChange={(e) => setCustomTimeStart(e.target.value)}
-                                    className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
-                                  />
-                                </div>
-                                <div>
-                                  <span className="text-[9px] text-text-secondary block mb-0.5">End Time (Optional)</span>
-                                  <input 
-                                    type="time" 
-                                    value={customTimeEnd} 
-                                    onChange={(e) => setCustomTimeEnd(e.target.value)}
-                                    className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
-                                  />
-                                </div>
-                              </div>
-                              <p className="text-[9px] text-text-secondary mt-1.5 leading-tight">
-                                Automatically distributes timestamps evenly between start and end times for all selected photos.
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            {/* Before Range */}
-                            <div className="p-2.5 rounded-lg border border-cyan-500/20 bg-cyan-500/5 space-y-1.5">
-                              <span className="text-[10px] font-black text-cyan-500 uppercase tracking-widest block">Before Photos</span>
-                              <div className="grid grid-cols-2 gap-2">
+                        {/* Continuous Job Timeline Range */}
+                        <div className="space-y-3 pt-1">
+                          <div>
+                            <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">Continuous Job Time Range</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className="text-[9px] text-text-secondary block mb-0.5">Start Time</span>
                                 <input 
                                   type="time" 
-                                  placeholder="Start"
-                                  value={beforeStart} 
-                                  onChange={(e) => setBeforeStart(e.target.value)}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-cyan-500 outline-none"
+                                  value={customTimeStart} 
+                                  onChange={(e) => setCustomTimeStart(e.target.value)}
+                                  className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
                                 />
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-text-secondary block mb-0.5">End Time (Optional)</span>
                                 <input 
                                   type="time" 
-                                  placeholder="End"
-                                  value={beforeEnd} 
-                                  onChange={(e) => setBeforeEnd(e.target.value)}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-cyan-500 outline-none"
+                                  value={customTimeEnd} 
+                                  onChange={(e) => setCustomTimeEnd(e.target.value)}
+                                  className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
                                 />
                               </div>
                             </div>
-
-                            {/* During Range */}
-                            <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 space-y-1.5">
-                              <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest block">During Photos</span>
-                              <div className="grid grid-cols-2 gap-2">
-                                <input 
-                                  type="time" 
-                                  placeholder="Start"
-                                  value={duringStartIsDerived ? formatTimelineMinute(derivedDuringStart) : duringStart}
-                                  onChange={(e) => setDuringStart(e.target.value)}
-                                  disabled={duringStartIsDerived}
-                                  title={duringStartIsDerived ? "Calculated from the final Before photo" : "Set the first During photo time"}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none disabled:cursor-not-allowed disabled:opacity-70"
-                                />
-                                <input 
-                                  type="time" 
-                                  placeholder="End"
-                                  value={duringEndWasCorrected ? formatTimelineMinute(duringSection.end) : duringEnd}
-                                  onChange={(e) => setDuringEnd(e.target.value)}
-                                  title={duringEndWasCorrected ? "Adjusted forward so During cannot overlap Before" : "Set the final During photo time"}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none"
-                                />
-                              </div>
-                            </div>
-
-                            {/* After Range */}
-                            <div className="p-2.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 space-y-1.5">
-                              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest block">After Photos</span>
-                              <div className="grid grid-cols-2 gap-2">
-                                <input 
-                                  type="time" 
-                                  placeholder="Start"
-                                  value={afterStartIsDerived ? formatTimelineMinute(derivedAfterStart) : afterStart}
-                                  onChange={(e) => setAfterStart(e.target.value)}
-                                  disabled={afterStartIsDerived}
-                                  title={afterStartIsDerived ? "Calculated from the final Before or During photo" : "Set the first After photo time"}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none disabled:cursor-not-allowed disabled:opacity-70"
-                                />
-                                <input 
-                                  type="time" 
-                                  placeholder="End"
-                                  value={afterEndWasCorrected ? formatTimelineMinute(afterSection.end) : afterEnd}
-                                  onChange={(e) => setAfterEnd(e.target.value)}
-                                  title={afterEndWasCorrected ? "Adjusted forward so After cannot overlap During" : "Set the final After photo time"}
-                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none"
-                                />
-                              </div>
-                            </div>
-                            {/* Chronological Adjuster Info Note */}
-                            <p className="text-[9px] text-cyan-500/90 font-medium leading-normal bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
-                              ⚡ Before, During, and After are one continuous timeline. Each non-empty section starts exactly one minute after the prior section&apos;s last photo; its Start field is used only when there is no earlier section with photos.
+                            <p className="text-[9px] text-text-secondary mt-1.5 leading-tight">
+                              Distributes photos seamlessly across one continuous timeline from Start to End.
                             </p>
                           </div>
-                        )}
+
+                          {/* Live Timeline Section Breakdown */}
+                          {photos.length > 0 && (
+                            <div className="space-y-2 pt-2 border-t border-border-subtle/50">
+                              <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center justify-between">
+                                <span>Timeline Sequence</span>
+                                <span className="text-[9px] text-emerald-400 font-mono">1 Clock</span>
+                              </div>
+
+                              <div className="space-y-1.5 text-xs font-mono">
+                                {photoTimeline.sections.before && (
+                                  <div className="flex items-center justify-between p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                                    <span className="font-bold uppercase text-[10px]">1. Before ({photoTimeline.sections.before.count})</span>
+                                    <span>{formatTimelineMinute12h(photoTimeline.sections.before.start)} – {formatTimelineMinute12h(photoTimeline.sections.before.end)}</span>
+                                  </div>
+                                )}
+
+                                {photoTimeline.sections.during && (
+                                  <div className="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                    <span className="font-bold uppercase text-[10px]">2. During ({photoTimeline.sections.during.count})</span>
+                                    <span>{formatTimelineMinute12h(photoTimeline.sections.during.start)} – {formatTimelineMinute12h(photoTimeline.sections.during.end)}</span>
+                                  </div>
+                                )}
+
+                                {photoTimeline.sections.after && (
+                                  <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                    <span className="font-bold uppercase text-[10px]">3. After ({photoTimeline.sections.after.count})</span>
+                                    <span>{formatTimelineMinute12h(photoTimeline.sections.after.start)} – {formatTimelineMinute12h(photoTimeline.sections.after.end)}</span>
+                                  </div>
+                                )}
+
+                                {photoTimeline.sections.none && (
+                                  <div className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border-medium text-text-secondary">
+                                    <span className="font-bold uppercase text-[10px]">Other ({photoTimeline.sections.none.count})</span>
+                                    <span>{formatTimelineMinute12h(photoTimeline.sections.none.start)} – {formatTimelineMinute12h(photoTimeline.sections.none.end)}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <p className="text-[9px] text-cyan-500/90 font-medium leading-normal bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
+                                ⚡ <strong>Strict Continuous Flow</strong>: Before → During → After. Each next photo timestamp is strictly later than the previous photo with zero overlaps.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                     
