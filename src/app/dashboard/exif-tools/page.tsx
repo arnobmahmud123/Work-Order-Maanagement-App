@@ -18,6 +18,7 @@ interface ProcessedPhoto {
     model?: string;
   } | null;
   selected: boolean;
+  category: "before" | "during" | "after" | "none";
 }
 
 function cropAndResizeImage(
@@ -85,7 +86,17 @@ export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
   const [customDate, setCustomDate] = useState("");
-  const [customTime, setCustomTime] = useState("");
+  const [customTimeStart, setCustomTimeStart] = useState("");
+  const [customTimeEnd, setCustomTimeEnd] = useState("");
+  
+  const [useCategorizedRanges, setUseCategorizedRanges] = useState(false);
+  const [beforeStart, setBeforeStart] = useState("");
+  const [beforeEnd, setBeforeEnd] = useState("");
+  const [duringStart, setDuringStart] = useState("");
+  const [duringEnd, setDuringEnd] = useState("");
+  const [afterStart, setAfterStart] = useState("");
+  const [afterEnd, setAfterEnd] = useState("");
+
   const [printTimestamp, setPrintTimestamp] = useState(true);
   const [cropRatio, setCropRatio] = useState<"none" | "4:3" | "16:9" | "1:1">("none");
   const [maxDimension, setMaxDimension] = useState<"none" | "1200" | "1600" | "1920">("1600");
@@ -95,6 +106,16 @@ export default function ExifToolsPage() {
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
   const [stripEXIF, setStripEXIF] = useState(false);
+
+  const updatePhotoCategory = (id: string, category: "before" | "during" | "after") => {
+    setPhotos(prev => prev.map(p => {
+      if (p.id === id) {
+        const nextCat = p.category === category ? "none" : category;
+        return { ...p, category: nextCat };
+      }
+      return p;
+    }));
+  };
 
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,7 +186,8 @@ export default function ExifToolsPage() {
         file,
         previewUrl: URL.createObjectURL(file),
         exifData,
-        selected: true
+        selected: true,
+        category: "none"
       });
     }
     
@@ -230,15 +252,76 @@ export default function ExifToolsPage() {
   };
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
-    if (downloadMode === "custom" && customDate) {
-      const d = new Date(customDate);
-      if (customTime) {
-        const [hours, minutes] = customTime.split(":");
-        d.setHours(parseInt(hours), parseInt(minutes));
-      }
-      return d;
+    const defaultDate = photo.exifData?.dateTime || new Date(photo.file.lastModified);
+    if (downloadMode !== "custom" || !customDate) {
+      return defaultDate;
     }
-    return photo.exifData?.dateTime || new Date(photo.file.lastModified);
+
+    // Parse base custom date
+    const [year, month, day] = customDate.split("-").map(Number);
+    const dateObj = new Date(year, month - 1, day, 12, 0, 0);
+
+    const getDistributedTime = (
+      targetPhoto: ProcessedPhoto,
+      photoList: ProcessedPhoto[],
+      startStr: string,
+      endStr: string
+    ): Date => {
+      // Sort photoList chronologically by original lastModified to preserve sequence order
+      const sorted = [...photoList].sort((a, b) => a.file.lastModified - b.file.lastModified);
+      const index = sorted.findIndex(p => p.id === targetPhoto.id);
+      if (index === -1) return dateObj;
+
+      if (!startStr) return dateObj;
+      const [sh, sm] = startStr.split(":").map(Number);
+      const startTimeMs = (sh * 60 + sm) * 60 * 1000;
+
+      if (!endStr) {
+        const resDate = new Date(dateObj);
+        resDate.setHours(sh, sm, 0, 0);
+        return resDate;
+      }
+
+      const [eh, em] = endStr.split(":").map(Number);
+      const endTimeMs = (eh * 60 + em) * 60 * 1000;
+
+      const totalPhotos = sorted.length;
+      if (totalPhotos <= 1) {
+        const resDate = new Date(dateObj);
+        resDate.setHours(sh, sm, 0, 0);
+        return resDate;
+      }
+
+      const diffMs = endTimeMs - startTimeMs;
+      const stepMs = diffMs / (totalPhotos - 1);
+      const targetTimeMs = startTimeMs + index * stepMs;
+
+      const totalMinutes = Math.floor(targetTimeMs / (60 * 1000));
+      const hours = Math.floor(totalMinutes / 60) % 24;
+      const minutes = totalMinutes % 60;
+      const seconds = Math.floor((targetTimeMs % (60 * 1000)) / 1000);
+
+      const resDate = new Date(dateObj);
+      resDate.setHours(hours, minutes, seconds, 0);
+      return resDate;
+    };
+
+    if (useCategorizedRanges) {
+      const cat = photo.category || "none";
+      if (cat === "before") {
+        const list = photos.filter(p => p.selected && p.category === "before");
+        return getDistributedTime(photo, list, beforeStart, beforeEnd);
+      } else if (cat === "during") {
+        const list = photos.filter(p => p.selected && p.category === "during");
+        return getDistributedTime(photo, list, duringStart, duringEnd);
+      } else if (cat === "after") {
+        const list = photos.filter(p => p.selected && p.category === "after");
+        return getDistributedTime(photo, list, afterStart, afterEnd);
+      }
+    }
+
+    const generalList = photos.filter(p => p.selected && (!useCategorizedRanges || p.category === "none"));
+    return getDistributedTime(photo, generalList, customTimeStart, customTimeEnd);
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
@@ -268,7 +351,7 @@ export default function ExifToolsPage() {
           gps: effectiveGPS
         }, {
           showDate: printTimestamp && (downloadMode !== "custom" || !!customDate),
-          showTime: printTimestamp && (downloadMode === "datetime" || (downloadMode === "custom" && !!customTime)),
+          showTime: printTimestamp && (downloadMode === "datetime" || (downloadMode === "custom" && (!!customTimeStart || useCategorizedRanges))),
           showGPS: false,
           showAddress: false,
           position: "bottom-right",
@@ -455,7 +538,7 @@ export default function ExifToolsPage() {
                     </div>
                     
                     {downloadMode === "custom" && (
-                      <div className="space-y-3 p-4 bg-background rounded-xl border border-border-subtle">
+                      <div className="space-y-4 p-4 bg-background rounded-xl border border-border-subtle">
                         <div>
                           <label className="block text-xs font-bold text-text-secondary mb-1">Date</label>
                           <input 
@@ -465,15 +548,116 @@ export default function ExifToolsPage() {
                             className="w-full px-3 py-2 bg-surface rounded-lg border border-border-medium text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
                           />
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-text-secondary mb-1">Time (Optional)</label>
+
+                        {/* Toggle categorized ranges */}
+                        <div className="flex items-center gap-2 py-1.5 border-t border-b border-border-subtle/50">
                           <input 
-                            type="time" 
-                            value={customTime} 
-                            onChange={(e) => setCustomTime(e.target.value)}
-                            className="w-full px-3 py-2 bg-surface rounded-lg border border-border-medium text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                            type="checkbox" 
+                            id="use-cat-ranges"
+                            checked={useCategorizedRanges}
+                            onChange={(e) => setUseCategorizedRanges(e.target.checked)}
+                            className="rounded border-border-medium text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5"
                           />
+                          <label htmlFor="use-cat-ranges" className="text-[11px] font-bold text-text-primary uppercase tracking-wider cursor-pointer">
+                            Use Category Ranges
+                          </label>
                         </div>
+
+                        {!useCategorizedRanges ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">General Time Range</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="text-[9px] text-text-secondary block mb-0.5">Start Time</span>
+                                  <input 
+                                    type="time" 
+                                    value={customTimeStart} 
+                                    onChange={(e) => setCustomTimeStart(e.target.value)}
+                                    className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-text-secondary block mb-0.5">End Time (Optional)</span>
+                                  <input 
+                                    type="time" 
+                                    value={customTimeEnd} 
+                                    onChange={(e) => setCustomTimeEnd(e.target.value)}
+                                    className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-[9px] text-text-secondary mt-1.5 leading-tight">
+                                Automatically distributes timestamps evenly between start and end times for all selected photos.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Before Range */}
+                            <div className="p-2.5 rounded-lg border border-cyan-500/20 bg-cyan-500/5 space-y-1.5">
+                              <span className="text-[10px] font-black text-cyan-500 uppercase tracking-widest block">Before Photos</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input 
+                                  type="time" 
+                                  placeholder="Start"
+                                  value={beforeStart} 
+                                  onChange={(e) => setBeforeStart(e.target.value)}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-cyan-500 outline-none"
+                                />
+                                <input 
+                                  type="time" 
+                                  placeholder="End"
+                                  value={beforeEnd} 
+                                  onChange={(e) => setBeforeEnd(e.target.value)}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-cyan-500 outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            {/* During Range */}
+                            <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 space-y-1.5">
+                              <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest block">During Photos</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input 
+                                  type="time" 
+                                  placeholder="Start"
+                                  value={duringStart} 
+                                  onChange={(e) => setDuringStart(e.target.value)}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none"
+                                />
+                                <input 
+                                  type="time" 
+                                  placeholder="End"
+                                  value={duringEnd} 
+                                  onChange={(e) => setDuringEnd(e.target.value)}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-amber-500 outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            {/* After Range */}
+                            <div className="p-2.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 space-y-1.5">
+                              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest block">After Photos</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input 
+                                  type="time" 
+                                  placeholder="Start"
+                                  value={afterStart} 
+                                  onChange={(e) => setAfterStart(e.target.value)}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none"
+                                />
+                                <input 
+                                  type="time" 
+                                  placeholder="End"
+                                  value={afterEnd} 
+                                  onChange={(e) => setAfterEnd(e.target.value)}
+                                  className="w-full px-2 py-1 bg-surface rounded border border-border-medium text-xs focus:border-emerald-500 outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     
@@ -664,6 +848,46 @@ export default function ExifToolsPage() {
                             {photo.selected && <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />}
                           </div>
  
+                          {/* Category Toggles (Before/During/After) */}
+                          <div className="absolute top-10 left-2 flex flex-col items-center gap-1 bg-black/60 rounded-lg p-0.5 border border-white/10 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all z-20">
+                            <button
+                              type="button"
+                              title="Mark as Before"
+                              onClick={(e) => { e.stopPropagation(); updatePhotoCategory(photo.id, "before"); }}
+                              className={`w-5 h-5 flex items-center justify-center text-[9px] font-black uppercase rounded transition-colors ${
+                                photo.category === "before" 
+                                  ? "bg-cyan-500 text-white shadow-sm" 
+                                  : "text-white/60 hover:text-white hover:bg-white/10"
+                              }`}
+                            >
+                              B
+                            </button>
+                            <button
+                              type="button"
+                              title="Mark as During"
+                              onClick={(e) => { e.stopPropagation(); updatePhotoCategory(photo.id, "during"); }}
+                              className={`w-5 h-5 flex items-center justify-center text-[9px] font-black uppercase rounded transition-colors ${
+                                photo.category === "during" 
+                                  ? "bg-amber-500 text-white shadow-sm" 
+                                  : "text-white/60 hover:text-white hover:bg-white/10"
+                              }`}
+                            >
+                              D
+                            </button>
+                            <button
+                              type="button"
+                              title="Mark as After"
+                              onClick={(e) => { e.stopPropagation(); updatePhotoCategory(photo.id, "after"); }}
+                              className={`w-5 h-5 flex items-center justify-center text-[9px] font-black uppercase rounded transition-colors ${
+                                photo.category === "after" 
+                                  ? "bg-emerald-500 text-white shadow-sm" 
+                                  : "text-white/60 hover:text-white hover:bg-white/10"
+                              }`}
+                            >
+                              A
+                            </button>
+                          </div>
+
                           {/* Delete Button */}
                           <button
                             onClick={(e) => { e.stopPropagation(); removePhoto(photo.id); }}
@@ -671,13 +895,26 @@ export default function ExifToolsPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
- 
+  
                           {/* Metadata Overlay Preview */}
                           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3 pt-8">
                             <div className="space-y-1">
-                              <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300">
-                                <Calendar className="h-3 w-3" />
-                                {effDate ? effDate.toLocaleDateString() : "No Date"}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300">
+                                  <Calendar className="h-3 w-3" />
+                                  {effDate ? effDate.toLocaleDateString() : "No Date"}
+                                </div>
+                                {photo.category && photo.category !== "none" && (
+                                  <div className={`px-1 rounded text-[8px] font-black uppercase tracking-wider text-white border ${
+                                    photo.category === "before"
+                                      ? "bg-cyan-600/80 border-cyan-400/40"
+                                      : photo.category === "during"
+                                      ? "bg-amber-600/80 border-amber-400/40"
+                                      : "bg-emerald-600/80 border-emerald-400/40"
+                                  }`}>
+                                    {photo.category}
+                                  </div>
+                                )}
                               </div>
                               {downloadMode !== "date" && (
                                 <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
