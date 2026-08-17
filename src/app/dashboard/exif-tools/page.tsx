@@ -94,6 +94,7 @@ export default function ExifToolsPage() {
   const [overrideGPS, setOverrideGPS] = useState(false);
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
+  const [stripEXIF, setStripEXIF] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -298,48 +299,52 @@ export default function ExifToolsPage() {
         }
         
         try {
-          // Format date for EXIF (YYYY:MM:DD HH:MM:SS)
-          const pad = (n: number) => n.toString().padStart(2, "0");
-          const exifDateStr = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())} ${pad(effectiveDate.getHours())}:${pad(effectiveDate.getMinutes())}:${pad(effectiveDate.getSeconds())}`;
+          let finalJpegDataUrl = jpegDataUrl;
           
-          if (!exifObj["0th"]) exifObj["0th"] = {};
-          if (!exifObj["Exif"]) exifObj["Exif"] = {};
-          if (!exifObj["GPS"]) exifObj["GPS"] = {};
-          
-          exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
-          exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
-          exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
-          
-          if (effectiveGPS) {
-            const latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
-            const lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
+          if (!stripEXIF) {
+            // Format date for EXIF (YYYY:MM:DD HH:MM:SS)
+            const pad = (n: number) => n.toString().padStart(2, "0");
+            const exifDateStr = `${effectiveDate.getFullYear()}:${pad(effectiveDate.getMonth() + 1)}:${pad(effectiveDate.getDate())} ${pad(effectiveDate.getHours())}:${pad(effectiveDate.getMinutes())}:${pad(effectiveDate.getSeconds())}`;
             
-            const absLat = Math.abs(effectiveGPS.latitude);
-            const latD = Math.floor(absLat);
-            const latM = Math.floor((absLat - latD) * 60);
-            const latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
+            if (!exifObj["0th"]) exifObj["0th"] = {};
+            if (!exifObj["Exif"]) exifObj["Exif"] = {};
+            if (!exifObj["GPS"]) exifObj["GPS"] = {};
             
-            const absLng = Math.abs(effectiveGPS.longitude);
-            const lngD = Math.floor(absLng);
-            const lngM = Math.floor((absLng - lngD) * 60);
-            const lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
+            exifObj["0th"][piexif.ImageIFD.DateTime] = exifDateStr;
+            exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = exifDateStr;
+            exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = exifDateStr;
             
-            exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
-            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
-            exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
-            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
-            
-            if (effectiveGPS.altitude !== undefined) {
-              exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] = effectiveGPS.altitude >= 0 ? 0 : 1;
-              exifObj["GPS"][piexif.GPSIFD.GPSAltitude] = [Math.round(Math.abs(effectiveGPS.altitude) * 100), 100];
+            if (effectiveGPS) {
+              const latRef = effectiveGPS.latitude >= 0 ? "N" : "S";
+              const lngRef = effectiveGPS.longitude >= 0 ? "E" : "W";
+              
+              const absLat = Math.abs(effectiveGPS.latitude);
+              const latD = Math.floor(absLat);
+              const latM = Math.floor((absLat - latD) * 60);
+              const latS = Math.round((absLat - latD - latM / 60) * 3600 * 100);
+              
+              const absLng = Math.abs(effectiveGPS.longitude);
+              const lngD = Math.floor(absLng);
+              const lngM = Math.floor((absLng - lngD) * 60);
+              const lngS = Math.round((absLng - lngD - lngM / 60) * 3600 * 100);
+              
+              exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latRef;
+              exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = [[latD, 1], [latM, 1], [latS, 100]];
+              exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lngRef;
+              exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = [[lngD, 1], [lngM, 1], [lngS, 100]];
+              
+              if (effectiveGPS.altitude !== undefined) {
+                exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] = effectiveGPS.altitude >= 0 ? 0 : 1;
+                exifObj["GPS"][piexif.GPSIFD.GPSAltitude] = [Math.round(Math.abs(effectiveGPS.altitude) * 100), 100];
+              }
             }
+            
+            const exifBytes = piexif.dump(exifObj);
+            finalJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
           }
           
-          const exifBytes = piexif.dump(exifObj);
-          const newJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
-          
           // Convert data URI back to Blob
-          const byteString = atob(newJpegDataUrl.split(',')[1]);
+          const byteString = atob(finalJpegDataUrl.split(',')[1]);
           const ab = new ArrayBuffer(byteString.length);
           const ia = new Uint8Array(ab);
           for (let k = 0; k < byteString.length; k++) {
@@ -531,6 +536,24 @@ export default function ExifToolsPage() {
                           </div>
                         </div>
                       )}
+                    </div>
+
+                    {/* Strip EXIF Settings */}
+                    <div className="pt-4 border-t border-border-subtle space-y-3">
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input 
+                          type="checkbox" 
+                          checked={stripEXIF}
+                          onChange={(e) => setStripEXIF(e.target.checked)}
+                          className="rounded border-border-medium text-cyan-500 focus:ring-cyan-500"
+                        />
+                        <span className="text-sm font-black text-text-primary uppercase tracking-widest group-hover:text-cyan-600 transition-colors">
+                          Strip EXIF Metadata
+                        </span>
+                      </label>
+                      <p className="text-[10px] text-text-secondary leading-relaxed">
+                        Removes all GPS, Timestamps, and Camera details from the downloaded files to resolve privacy concerns.
+                      </p>
                     </div>
 
                     {/* Crop & Scale Settings */}
