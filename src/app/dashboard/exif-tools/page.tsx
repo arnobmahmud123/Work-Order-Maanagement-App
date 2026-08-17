@@ -289,30 +289,18 @@ export default function ExifToolsPage() {
         ? a.file.lastModified - b.file.lastModified
         : a.id.localeCompare(b.id);
 
-    // ── Distribute across sortedList ─────────────────────────────────────────
-    const assignTime = (sortedList: ProcessedPhoto[], startMins: number, endMins: number): Date => {
-      const fallbackMins = defaultDate.getHours() * 60 + defaultDate.getMinutes();
-      const s = startMins >= 0 ? startMins : fallbackMins;
-      const idx = sortedList.findIndex(p => p.id === photo.id);
-      if (idx === -1) return buildDate(s);
-      if (sortedList.length <= 1) return buildDate(s);
-
-      // If no valid end time provided, increment by 1 minute per photo if start was configured
-      if (endMins < 0 || endMins <= s) {
-        return buildDate(startMins >= 0 ? s + idx : s);
-      }
-
-      const step = (endMins - s) / (sortedList.length - 1);
-      return buildDate(s + idx * step);
-    };
-
     // ════════════════════════════════════════════════════════════════════════
     // GENERAL MODE — Single continuous timeline across all photos
     // ════════════════════════════════════════════════════════════════════════
     if (!useCategorizedRanges) {
-      const gS = parseTimeToMinutes(customTimeStart);
-      let gE = parseTimeToMinutes(customTimeEnd);
-      if (gS >= 0 && gE >= 0 && gE < gS) gE += 1440; // midnight crossing
+      const userStart = parseTimeToMinutes(customTimeStart);
+      const gS = userStart >= 0 ? userStart : 600; // Default 10:00 AM if unconfigured
+      
+      let userEnd = parseTimeToMinutes(customTimeEnd);
+      let gE = userEnd;
+      if (userStart >= 0 && gE >= 0 && gE < gS) {
+        gE += 1440; // midnight crossing
+      }
 
       const sel = (cat: string) =>
         photos.filter(p => p.category === cat).sort(byMod);
@@ -329,11 +317,23 @@ export default function ExifToolsPage() {
         ...photos.filter(p => p.category === "none").sort(byMod),
       ];
 
-      return assignTime(timeline, gS, gE);
+      const idx = timeline.findIndex(p => p.id === photo.id);
+      if (idx === -1) return buildDate(gS);
+      if (timeline.length <= 1) return buildDate(gS);
+
+      if (gE < 0 || gE <= gS) {
+        // No end time provided: increment by 1 minute per photo sequentially
+        return buildDate(gS + idx);
+      }
+
+      // Even distribution across entire range
+      const step = (gE - gS) / (timeline.length - 1);
+      return buildDate(gS + idx * step);
     }
 
-    // CATEGORY MODE — All captions, previews, and downloaded EXIF timestamps
-    // use this same continuous timeline calculation.
+    // ════════════════════════════════════════════════════════════════════════
+    // CATEGORY MODE — Separate ranges with hard non-overlapping boundaries
+    // ════════════════════════════════════════════════════════════════════════
     const categorizedMinute = categorizedTimeline.photoMinutes.get(photo.id);
     if (categorizedMinute !== undefined) return buildDate(categorizedMinute);
 
@@ -341,12 +341,11 @@ export default function ExifToolsPage() {
     const lastSectionEnd = categorizedTimeline.sections.after?.end 
       ?? categorizedTimeline.sections.during?.end 
       ?? categorizedTimeline.sections.before?.end 
-      ?? parseTimeToMinutes(customTimeStart);
+      ?? 720;
 
     const uncatPhotos = photos.filter(p => p.category === "none").sort(byMod);
     const uncatIdx = uncatPhotos.findIndex(p => p.id === photo.id);
-    const baseStart = lastSectionEnd >= 0 ? lastSectionEnd + 1 : 720;
-    return buildDate(baseStart + Math.max(uncatIdx, 0));
+    return buildDate(lastSectionEnd + 1 + Math.max(uncatIdx, 0));
   };
 
   const processAndDownload = async (onlySelected: boolean) => {
