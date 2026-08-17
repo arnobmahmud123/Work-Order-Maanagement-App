@@ -337,12 +337,16 @@ export default function ExifToolsPage() {
     const categorizedMinute = categorizedTimeline.photoMinutes.get(photo.id);
     if (categorizedMinute !== undefined) return buildDate(categorizedMinute);
 
-    // Uncategorized photos in Category Mode → fall back to general range
-    const gS2 = parseTimeToMinutes(customTimeStart);
-    let gE2 = parseTimeToMinutes(customTimeEnd);
-    if (gS2 >= 0 && gE2 >= 0 && gE2 < gS2) gE2 += 1440;
-    const unc = photos.filter(p => p.category === "none").sort(byMod);
-    return assignTime(unc, gS2, gE2);
+    // Uncategorized photos in Category Mode → continue sequentially after the last section
+    const lastSectionEnd = categorizedTimeline.sections.after?.end 
+      ?? categorizedTimeline.sections.during?.end 
+      ?? categorizedTimeline.sections.before?.end 
+      ?? parseTimeToMinutes(customTimeStart);
+
+    const uncatPhotos = photos.filter(p => p.category === "none").sort(byMod);
+    const uncatIdx = uncatPhotos.findIndex(p => p.id === photo.id);
+    const baseStart = lastSectionEnd >= 0 ? lastSectionEnd + 1 : 720;
+    return buildDate(baseStart + Math.max(uncatIdx, 0));
   };
 
   const processAndDownload = async (onlySelected: boolean) => {

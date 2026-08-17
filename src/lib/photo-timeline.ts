@@ -48,23 +48,31 @@ export function createContinuousPhotoTimeline(
     if (categoryPhotos.length === 0) continue;
 
     const configuredRange = ranges[category];
-    const start = previousLast >= 0 ? previousLast + 1 : configuredRange?.start ?? -1;
-    if (start < 0) continue;
+    let start = configuredRange?.start ?? -1;
+
+    // Hard boundary enforcement: start must be strictly AFTER previous category's end
+    if (previousLast >= 0) {
+      if (start < 0 || start <= previousLast) {
+        start = previousLast + 1;
+      }
+    }
+
+    if (start < 0) {
+      start = 720; // Default to 12:00 PM if unconfigured
+    }
 
     let end = configuredRange?.end ?? -1;
-    if (end < start) end = start + categoryPhotos.length - 1;
+    // End must be >= start
+    if (end < start) {
+      end = start + Math.max(categoryPhotos.length - 1, 0);
+    }
 
-    const step = categoryPhotos.length === 1 ? 0 : (end - start) / (categoryPhotos.length - 1);
+    const step = categoryPhotos.length <= 1 ? 0 : (end - start) / (categoryPhotos.length - 1);
     categoryPhotos.forEach((photo, index) => {
-      // The configured end is the last photo's displayed time, including when
-      // a section contains only one photo. This keeps the next section anchored
-      // to the actual timestamp shown on the prior section's final photo.
       const minute = index === categoryPhotos.length - 1 ? end : start + index * step;
       photoMinutes.set(photo.id, Math.round(minute));
     });
 
-    // The last index is calculated from `end`, but retain it explicitly as the
-    // source of truth for the following category's start.
     previousLast = end;
     sections[category] = { start, end };
   }
