@@ -371,39 +371,30 @@ export default function ExifToolsPage() {
     const normPair = (s: number, e: number): [number, number] =>
       (e >= 0 && e < s) ? [s, e + 1440] : [s, e];
 
-    // ── Sort key ─────────────────────────────────────────────────────────────
-    // Priority: before=0 → during=1 → after=2 → none=3
-    // Tie-break: file.lastModified asc, then id asc (stable)
-    const CAT: Record<string, number> = { before: 0, during: 1, after: 2, none: 3 };
-    const byTimeline = (a: ProcessedPhoto, b: ProcessedPhoto): number => {
-      const ca = CAT[a.category] ?? 3, cb = CAT[b.category] ?? 3;
-      if (ca !== cb) return ca - cb;
-      if (a.file.lastModified !== b.file.lastModified)
-        return a.file.lastModified - b.file.lastModified;
-      return a.id.localeCompare(b.id);
-    };
+    // ── Sort within bucket by file.lastModified then id ──────────────────────
+    const byMod = (a: ProcessedPhoto, b: ProcessedPhoto) =>
+      a.file.lastModified !== b.file.lastModified
+        ? a.file.lastModified - b.file.lastModified
+        : a.id.localeCompare(b.id);
 
-    // ── Distribute ───────────────────────────────────────────────────────────
-    // Find this photo's index in sortedList, then assign an evenly-spaced time
-    // from startMins to endMins. Only SELECTED photos should be in sortedList.
+    // ── Distribute across sortedList ─────────────────────────────────────────
     const assignTime = (sortedList: ProcessedPhoto[], startMins: number, endMins: number): Date => {
       if (startMins < 0) return defaultDate;
       const idx = sortedList.findIndex(p => p.id === photo.id);
       if (idx === -1) return buildDate(startMins);
-      if (sortedList.length <= 1 || endMins < 0 || endMins <= startMins)
-        return buildDate(startMins);
+      if (sortedList.length <= 1) return buildDate(startMins);
+
+      // If no valid end time provided, increment by 1 minute per photo
+      if (endMins < 0 || endMins <= startMins) {
+        return buildDate(startMins + idx);
+      }
+
       const step = (endMins - startMins) / (sortedList.length - 1);
       return buildDate(startMins + idx * step);
     };
 
     // ════════════════════════════════════════════════════════════════════════
-    // GENERAL MODE — Single continuous timeline
-    //
-    //   Start ──► [All Before photos] ──► [All During photos] ──► [All After photos] ──► End
-    //
-    // The full selected photo set is sorted Before→During→After→None, then
-    // distributed evenly from customTimeStart to customTimeEnd.
-    // The boundary between categories is automatic — no manual sub-ranges needed.
+    // GENERAL MODE — Single continuous timeline across all photos
     // ════════════════════════════════════════════════════════════════════════
     if (!useCategorizedRanges) {
       const gS = toMins(customTimeStart);
@@ -411,34 +402,29 @@ export default function ExifToolsPage() {
       let gE = toMins(customTimeEnd);
       if (gE >= 0 && gE < gS) gE += 1440; // midnight crossing
 
-      // Sort within each category bucket by file.lastModified then id (stable)
-      const byMod = (a: ProcessedPhoto, b: ProcessedPhoto) =>
-        a.file.lastModified !== b.file.lastModified
-          ? a.file.lastModified - b.file.lastModified
-          : a.id.localeCompare(b.id);
-
       const sel = (cat: string) =>
-        photos.filter(p => p.selected && p.category === cat).sort(byMod);
+        photos.filter(p => p.category === cat).sort(byMod);
 
-      // GUARANTEED ORDER: Before → During → After → Uncategorized
-      // Each category is filtered separately so they CANNOT mix.
+      // STRICT TIMELINE ORDER:
+      // 1. All Before photos
+      // 2. All During photos
+      // 3. All After photos
+      // 4. All Uncategorized photos
       const timeline = [
         ...sel("before"),
         ...sel("during"),
         ...sel("after"),
-        ...photos.filter(p => p.selected && p.category === "none").sort(byMod),
+        ...photos.filter(p => p.category === "none").sort(byMod),
       ];
 
       return assignTime(timeline, gS, gE);
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // CATEGORY MODE — Each category has its own independent time range
-    //
-    // Enforces chronological order: Before end < During start < During end < After start
+    // CATEGORY MODE — Separate per-category ranges with auto-gap enforcement
     // ════════════════════════════════════════════════════════════════════════
-    const GAP = 1;      // 1-minute minimum gap between category boundaries
-    const SPAN = 5;     // 5-minute minimum span within a category
+    const GAP = 1;
+    const SPAN = 5;
 
     let bS = toMins(beforeStart), bE = toMins(beforeEnd);
     let dS = toMins(duringStart), dE = toMins(duringEnd);
@@ -459,15 +445,15 @@ export default function ExifToolsPage() {
 
     const cat = photo.category || "none";
     if (cat === "before" && bS >= 0) {
-      const list = photos.filter(p => p.selected && p.category === "before").sort(byTimeline);
+      const list = photos.filter(p => p.category === "before").sort(byMod);
       return assignTime(list, bS, bE);
     }
     if (cat === "during" && dS >= 0) {
-      const list = photos.filter(p => p.selected && p.category === "during").sort(byTimeline);
+      const list = photos.filter(p => p.category === "during").sort(byMod);
       return assignTime(list, dS, dE);
     }
     if (cat === "after" && aS >= 0) {
-      const list = photos.filter(p => p.selected && p.category === "after").sort(byTimeline);
+      const list = photos.filter(p => p.category === "after").sort(byMod);
       return assignTime(list, aS, aE);
     }
 
@@ -475,7 +461,7 @@ export default function ExifToolsPage() {
     const gS2 = toMins(customTimeStart);
     let gE2 = toMins(customTimeEnd);
     if (gS2 >= 0 && gE2 >= 0 && gE2 < gS2) gE2 += 1440;
-    const unc = photos.filter(p => p.selected && p.category === "none").sort(byTimeline);
+    const unc = photos.filter(p => p.category === "none").sort(byMod);
     return assignTime(unc, gS2, gE2);
   };
 
@@ -989,7 +975,12 @@ export default function ExifToolsPage() {
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {photos.map((photo) => {
+                    {[...photos].sort((a, b) => {
+                      const tA = getEffectiveDateTime(a).getTime();
+                      const tB = getEffectiveDateTime(b).getTime();
+                      if (tA !== tB) return tA - tB;
+                      return a.file.lastModified - b.file.lastModified;
+                    }).map((photo) => {
                       const effDate = getEffectiveDateTime(photo);
                       const effGPS = getEffectiveGPS(photo);
                       return (
@@ -1078,7 +1069,7 @@ export default function ExifToolsPage() {
                               {downloadMode !== "date" && (
                                 <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
                                   <Clock className="h-3 w-3" />
-                                  {effDate ? effDate.toLocaleTimeString([], { hour12: false }) : "--:--"}
+                                  {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
                                 </div>
                               )}
                               {effGPS ? (
