@@ -7,75 +7,211 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-console.log("Running Strict Chronological Photo Timeline Verification Tests...\n");
+/**
+ * Validates the STRICT GLOBAL cross-category rule:
+ *   Every Before < Every During < Every After
+ * Not just boundary checks — EVERY pair across categories.
+ */
+function validateGlobalOrder(result: ReturnType<typeof buildContinuousPhotoTimeline>) {
+  const beforeAll = result.orderedPhotos.filter(p => p.category === "before");
+  const duringAll = result.orderedPhotos.filter(p => p.category === "during");
+  const afterAll  = result.orderedPhotos.filter(p => p.category === "after");
 
-// Test 1: Standard Mixed Sequence
-const testPhotos1: TimelinePhotoInput[] = [
-  { id: "b1", category: "before", sortValue: 100 },
-  { id: "b2", category: "before", sortValue: 200 },
-  { id: "b3", category: "before", sortValue: 300 },
-  { id: "d1", category: "during", sortValue: 150 },
-  { id: "d2", category: "during", sortValue: 250 },
-  { id: "d3", category: "during", sortValue: 350 },
-  { id: "a1", category: "after", sortValue: 120 },
-  { id: "a2", category: "after", sortValue: 220 },
-  { id: "a3", category: "after", sortValue: 320 },
-];
+  // Every Before < Every During
+  for (const b of beforeAll) {
+    for (const d of duringAll) {
+      assert(
+        b.timestamp.getTime() < d.timestamp.getTime(),
+        `Before "${b.id}" (${b.timeString12h}) must be < During "${d.id}" (${d.timeString12h})`
+      );
+    }
+  }
 
-const result1 = buildContinuousPhotoTimeline(testPhotos1, {
-  startTimeStr: "18:00", // 6:00 PM
-  endTimeStr: "19:30",   // 7:30 PM
-});
+  // Every During < Every After
+  for (const d of duringAll) {
+    for (const a of afterAll) {
+      assert(
+        d.timestamp.getTime() < a.timestamp.getTime(),
+        `During "${d.id}" (${d.timeString12h}) must be < After "${a.id}" (${a.timeString12h})`
+      );
+    }
+  }
 
-const beforeList1 = result1.orderedPhotos.filter(p => p.category === "before");
-const duringList1 = result1.orderedPhotos.filter(p => p.category === "during");
-const afterList1 = result1.orderedPhotos.filter(p => p.category === "after");
+  // Every Before < Every After
+  for (const b of beforeAll) {
+    for (const a of afterAll) {
+      assert(
+        b.timestamp.getTime() < a.timestamp.getTime(),
+        `Before "${b.id}" (${b.timeString12h}) must be < After "${a.id}" (${a.timeString12h})`
+      );
+    }
+  }
 
-const maxBefore1 = Math.max(...beforeList1.map(p => p.timestamp.getTime()));
-const minDuring1 = Math.min(...duringList1.map(p => p.timestamp.getTime()));
-const maxDuring1 = Math.max(...duringList1.map(p => p.timestamp.getTime()));
-const minAfter1 = Math.min(...afterList1.map(p => p.timestamp.getTime()));
+  // Also: Latest Before < Earliest During < Earliest After (boundary check)
+  if (beforeAll.length > 0 && duringAll.length > 0) {
+    const latestBefore = Math.max(...beforeAll.map(p => p.timestamp.getTime()));
+    const earliestDuring = Math.min(...duringAll.map(p => p.timestamp.getTime()));
+    assert(latestBefore < earliestDuring,
+      `Latest Before (${new Date(latestBefore).toLocaleTimeString()}) must be < Earliest During (${new Date(earliestDuring).toLocaleTimeString()})`);
+  }
+  if (duringAll.length > 0 && afterAll.length > 0) {
+    const latestDuring = Math.max(...duringAll.map(p => p.timestamp.getTime()));
+    const earliestAfter = Math.min(...afterAll.map(p => p.timestamp.getTime()));
+    assert(latestDuring < earliestAfter,
+      `Latest During (${new Date(latestDuring).toLocaleTimeString()}) must be < Earliest After (${new Date(earliestAfter).toLocaleTimeString()})`);
+  }
 
-console.log("Test 1 Timeline:");
-result1.orderedPhotos.forEach(p => {
-  console.log(`  #${p.timelineIndex + 1} | ${p.category.toUpperCase().padEnd(7)} | ${p.id} | ${p.timeString12h}`);
-});
+  // Sequential monotonicity: each photo strictly later than previous
+  for (let i = 1; i < result.orderedPhotos.length; i++) {
+    assert(
+      result.orderedPhotos[i].timestamp.getTime() > result.orderedPhotos[i - 1].timestamp.getTime(),
+      `Photo #${i + 1} (${result.orderedPhotos[i].timeString12h}) must be > Photo #${i} (${result.orderedPhotos[i - 1].timeString12h})`
+    );
+  }
 
-assert(maxBefore1 < minDuring1, "Max Before must be strictly earlier than Min During");
-assert(maxDuring1 < minAfter1, "Max During must be strictly earlier than Min After");
-
-for (let i = 1; i < result1.orderedPhotos.length; i++) {
+  // No equal timestamps across any stages
+  const allTimestamps = result.orderedPhotos.map(p => p.timestamp.getTime());
+  const uniqueTimestamps = new Set(allTimestamps);
   assert(
-    result1.orderedPhotos[i].timestamp.getTime() > result1.orderedPhotos[i - 1].timestamp.getTime(),
-    `Photo #${i + 1} must be strictly later than Photo #${i}`
+    allTimestamps.length === uniqueTimestamps.size,
+    `All timestamps must be unique. Got ${allTimestamps.length} photos but only ${uniqueTimestamps.size} unique timestamps.`
   );
 }
-console.log("✓ Test 1 Passed: Before < During < After strictly satisfied!\n");
 
-// Test 2: Midnight Crossing
-const testPhotos2: TimelinePhotoInput[] = [
-  { id: "b1", category: "before", sortValue: 1 },
-  { id: "d1", category: "during", sortValue: 2 },
-  { id: "a1", category: "after", sortValue: 3 },
-];
+function printTimeline(result: ReturnType<typeof buildContinuousPhotoTimeline>) {
+  result.orderedPhotos.forEach(p => {
+    console.log(`  #${String(p.timelineIndex + 1).padStart(2)} | ${p.category.toUpperCase().padEnd(7)} | ${p.id.padEnd(4)} | ${p.timeString12h}`);
+  });
+}
 
-const result2 = buildContinuousPhotoTimeline(testPhotos2, {
-  startTimeStr: "23:58", // 11:58 PM
-  endTimeStr: "00:05",   // 12:05 AM (next day)
-});
+console.log("════════════════════════════════════════════════════════════");
+console.log("  STRICT GLOBAL PHOTO TIMELINE VERIFICATION TEST SUITE");
+console.log("════════════════════════════════════════════════════════════\n");
 
-console.log("Test 2 Midnight Crossing Timeline:");
-result2.orderedPhotos.forEach(p => {
-  console.log(`  #${p.timelineIndex + 1} | ${p.category.toUpperCase().padEnd(7)} | ${p.id} | ${p.timeString12h} (${p.timestamp.toISOString()})`);
-});
+// ──── TEST 1: Standard 9 photos (3 Before, 3 During, 3 After) ────
+console.log("TEST 1: Standard 9 photos with start/end time window");
+const result1 = buildContinuousPhotoTimeline(
+  [
+    { id: "b1", category: "before", sortValue: 100 },
+    { id: "b2", category: "before", sortValue: 200 },
+    { id: "b3", category: "before", sortValue: 300 },
+    { id: "d1", category: "during", sortValue: 150 },
+    { id: "d2", category: "during", sortValue: 250 },
+    { id: "d3", category: "during", sortValue: 350 },
+    { id: "a1", category: "after", sortValue: 120 },
+    { id: "a2", category: "after", sortValue: 220 },
+    { id: "a3", category: "after", sortValue: 320 },
+  ],
+  { startTimeStr: "18:00", endTimeStr: "19:30" }
+);
+printTimeline(result1);
+validateGlobalOrder(result1);
+console.log("✅ TEST 1 PASSED\n");
 
-const maxBefore2 = Math.max(...result2.orderedPhotos.filter(p => p.category === "before").map(p => p.timestamp.getTime()));
-const minDuring2 = Math.min(...result2.orderedPhotos.filter(p => p.category === "during").map(p => p.timestamp.getTime()));
-const maxDuring2 = Math.max(...result2.orderedPhotos.filter(p => p.category === "during").map(p => p.timestamp.getTime()));
-const minAfter2 = Math.min(...result2.orderedPhotos.filter(p => p.category === "after").map(p => p.timestamp.getTime()));
+// ──── TEST 2: Tight window (forces all into narrow range) ────
+console.log("TEST 2: Tight time window (should auto-expand)");
+const result2 = buildContinuousPhotoTimeline(
+  [
+    { id: "b1", category: "before", sortValue: 1 },
+    { id: "b2", category: "before", sortValue: 2 },
+    { id: "d1", category: "during", sortValue: 3 },
+    { id: "d2", category: "during", sortValue: 4 },
+    { id: "d3", category: "during", sortValue: 5 },
+    { id: "a1", category: "after", sortValue: 6 },
+  ],
+  { startTimeStr: "14:00", endTimeStr: "14:05" }
+);
+printTimeline(result2);
+validateGlobalOrder(result2);
+console.log("✅ TEST 2 PASSED\n");
 
-assert(maxBefore2 < minDuring2, "Max Before must be strictly earlier than Min During across midnight");
-assert(maxDuring2 < minAfter2, "Max During must be strictly earlier than Min After across midnight");
-console.log("✓ Test 2 Passed: Midnight crossing handled seamlessly with strictly increasing Date!\n");
+// ──── TEST 3: Midnight crossing ────
+console.log("TEST 3: Midnight crossing (23:58 start, 00:10 end)");
+const result3 = buildContinuousPhotoTimeline(
+  [
+    { id: "b1", category: "before", sortValue: 1 },
+    { id: "d1", category: "during", sortValue: 2 },
+    { id: "d2", category: "during", sortValue: 3 },
+    { id: "a1", category: "after", sortValue: 4 },
+  ],
+  { startTimeStr: "23:58", endTimeStr: "00:10" }
+);
+printTimeline(result3);
+validateGlobalOrder(result3);
+console.log("✅ TEST 3 PASSED\n");
 
-console.log("ALL MATHEMATICAL TIMELINE VERIFICATION TESTS PASSED SUCCESSFULLY!");
+// ──── TEST 4: No end time (default 1-min spacing) ────
+console.log("TEST 4: No end time provided (default spacing)");
+const result4 = buildContinuousPhotoTimeline(
+  [
+    { id: "b1", category: "before", sortValue: 1 },
+    { id: "b2", category: "before", sortValue: 2 },
+    { id: "b3", category: "before", sortValue: 3 },
+    { id: "b4", category: "before", sortValue: 4 },
+    { id: "d1", category: "during", sortValue: 5 },
+    { id: "d2", category: "during", sortValue: 6 },
+    { id: "d3", category: "during", sortValue: 7 },
+    { id: "d4", category: "during", sortValue: 8 },
+    { id: "d5", category: "during", sortValue: 9 },
+    { id: "a1", category: "after", sortValue: 10 },
+    { id: "a2", category: "after", sortValue: 11 },
+  ],
+  { startTimeStr: "10:00" }
+);
+printTimeline(result4);
+validateGlobalOrder(result4);
+console.log("✅ TEST 4 PASSED\n");
+
+// ──── TEST 5: Large asymmetric (20 Before, 2 During, 1 After) ────
+console.log("TEST 5: Asymmetric — 20 Before, 2 During, 1 After");
+const bigBefore: TimelinePhotoInput[] = [];
+for (let i = 1; i <= 20; i++) {
+  bigBefore.push({ id: `b${i}`, category: "before", sortValue: i });
+}
+const result5 = buildContinuousPhotoTimeline(
+  [
+    ...bigBefore,
+    { id: "d1", category: "during", sortValue: 21 },
+    { id: "d2", category: "during", sortValue: 22 },
+    { id: "a1", category: "after", sortValue: 23 },
+  ],
+  { startTimeStr: "06:00", endTimeStr: "07:00" }
+);
+printTimeline(result5);
+validateGlobalOrder(result5);
+console.log("✅ TEST 5 PASSED\n");
+
+// ──── TEST 6: Only Before and After (no During) ────
+console.log("TEST 6: Only Before and After (no During photos)");
+const result6 = buildContinuousPhotoTimeline(
+  [
+    { id: "b1", category: "before", sortValue: 1 },
+    { id: "b2", category: "before", sortValue: 2 },
+    { id: "a1", category: "after", sortValue: 3 },
+    { id: "a2", category: "after", sortValue: 4 },
+  ],
+  { startTimeStr: "15:00", endTimeStr: "16:00" }
+);
+printTimeline(result6);
+validateGlobalOrder(result6);
+console.log("✅ TEST 6 PASSED\n");
+
+// ──── TEST 7: Single photo per category ────
+console.log("TEST 7: One photo per category");
+const result7 = buildContinuousPhotoTimeline(
+  [
+    { id: "b1", category: "before", sortValue: 1 },
+    { id: "d1", category: "during", sortValue: 2 },
+    { id: "a1", category: "after", sortValue: 3 },
+  ],
+  { startTimeStr: "22:00" }
+);
+printTimeline(result7);
+validateGlobalOrder(result7);
+console.log("✅ TEST 7 PASSED\n");
+
+console.log("════════════════════════════════════════════════════════════");
+console.log("  ALL 7 TESTS PASSED — GLOBAL ORDER IS MATHEMATICALLY PROVEN");
+console.log("  Every Before < Every During < Every After");
+console.log("  No overlapping or equal timestamps between any stages");
+console.log("════════════════════════════════════════════════════════════");

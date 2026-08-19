@@ -292,7 +292,8 @@ export default function ExifToolsPage() {
         };
       });
 
-      // 2. REQUIRED HARD VALIDATION (Rule 10 & 11)
+      // 2. GLOBAL CROSS-CATEGORY VALIDATION — not just sequential
+      // 2a. Sequential monotonicity
       for (let i = 1; i < timelineItems.length; i++) {
         const prev = timelineItems[i - 1];
         const curr = timelineItems[i];
@@ -303,7 +304,40 @@ export default function ExifToolsPage() {
         }
       }
 
-      // 3. REQUIRED DEBUG LOG OUTPUT (Rule 15)
+      // 2b. Global: every Before < every During
+      const beforeItems = timelineItems.filter(t => t.category === "before");
+      const duringItems = timelineItems.filter(t => t.category === "during");
+      const afterItems  = timelineItems.filter(t => t.category === "after");
+
+      for (const b of beforeItems) {
+        for (const d of duringItems) {
+          if (b.timestamp.getTime() >= d.timestamp.getTime()) {
+            throw new Error(
+              `CROSS-CATEGORY VIOLATION: Before "${b.filename}" (${b.timestamp.toLocaleTimeString()}) must be strictly earlier than During "${d.filename}" (${d.timestamp.toLocaleTimeString()})`
+            );
+          }
+        }
+        for (const a of afterItems) {
+          if (b.timestamp.getTime() >= a.timestamp.getTime()) {
+            throw new Error(
+              `CROSS-CATEGORY VIOLATION: Before "${b.filename}" (${b.timestamp.toLocaleTimeString()}) must be strictly earlier than After "${a.filename}" (${a.timestamp.toLocaleTimeString()})`
+            );
+          }
+        }
+      }
+
+      // 2c. Global: every During < every After
+      for (const d of duringItems) {
+        for (const a of afterItems) {
+          if (d.timestamp.getTime() >= a.timestamp.getTime()) {
+            throw new Error(
+              `CROSS-CATEGORY VIOLATION: During "${d.filename}" (${d.timestamp.toLocaleTimeString()}) must be strictly earlier than After "${a.filename}" (${a.timestamp.toLocaleTimeString()})`
+            );
+          }
+        }
+      }
+
+      // 3. REQUIRED DEBUG LOG OUTPUT
       console.log("=================== TIMELINE ===================");
       timelineItems.forEach(({ index, category, filename, timestamp }) => {
         const idxStr = (index + 1).toString().padStart(2, "0");
