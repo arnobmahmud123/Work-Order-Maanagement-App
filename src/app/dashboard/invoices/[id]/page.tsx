@@ -34,6 +34,7 @@ import toast from "react-hot-toast";
 const statusColors: Record<string, string> = {
   DRAFT: "bg-surface-hover text-text-dim",
   SENT: "bg-blue-100 text-blue-700",
+  APPROVED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30",
   PAID: "bg-green-100 text-green-700",
   OVERDUE: "bg-red-100 text-red-700",
   CANCELLED: "bg-surface-hover text-text-muted",
@@ -299,13 +300,29 @@ function InvoiceDetailView({
             )}
             {invoice.status === "DRAFT" && ["ADMIN", "COORDINATOR"].includes(role) && (
               <Button size="sm" onClick={() => onStatusChange(invoice.id, "SENT")}>
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4 mr-1.5" />
                 Send
               </Button>
             )}
-            {invoice.status === "SENT" && ["ADMIN", "COORDINATOR"].includes(role) && (
+            {!isClient && (invoice.status === "DRAFT" || invoice.status === "SENT") && ["ADMIN", "COORDINATOR"].includes(role) && (
+              <Button 
+                size="sm" 
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20"
+                onClick={() => onStatusChange(invoice.id, "APPROVED")}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Approve Invoice
+              </Button>
+            )}
+            {invoice.status === "APPROVED" && ["ADMIN", "COORDINATOR"].includes(role) && (
               <Button size="sm" onClick={() => onStatusChange(invoice.id, "PAID")}>
-                <CheckCircle2 className="h-4 w-4" />
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Mark Paid
+              </Button>
+            )}
+            {invoice.status === "SENT" && isClient && ["ADMIN", "COORDINATOR"].includes(role) && (
+              <Button size="sm" onClick={() => onStatusChange(invoice.id, "PAID")}>
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 Mark Paid
               </Button>
             )}

@@ -103,6 +103,7 @@ export const STATUS_COLORS: Record<string, string> = {
 export const INVOICE_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
   SENT: "Sent",
+  APPROVED: "Approved",
   PAID: "Paid",
   OVERDUE: "Overdue",
   CANCELLED: "Cancelled",

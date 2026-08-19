@@ -76,47 +76,94 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden: Invoice belongs to another company" }, { status: 403 });
   }
 
+  const isNowApproved = body.status === "APPROVED" && existing.status !== "APPROVED";
+  const isNowPaid = body.status === "PAID" && existing.status !== "PAID";
+  const wasNotApprovedOrPaid = !["APPROVED", "PAID"].includes(existing.status);
+
+  const updateData: any = {
+    status: body.status,
+    notes: body.notes,
+  };
+
+  if (body.status === "APPROVED" && !existing.approvedAt) {
+    updateData.approvedAt = new Date();
+  }
+  if (body.status === "PAID") {
+    updateData.paidAt = new Date();
+    if (!existing.approvedAt) {
+      updateData.approvedAt = new Date();
+    }
+  }
+
   const invoice = await prisma.invoice.update({
     where: { id },
-    data: {
-      status: body.status,
-      notes: body.notes,
-      paidAt: body.status === "PAID" ? new Date() : undefined,
-    },
-    include: { items: true, workOrder: { select: { contractorId: true } } },
+    data: updateData,
+    include: { items: true, workOrder: { select: { contractorId: true, title: true } } },
   });
 
-  // Auto-credit contractor balance when invoice is paid
-  if (body.status === "PAID" && invoice.workOrder?.contractorId && invoice.total > 0) {
+  // Auto-credit contractor balance when contractor invoice is approved or paid
+  if ((isNowApproved || isNowPaid) && wasNotApprovedOrPaid && invoice.total > 0) {
     try {
-      const contractorId = invoice.workOrder.contractorId;
-      // Upsert contractor balance
-      const balance = await prisma.contractorBalance.upsert({
-        where: { contractorId },
-        update: {
-          totalEarned: { increment: invoice.total },
-          availableBalance: { increment: invoice.total },
-        },
-        create: {
-          contractorId,
-          totalEarned: invoice.total,
-          availableBalance: invoice.total,
-        },
-      });
+      const contractorId = (invoice.type === "CONTRACTOR" && invoice.clientId) 
+        ? invoice.clientId 
+        : invoice.workOrder?.contractorId;
 
-      // Create balance transaction
-      await prisma.balanceTransaction.create({
-        data: {
-          contractorId,
-          type: "CREDIT",
-          amount: invoice.total,
-          description: `Payment received for invoice ${invoice.invoiceNumber}`,
-          referenceId: invoice.id,
-          balanceAfter: balance.availableBalance + invoice.total,
-        },
-      });
+      if (contractorId) {
+        // Prevent duplicate crediting
+        const existingTx = await prisma.balanceTransaction.findFirst({
+          where: {
+            contractorId,
+            referenceId: invoice.id,
+            type: "CREDIT",
+          },
+        });
+
+        if (!existingTx) {
+          const currentBalance = await prisma.contractorBalance.findUnique({
+            where: { contractorId },
+          });
+
+          const balance = await prisma.contractorBalance.upsert({
+            where: { contractorId },
+            update: {
+              totalEarned: { increment: invoice.total },
+              pendingAmount: { increment: invoice.total },
+            },
+            create: {
+              contractorId,
+              totalEarned: invoice.total,
+              pendingAmount: invoice.total,
+              availableBalance: 0,
+            },
+          });
+
+          const newTotal = (currentBalance?.totalEarned || 0) + invoice.total;
+
+          // Create balance transaction noting the 30-day holding period
+          await prisma.balanceTransaction.create({
+            data: {
+              contractorId,
+              type: "CREDIT",
+              amount: invoice.total,
+              description: `Invoice #${invoice.invoiceNumber} approved ($${invoice.total.toFixed(2)}) — 30-day holding period`,
+              referenceId: invoice.id,
+              balanceAfter: newTotal,
+            },
+          });
+
+          // Notify contractor
+          await prisma.notification.create({
+            data: {
+              type: "INVOICE",
+              title: "Invoice Approved",
+              message: `Your invoice #${invoice.invoiceNumber} for $${invoice.total.toFixed(2)} has been approved and added to your balance. Funds will unlock for withdrawal in 30 days.`,
+              userId: contractorId,
+            },
+          }).catch(() => {});
+        }
+      }
     } catch (err) {
-      console.error("Failed to credit contractor balance:", err);
+      console.error("Failed to credit contractor balance on invoice approval:", err);
     }
   }
 

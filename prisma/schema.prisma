@@ -359,6 +359,7 @@ model Invoice {
   notes           String?
   dueDate         DateTime?
   paidAt          DateTime?
+  approvedAt      DateTime?
   stripePaymentId String?
   stripeInvoiceId String?
 

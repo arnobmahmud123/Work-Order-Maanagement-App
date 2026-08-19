@@ -56,14 +56,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Check available balance
-  const balance = await prisma.contractorBalance.findUnique({
-    where: { contractorId: userId },
-  });
+  // 30-Day Maturation Check: Calculate real-time available matured balance
+  const { calculateContractorMaturityBalance } = await import("@/lib/contractor-balance-calculator");
+  const maturityBalance = await calculateContractorMaturityBalance(userId);
 
-  if (!balance || balance.availableBalance < amount) {
+  if (maturityBalance.availableBalance < amount) {
+    const immatureInfo = maturityBalance.immatureAmount > 0
+      ? ` ($${maturityBalance.immatureAmount.toFixed(2)} is currently pending the 30-day holding period)`
+      : "";
     return NextResponse.json(
-      { error: "Insufficient available balance" },
+      {
+        error: `Insufficient withdrawable balance. You can only withdraw earnings from work orders and invoices approved at least 30 days ago. Current withdrawable balance: $${maturityBalance.availableBalance.toFixed(2)}${immatureInfo}.`,
+      },
       { status: 400 }
     );
   }
@@ -90,11 +94,17 @@ export async function POST(req: NextRequest) {
   });
 
   // Deduct from available balance and add to pending
-  await prisma.contractorBalance.update({
+  await prisma.contractorBalance.upsert({
     where: { contractorId: userId },
-    data: {
+    update: {
       availableBalance: { decrement: amount },
       pendingAmount: { increment: amount },
+    },
+    create: {
+      contractorId: userId,
+      totalEarned: maturityBalance.totalEarned,
+      availableBalance: Math.max(0, maturityBalance.availableBalance - amount),
+      pendingAmount: amount,
     },
   });
 
@@ -106,7 +116,7 @@ export async function POST(req: NextRequest) {
       amount: -amount,
       description: `Withdrawal request via ${method}`,
       referenceId: withdrawal.id,
-      balanceAfter: balance.availableBalance - amount,
+      balanceAfter: Math.max(0, maturityBalance.availableBalance - amount),
     },
   });
 

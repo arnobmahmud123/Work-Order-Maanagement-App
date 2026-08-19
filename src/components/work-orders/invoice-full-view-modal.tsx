@@ -79,7 +79,8 @@ interface InvoiceFullViewModalProps {
 const statusColors: Record<string, string> = {
   DRAFT: "bg-surface-hover text-text-dim border-border-subtle",
   SENT: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  PAID: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  APPROVED: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  PAID: "bg-green-500/10 text-green-400 border-green-500/20",
   OVERDUE: "bg-rose-500/10 text-rose-400 border-rose-500/20",
   CANCELLED: "bg-surface-hover text-text-muted border-border-subtle",
 };

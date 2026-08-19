@@ -759,6 +759,21 @@ export default function WorkOrderDetailPage({
     }
   };
 
+  const handleApproveInvoice = async (inv: any) => {
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "APPROVED" }),
+      });
+      if (!res.ok) throw new Error("Failed to approve invoice");
+      toast.success(`Invoice ${inv.invoiceNumber} approved and credited to contractor balance`);
+      refetchWorkOrder();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve invoice");
+    }
+  };
+
   const handlePrintInvoice = (inv: any) => {
     const user = session?.user as any;
     const fromCompany = user?.company || "PreservationPro";
@@ -3785,6 +3800,11 @@ export default function WorkOrderDetailPage({
                               </>
                             ) : (
                               <>
+                                {color === "emerald" && inv.status !== "APPROVED" && inv.status !== "PAID" && ["ADMIN", "COORDINATOR", "SUPER_ADMIN"].includes(role) && (
+                                  <button onClick={() => handleApproveInvoice(inv)} className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/20 transition-all text-[10px] font-black uppercase tracking-widest">
+                                    <CheckCircle2 className="h-3 w-3" /> Approve
+                                  </button>
+                                )}
                                 <button onClick={() => handlePrintInvoice(inv)} className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover text-text-secondary hover:text-foreground dark:hover:text-white border border-border-subtle hover:border-border-medium transition-all text-[10px] font-black uppercase tracking-widest">
                                   <Printer className="h-3 w-3" /> Print
                                 </button>

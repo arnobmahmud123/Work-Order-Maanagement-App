@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { calculateContractorMaturityBalance } from "@/lib/contractor-balance-calculator";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -10,25 +11,37 @@ export async function GET(req: NextRequest) {
 
   const role = (session.user as any).role;
   const userId = (session.user as any).id;
+  const { searchParams } = new URL(req.url);
+  const targetContractorId = searchParams.get("contractorId");
 
-  if (role === "ADMIN") {
-    // Admin sees all balances
-    const balances = await prisma.contractorBalance.findMany({
-      include: {
-        contractor: { select: { id: true, name: true, email: true, image: true } },
+  if (role === "ADMIN" && !targetContractorId) {
+    // Admin overview: calculate live maturity for all contractors with balances/invoices
+    const contractorUsers = await prisma.user.findMany({
+      where: {
+        OR: [
+          { role: "CONTRACTOR" },
+          { contractorBalance: { isNot: null } },
+        ],
       },
-      orderBy: { updatedAt: "desc" },
+      select: { id: true, name: true, email: true, image: true },
     });
+
+    const balances = await Promise.all(
+      contractorUsers.map(async (u) => {
+        const matBalance = await calculateContractorMaturityBalance(u.id);
+        return {
+          ...matBalance,
+          contractor: u,
+        };
+      })
+    );
+
     return NextResponse.json({ balances });
   }
 
-  // Contractor sees only their balance
-  const balance = await prisma.contractorBalance.findUnique({
-    where: { contractorId: userId },
-    include: {
-      contractor: { select: { id: true, name: true, email: true, image: true } },
-    },
-  });
+  // Contractor sees their own live maturity balance (or admin requesting a specific contractor)
+  const contractorIdToQuery = (role === "ADMIN" && targetContractorId) ? targetContractorId : userId;
+  const maturityBalance = await calculateContractorMaturityBalance(contractorIdToQuery);
 
-  return NextResponse.json({ balance: balance || null });
+  return NextResponse.json({ balance: maturityBalance });
 }
