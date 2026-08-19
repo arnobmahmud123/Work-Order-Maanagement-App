@@ -6,7 +6,6 @@ import JSZip from "jszip";
 import * as piexif from "piexifjs";
 import { readEXIF, generatePhotoWithOverlay, GPSData } from "@/lib/exif";
 import { buildContinuousPhotoTimeline, format12h } from "@/lib/photo-timeline";
-import { TopNav } from "@/components/layout/top-nav";
 
 interface ProcessedPhoto {
   id: string;
@@ -516,24 +515,21 @@ export default function ExifToolsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <main className="flex-1 flex flex-col min-w-0">
-        <TopNav />
-        <div 
-          className={`flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative transition-colors ${isDragging ? 'bg-cyan-500/5' : ''}`}
-          onDragEnter={handleDragEnter}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {isDragging && (
-            <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-cyan-500 rounded-3xl m-4 md:m-6 lg:m-8 pointer-events-none">
-              <Upload className="h-12 w-12 text-cyan-500 mb-4 animate-bounce" />
-              <h2 className="text-2xl font-black text-cyan-500 tracking-tight">Drop photos here</h2>
-              <p className="text-text-secondary mt-2 font-medium">Release to add to EXIF tools</p>
-            </div>
-          )}
-          <div className="max-w-6xl mx-auto space-y-6">
+    <div 
+      className={`relative min-h-[calc(100vh-140px)] transition-colors ${isDragging ? 'bg-cyan-500/5' : ''}`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-cyan-500 rounded-3xl pointer-events-none">
+          <Upload className="h-12 w-12 text-cyan-500 mb-4 animate-bounce" />
+          <h2 className="text-2xl font-black text-cyan-500 tracking-tight">Drop photos here</h2>
+          <p className="text-text-secondary mt-2 font-medium">Release to add to EXIF tools</p>
+        </div>
+      )}
+      <div className="space-y-6">
             
             {/* Header Area */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface p-6 rounded-2xl border border-border-medium shadow-sm">
@@ -967,10 +963,7 @@ export default function ExifToolsPage() {
                 </button>
               </div>
             )}
-            
           </div>
         </div>
-      </main>
-    </div>
-  );
-}
+      );
+    }
