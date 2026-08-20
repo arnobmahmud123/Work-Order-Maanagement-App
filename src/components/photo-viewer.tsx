@@ -165,8 +165,8 @@ export function PhotoViewer({
     : null;
 
   return (
-    <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden" style={{ paddingTop: 'max(3.5rem, calc(env(safe-area-inset-top) + 0.5rem))' }}>
-      <div className={cn("relative w-full max-w-[95vw] max-h-[95vh] mx-4 flex flex-col lg:flex-row overflow-hidden", className)}>
+    <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden">
+      <div className={cn("relative w-full max-w-[95vw] max-h-[95vh] mx-4 flex flex-col overflow-hidden", className)}>
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 relative z-[9999]">
           <div className="flex items-center gap-3 min-w-0">

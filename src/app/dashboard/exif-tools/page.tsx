@@ -84,6 +84,7 @@ function cropAndResizeImage(
 
 export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
+  const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [customTimeStart, setCustomTimeStart] = useState("");
   const [customTimeEnd, setCustomTimeEnd] = useState("");
@@ -259,6 +260,9 @@ export default function ExifToolsPage() {
   }, [photos, customDate, customTimeStart, customTimeEnd]);
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
+    if (downloadMode !== "custom") {
+      return photo.exifData?.dateTime || new Date(photo.file.lastModified);
+    }
     const timedPhoto = photoTimeline.photoMap.get(photo.id);
     if (timedPhoto) {
       return timedPhoto.timestamp;
@@ -291,47 +295,49 @@ export default function ExifToolsPage() {
         };
       });
 
-      // 2. GLOBAL CROSS-CATEGORY VALIDATION — not just sequential
-      // 2a. Sequential monotonicity
-      for (let i = 1; i < timelineItems.length; i++) {
-        const prev = timelineItems[i - 1];
-        const curr = timelineItems[i];
-        if (curr.timestamp.getTime() <= prev.timestamp.getTime()) {
-          throw new Error(
-            `INVALID TIMELINE: Photo #${curr.index + 1} ${curr.filename} (${curr.timestamp.toLocaleTimeString()}) must be strictly later than Photo #${prev.index + 1} ${prev.filename} (${prev.timestamp.toLocaleTimeString()})`
-          );
+      // 2. GLOBAL CROSS-CATEGORY VALIDATION — not just sequential (Only in Custom Timeline mode)
+      if (downloadMode === "custom") {
+        // 2a. Sequential monotonicity
+        for (let i = 1; i < timelineItems.length; i++) {
+          const prev = timelineItems[i - 1];
+          const curr = timelineItems[i];
+          if (curr.timestamp.getTime() <= prev.timestamp.getTime()) {
+            throw new Error(
+              `INVALID TIMELINE: Photo #${curr.index + 1} ${curr.filename} (${curr.timestamp.toLocaleTimeString()}) must be strictly later than Photo #${prev.index + 1} ${prev.filename} (${prev.timestamp.toLocaleTimeString()})`
+            );
+          }
         }
-      }
 
-      // 2b. Global: every Before < every During
-      const beforeItems = timelineItems.filter(t => t.category === "before");
-      const duringItems = timelineItems.filter(t => t.category === "during");
-      const afterItems  = timelineItems.filter(t => t.category === "after");
+        // 2b. Global: every Before < every During
+        const beforeItems = timelineItems.filter(t => t.category === "before");
+        const duringItems = timelineItems.filter(t => t.category === "during");
+        const afterItems  = timelineItems.filter(t => t.category === "after");
 
-      for (const b of beforeItems) {
+        for (const b of beforeItems) {
+          for (const d of duringItems) {
+            if (b.timestamp.getTime() >= d.timestamp.getTime()) {
+              throw new Error(
+                `CROSS-CATEGORY VIOLATION: Before "${b.filename}" (${b.timestamp.toLocaleTimeString()}) must be strictly earlier than During "${d.filename}" (${d.timestamp.toLocaleTimeString()})`
+              );
+            }
+          }
+          for (const a of afterItems) {
+            if (b.timestamp.getTime() >= a.timestamp.getTime()) {
+              throw new Error(
+                `CROSS-CATEGORY VIOLATION: Before "${b.filename}" (${b.timestamp.toLocaleTimeString()}) must be strictly earlier than After "${a.filename}" (${a.timestamp.toLocaleTimeString()})`
+              );
+            }
+          }
+        }
+
+        // 2c. Global: every During < every After
         for (const d of duringItems) {
-          if (b.timestamp.getTime() >= d.timestamp.getTime()) {
-            throw new Error(
-              `CROSS-CATEGORY VIOLATION: Before "${b.filename}" (${b.timestamp.toLocaleTimeString()}) must be strictly earlier than During "${d.filename}" (${d.timestamp.toLocaleTimeString()})`
-            );
-          }
-        }
-        for (const a of afterItems) {
-          if (b.timestamp.getTime() >= a.timestamp.getTime()) {
-            throw new Error(
-              `CROSS-CATEGORY VIOLATION: Before "${b.filename}" (${b.timestamp.toLocaleTimeString()}) must be strictly earlier than After "${a.filename}" (${a.timestamp.toLocaleTimeString()})`
-            );
-          }
-        }
-      }
-
-      // 2c. Global: every During < every After
-      for (const d of duringItems) {
-        for (const a of afterItems) {
-          if (d.timestamp.getTime() >= a.timestamp.getTime()) {
-            throw new Error(
-              `CROSS-CATEGORY VIOLATION: During "${d.filename}" (${d.timestamp.toLocaleTimeString()}) must be strictly earlier than After "${a.filename}" (${a.timestamp.toLocaleTimeString()})`
-            );
+          for (const a of afterItems) {
+            if (d.timestamp.getTime() >= a.timestamp.getTime()) {
+              throw new Error(
+                `CROSS-CATEGORY VIOLATION: During "${d.filename}" (${d.timestamp.toLocaleTimeString()}) must be strictly earlier than After "${a.filename}" (${a.timestamp.toLocaleTimeString()})`
+              );
+            }
           }
         }
       }
@@ -367,7 +373,7 @@ export default function ExifToolsPage() {
           gps: effectiveGPS
         }, {
           showDate: printTimestamp,
-          showTime: printTimestamp,
+          showTime: printTimestamp && downloadMode !== "date",
           showGPS: false,
           showAddress: false,
           position: "bottom-right",
@@ -565,94 +571,132 @@ export default function ExifToolsPage() {
                 <div className="lg:col-span-1 space-y-4">
                   <div className="bg-surface p-5 rounded-2xl border border-border-medium shadow-sm space-y-5 sticky top-4">
                     <div>
-                      <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timeline Configuration</h3>
-                      
-                      <div className="space-y-4 p-4 bg-background rounded-xl border border-border-subtle">
-                        <div>
-                          <label className="block text-xs font-bold text-text-secondary mb-1">Work Order Date</label>
+                      <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timestamp Settings</h3>
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
                           <input 
-                            type="date" 
-                            value={customDate} 
-                            onChange={(e) => setCustomDate(e.target.value)}
-                            className="w-full px-3 py-2 bg-surface rounded-lg border border-border-medium text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "date"} 
+                            onChange={() => setDownloadMode("date")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
                           />
-                        </div>
-
-                        {/* Continuous Job Timeline Range */}
-                        <div className="space-y-3 pt-1">
-                          <div>
-                            <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">Continuous Clock Window</label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <span className="text-[9px] text-text-secondary block mb-0.5">Start Time</span>
-                                <input 
-                                  type="time" 
-                                  value={customTimeStart} 
-                                  onChange={(e) => setCustomTimeStart(e.target.value)}
-                                  className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-[9px] text-text-secondary block mb-0.5">End Time (Optional)</span>
-                                <input 
-                                  type="time" 
-                                  value={customTimeEnd} 
-                                  onChange={(e) => setCustomTimeEnd(e.target.value)}
-                                  className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
-                                />
-                              </div>
-                            </div>
-                            <p className="text-[9px] text-text-secondary mt-1.5 leading-tight">
-                              Distributes photos seamlessly across one continuous timeline from Start to End.
-                            </p>
-                          </div>
-
-                          {/* Live Timeline Section Breakdown */}
-                          {photos.length > 0 && (
-                            <div className="space-y-2 pt-2 border-t border-border-subtle/50">
-                              <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center justify-between">
-                                <span>Timeline Sequence</span>
-                                <span className="text-[9px] text-emerald-400 font-mono font-bold">1 Continuous Clock</span>
-                              </div>
-
-                              <div className="space-y-1.5 text-xs font-mono">
-                                {photoTimeline.sections.before && (
-                                  <div className="flex items-center justify-between p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                                    <span className="font-bold uppercase text-[10px]">1. Before ({photoTimeline.sections.before.count})</span>
-                                    <span>{format12h(photoTimeline.sections.before.start)} – {format12h(photoTimeline.sections.before.end)}</span>
-                                  </div>
-                                )}
-
-                                {photoTimeline.sections.during && (
-                                  <div className="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                                    <span className="font-bold uppercase text-[10px]">2. During ({photoTimeline.sections.during.count})</span>
-                                    <span>{format12h(photoTimeline.sections.during.start)} – {format12h(photoTimeline.sections.during.end)}</span>
-                                  </div>
-                                )}
-
-                                {photoTimeline.sections.after && (
-                                  <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                                    <span className="font-bold uppercase text-[10px]">3. After ({photoTimeline.sections.after.count})</span>
-                                    <span>{format12h(photoTimeline.sections.after.start)} – {format12h(photoTimeline.sections.after.end)}</span>
-                                  </div>
-                                )}
-
-                                {photoTimeline.sections.none && (
-                                  <div className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border-medium text-text-secondary">
-                                    <span className="font-bold uppercase text-[10px]">Other ({photoTimeline.sections.none.count})</span>
-                                    <span>{format12h(photoTimeline.sections.none.start)} – {format12h(photoTimeline.sections.none.end)}</span>
-                                  </div>
-                                )}
-                              </div>
-
-                              <p className="text-[9px] text-cyan-500/90 font-medium leading-normal bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
-                                ⚡ <strong>Strict Continuous Flow</strong>: Before → During → After. Each next photo timestamp is strictly later than the previous photo with zero overlaps.
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                          <span className="text-sm font-medium text-text-primary">EXIF Date Only</span>
+                        </label>
+                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                          <input 
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "datetime"} 
+                            onChange={() => setDownloadMode("datetime")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
+                          />
+                          <span className="text-sm font-medium text-text-primary">EXIF Date & Time</span>
+                        </label>
+                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                          <input 
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "custom"} 
+                            onChange={() => setDownloadMode("custom")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
+                          />
+                          <span className="text-sm font-medium text-text-primary">Custom Date/Time (Timeline)</span>
+                        </label>
                       </div>
                     </div>
+
+                    {downloadMode === "custom" && (
+                      <div>
+                        <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timeline Configuration</h3>
+                        
+                        <div className="space-y-4 p-4 bg-background rounded-xl border border-border-subtle">
+                          <div>
+                            <label className="block text-xs font-bold text-text-secondary mb-1">Work Order Date</label>
+                            <input 
+                              type="date" 
+                              value={customDate} 
+                              onChange={(e) => setCustomDate(e.target.value)}
+                              className="w-full px-3 py-2 bg-surface rounded-lg border border-border-medium text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                            />
+                          </div>
+
+                          {/* Continuous Job Timeline Range */}
+                          <div className="space-y-3 pt-1">
+                            <div>
+                              <label className="block text-[10px] font-bold text-text-secondary uppercase mb-1">Continuous Clock Window</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="text-[9px] text-text-secondary block mb-0.5">Start Time</span>
+                                  <input 
+                                    type="time" 
+                                    value={customTimeStart} 
+                                    onChange={(e) => setCustomTimeStart(e.target.value)}
+                                    className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-text-secondary block mb-0.5">End Time (Optional)</span>
+                                  <input 
+                                    type="time" 
+                                    value={customTimeEnd} 
+                                    onChange={(e) => setCustomTimeEnd(e.target.value)}
+                                    className="w-full px-2 py-1.5 bg-surface rounded-lg border border-border-medium text-xs focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-[9px] text-text-secondary mt-1.5 leading-tight">
+                                Distributes photos seamlessly across one continuous timeline from Start to End.
+                              </p>
+                            </div>
+
+                            {/* Live Timeline Section Breakdown */}
+                            {photos.length > 0 && (
+                              <div className="space-y-2 pt-2 border-t border-border-subtle/50">
+                                <div className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center justify-between">
+                                  <span>Timeline Sequence</span>
+                                  <span className="text-[9px] text-emerald-400 font-mono font-bold">1 Continuous Clock</span>
+                                </div>
+
+                                <div className="space-y-1.5 text-xs font-mono">
+                                  {photoTimeline.sections.before && (
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                                      <span className="font-bold uppercase text-[10px]">1. Before ({photoTimeline.sections.before.count})</span>
+                                      <span>{format12h(photoTimeline.sections.before.start)} – {format12h(photoTimeline.sections.before.end)}</span>
+                                    </div>
+                                  )}
+
+                                  {photoTimeline.sections.during && (
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                      <span className="font-bold uppercase text-[10px]">2. During ({photoTimeline.sections.during.count})</span>
+                                      <span>{format12h(photoTimeline.sections.during.start)} – {format12h(photoTimeline.sections.during.end)}</span>
+                                    </div>
+                                  )}
+
+                                  {photoTimeline.sections.after && (
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                      <span className="font-bold uppercase text-[10px]">3. After ({photoTimeline.sections.after.count})</span>
+                                      <span>{format12h(photoTimeline.sections.after.start)} – {format12h(photoTimeline.sections.after.end)}</span>
+                                    </div>
+                                  )}
+
+                                  {photoTimeline.sections.none && (
+                                    <div className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border-medium text-text-secondary">
+                                      <span className="font-bold uppercase text-[10px]">Other ({photoTimeline.sections.none.count})</span>
+                                      <span>{format12h(photoTimeline.sections.none.start)} – {format12h(photoTimeline.sections.none.end)}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <p className="text-[9px] text-cyan-500/90 font-medium leading-normal bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
+                                  ⚡ <strong>Strict Continuous Flow</strong>: Before → During → After. Each next photo timestamp is strictly later than the previous photo with zero overlaps.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     
                     <div className="pt-4 border-t border-border-subtle space-y-3">
@@ -916,10 +960,12 @@ export default function ExifToolsPage() {
                                   </div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
-                                <Clock className="h-3 w-3" />
-                                {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
-                              </div>
+                              {downloadMode !== "date" && (
+                                <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
+                                  <Clock className="h-3 w-3" />
+                                  {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
+                                </div>
+                              )}
                               {effGPS ? (
                                 <div className="flex flex-col gap-0.5 text-[10px] font-mono text-emerald-400/80 mt-1">
                                   <div className="flex items-center gap-1.5" title={`${effGPS.latitude}, ${effGPS.longitude}`}>
