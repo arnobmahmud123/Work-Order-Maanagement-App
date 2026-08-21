@@ -15,11 +15,11 @@ export default function APDashboard() {
     const fetchAP = async () => {
       try {
         const res = await fetch('/api/accounting/ap');
-        if (!res.ok) throw new Error('Failed to load AP data');
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed to load AP data'); }
         const json = await res.json();
         setData(json);
       } catch (err) {
-        toast.error('Failed to load AP data');
+        toast.error(err instanceof Error ? err.message : 'Failed to load AP data');
       } finally {
         setLoading(false);
       }

@@ -15,11 +15,11 @@ export default function ARDashboard() {
     const fetchAR = async () => {
       try {
         const res = await fetch('/api/accounting/ar');
-        if (!res.ok) throw new Error('Failed to load AR data');
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed to load AR data'); }
         const json = await res.json();
         setData(json);
       } catch (err) {
-        toast.error('Failed to load AR data');
+        toast.error(err instanceof Error ? err.message : 'Failed to load AR data');
       } finally {
         setLoading(false);
       }
