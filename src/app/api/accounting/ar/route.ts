@@ -39,6 +39,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error("AR Error:", error);
-    return NextResponse.json({ error: "Failed to fetch AR data" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch AR data: " + (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
