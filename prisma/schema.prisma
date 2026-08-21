@@ -2,14 +2,11 @@ generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
-
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
 }
-
 // ─── Auth ────────────────────────────────────────────────────────────────────
-
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -23,35 +20,27 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([provider, providerAccountId])
   @@index([userId])
   @@map("accounts")
 }
-
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@index([userId])
   @@map("sessions")
 }
-
 model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
-
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
-
 model User {
   id             String    @id @default(cuid())
   name           String?
@@ -65,7 +54,6 @@ model User {
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-
   accounts                Account[]
   sessions                Session[]
   assignedWorkOrders      WorkOrder[]             @relation("AssignedContractor")
@@ -96,7 +84,8 @@ model User {
   disputesRaised          Dispute[]               @relation("DisputeRaised")
   disputesAssigned        Dispute[]               @relation("DisputeAssigned")
   withdrawals             Withdrawal[]
-
+  bills                   Bill[]                  @relation("BillVendor")
+  chargebacks             Chargeback[]            @relation("ChargebackContractor")
   // Contractor Network
   posts                Post[]                @relation("PostAuthor")
   postComments         PostComment[]         @relation("CommentAuthor")
@@ -112,18 +101,14 @@ model User {
   reviewedReports      PostReport[]          @relation("ReportReviewer")
   purchaseOrders       PurchaseOrder[]       @relation("PurchaseOrderCreator")
   materialTransactions MaterialTransaction[] @relation("MaterialTransactionUser")
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id])
-
   @@index([role])
   @@index([email])
   @@index([companyId])
   @@map("users")
 }
-
 // ─── Work Orders ─────────────────────────────────────────────────────────────
-
 model WorkOrder {
   id                  String    @id @default(cuid())
   title               String
@@ -149,38 +134,33 @@ model WorkOrder {
   specialInstructions String?
   tasks               String? // JSON array of task objects
   metadata            String? // flexible extra data
-
   contractorId  String?
   coordinatorId String?
   processorId   String?
   createdById   String?
-
   contractor  User? @relation("AssignedContractor", fields: [contractorId], references: [id])
   coordinator User? @relation("Coordinator", fields: [coordinatorId], references: [id])
   processor   User? @relation("Processor", fields: [processorId], references: [id])
   createdBy   User? @relation("CreatedBy", fields: [createdById], references: [id])
-
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id])
-
   files         FileUpload[]
   threads       Thread[]
   invoices      Invoice[]
   history       ActivityLog[]
   notifications Notification[]
   disputes      Dispute[]
-
+  financialTransactions FinancialTransaction[]
+  bills                Bill[]
+  chargebacks          Chargeback[]
   // Contractor Network
   posts       Post[]
   jobRequests JobRequest[]
   formSubmissions WorkOrderFormSubmission[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id])
-
   @@index([status])
   @@index([contractorId])
   @@index([coordinatorId])
@@ -189,7 +169,6 @@ model WorkOrder {
   @@index([propertyId])
   @@index([companyId])
 }
-
 model Property {
   id         String          @id @default(cuid())
   address    String
@@ -204,14 +183,11 @@ model Property {
   photos     PropertyPhoto[]
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([address])
   @@index([companyId])
 }
-
 model PropertyPhoto {
   id           String   @id @default(cuid())
   propertyId   String
@@ -224,10 +200,8 @@ model PropertyPhoto {
   category     String   @default("FRONT") // FRONT, SIDE, BACK, etc.
   uploaderId   String?
   createdAt    DateTime @default(now())
-
   @@index([propertyId])
 }
-
 model FileUpload {
   id           String     @id @default(cuid())
   filename     String
@@ -242,17 +216,13 @@ model FileUpload {
   uploaderId   String?    @map("uploader_id")
   uploader     User?      @relation(fields: [uploaderId], references: [id])
   createdAt    DateTime   @default(now()) @map("created_at")
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([workOrderId])
   @@index([companyId])
   @@map("work_order_files")
 }
-
 // ─── Messaging ───────────────────────────────────────────────────────────────
-
 model Thread {
   id          String     @id @default(cuid())
   title       String?
@@ -261,17 +231,13 @@ model Thread {
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-
   participants ThreadParticipant[]
   messages     Message[]
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([workOrderId])
   @@index([companyId])
 }
-
 model ThreadParticipant {
   id       String   @id @default(cuid())
   threadId String
@@ -280,14 +246,11 @@ model ThreadParticipant {
   follows  Boolean  @default(true)
   blocked  Boolean  @default(false)
   joinedAt DateTime @default(now())
-
   thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([threadId, userId])
   @@index([userId])
 }
-
 model Message {
   id         String  @id @default(cuid())
   content    String
@@ -298,35 +261,28 @@ model Message {
   threadId   String
   authorId   String
   parentId   String? // for threading/replies
-
   thread       Thread               @relation(fields: [threadId], references: [id], onDelete: Cascade)
   author       User                 @relation(fields: [authorId], references: [id])
   parent       Message?             @relation("MessageReplies", fields: [parentId], references: [id])
   replies      Message[]            @relation("MessageReplies")
   readReceipts MessageReadReceipt[]
   attachments  MessageAttachment[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([threadId])
   @@index([authorId])
   @@index([parentId])
   @@index([createdAt])
 }
-
 model MessageReadReceipt {
   id        String   @id @default(cuid())
   messageId String
   userId    String
   readAt    DateTime @default(now())
-
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
   @@unique([messageId, userId])
   @@index([messageId])
 }
-
 model MessageAttachment {
   id           String @id @default(cuid())
   filename     String
@@ -335,14 +291,10 @@ model MessageAttachment {
   size         Int
   path         String
   messageId    String
-
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
   @@index([messageId])
 }
-
 // ─── Finance ─────────────────────────────────────────────────────────────────
-
 model Invoice {
   id              String     @id @default(cuid())
   invoiceNumber   String     @unique
@@ -362,22 +314,19 @@ model Invoice {
   approvedAt      DateTime?
   stripePaymentId String?
   stripeInvoiceId String?
-
+  syncStatus      String     @default("PENDING")
+  qboId           String?
   items InvoiceItem[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([clientId])
   @@index([status])
   @@index([workOrderId])
   @@index([type])
   @@index([companyId])
 }
-
 model InvoiceItem {
   id              String  @id @default(cuid())
   taskName        String?
@@ -388,14 +337,10 @@ model InvoiceItem {
   discountPercent Float   @default(0)
   amount          Float
   invoiceId       String
-
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-
   @@index([invoiceId])
 }
-
 // ─── Support ─────────────────────────────────────────────────────────────────
-
 model SupportTicket {
   id          String  @id @default(cuid())
   subject     String
@@ -407,40 +352,30 @@ model SupportTicket {
   creator     User    @relation("TicketCreator", fields: [creatorId], references: [id])
   assigneeId  String?
   assignee    User?   @relation("TicketAssignee", fields: [assigneeId], references: [id])
-
   comments      TicketComment[]
   notifications Notification[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([creatorId])
   @@index([assigneeId])
   @@index([status])
   @@index([priority])
   @@index([companyId])
 }
-
 model TicketComment {
   id         String  @id @default(cuid())
   content    String
   ticketId   String
   authorId   String
   isInternal Boolean @default(false)
-
   ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author User          @relation(fields: [authorId], references: [id])
-
   createdAt DateTime @default(now())
-
   @@index([ticketId])
 }
-
 // ─── System ──────────────────────────────────────────────────────────────────
-
 model Notification {
   id          String         @id @default(cuid())
   title       String
@@ -454,14 +389,11 @@ model Notification {
   ticketId    String?
   ticket      SupportTicket? @relation(fields: [ticketId], references: [id])
   createdAt   DateTime       @default(now())
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([userId, isRead])
   @@index([companyId])
 }
-
 model ActivityLog {
   id          String     @id @default(cuid())
   action      String
@@ -471,60 +403,46 @@ model ActivityLog {
   workOrderId String?
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
   createdAt   DateTime   @default(now())
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([workOrderId])
   @@index([userId])
   @@index([createdAt])
   @@index([companyId])
 }
-
 // ─── Notification Preferences ────────────────────────────────────────────────
-
 model NotificationPreference {
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   // Channel toggles
   messagesInApp Boolean @default(true)
   messagesEmail Boolean @default(true)
   messagesSms   Boolean @default(false)
-
   workOrderStatusInApp Boolean @default(true)
   workOrderStatusEmail Boolean @default(true)
   workOrderStatusSms   Boolean @default(false)
-
   dueOverdueInApp Boolean @default(true)
   dueOverdueEmail Boolean @default(true)
   dueOverdueSms   Boolean @default(true)
-
   invoicesInApp Boolean @default(true)
   invoicesEmail Boolean @default(true)
   invoicesSms   Boolean @default(false)
-
   supportInApp Boolean @default(true)
   supportEmail Boolean @default(true)
   supportSms   Boolean @default(false)
-
   aiInApp Boolean @default(true)
   aiEmail Boolean @default(false)
   aiSms   Boolean @default(false)
-
   // Quiet hours
   quietHoursEnabled  Boolean @default(false)
   quietHoursStart    String? // "22:00"
   quietHoursEnd      String? // "07:00"
   quietHoursTimezone String? @default("America/New_York")
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
 // ─── Inspectors ──────────────────────────────────────────────────────────────
-
 model Inspector {
   id           String   @id @default(cuid())
   name         String
@@ -546,33 +464,25 @@ model Inspector {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   specialties InspectorSpecialty[]
   callLogs    CallLog[]
-
   @@index([availability])
   @@index([city])
   @@index([isActive])
 }
-
 model InspectorSpecialty {
   id          String  @id @default(cuid())
   inspectorId String
   specialty   String
   yearsExp    Int?
   certified   Boolean @default(false)
-
   inspector Inspector @relation(fields: [inspectorId], references: [id], onDelete: Cascade)
-
   @@unique([inspectorId, specialty])
   @@index([specialty])
 }
-
 // ─── AI Calling & Voice ─────────────────────────────────────────────────────
-
 model VoiceProfile {
   id             String   @id @default(cuid())
   userId         String
@@ -587,12 +497,9 @@ model VoiceProfile {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-
   callLogs CallLog[]
-
   @@index([userId])
 }
-
 model CallLog {
   id              String        @id @default(cuid())
   initiatorId     String
@@ -616,13 +523,11 @@ model CallLog {
   endedAt         DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-
   @@index([initiatorId])
   @@index([recipientId])
   @@index([status])
   @@index([createdAt])
 }
-
 model ScheduledCall {
   id             String   @id @default(cuid())
   creatorId      String
@@ -640,14 +545,11 @@ model ScheduledCall {
   callLogId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-
   @@index([creatorId])
   @@index([scheduledAt])
   @@index([status])
 }
-
 // ─── Slack-like Chat ────────────────────────────────────────────────────────
-
 model Channel {
   id          String   @id @default(cuid())
   name        String
@@ -658,17 +560,13 @@ model Channel {
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   members  ChannelMember[]
   messages ChatMessage[]
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([type])
   @@index([companyId])
 }
-
 model ChannelMember {
   id         String    @id @default(cuid())
   channelId  String
@@ -676,14 +574,11 @@ model ChannelMember {
   role       String    @default("MEMBER") // ADMIN, MEMBER
   lastReadAt DateTime?
   joinedAt   DateTime  @default(now())
-
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([channelId, userId])
   @@index([userId])
 }
-
 model ChatMessage {
   id        String  @id @default(cuid())
   content   String
@@ -697,49 +592,38 @@ model ChatMessage {
   fileMime  String?
   isEdited  Boolean @default(false)
   isDeleted Boolean @default(false)
-
   channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
   author    User              @relation(fields: [authorId], references: [id])
   parent    ChatMessage?      @relation("ChatThreadReplies", fields: [parentId], references: [id])
   replies   ChatMessage[]     @relation("ChatThreadReplies")
   reactions MessageReaction[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([channelId])
   @@index([authorId])
   @@index([parentId])
   @@index([createdAt])
 }
-
 model MessageReaction {
   id        String @id @default(cuid())
   messageId String
   userId    String
   emoji     String
-
   message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
   user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([messageId, userId, emoji])
   @@index([messageId])
 }
-
 model TypingIndicator {
   id        String   @id @default(cuid())
   channelId String
   userId    String
   expiresAt DateTime
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([channelId, userId])
   @@index([channelId])
 }
-
 // ─── Contractor Balance ──────────────────────────────────────────────────────
-
 model ContractorBalance {
   id               String   @id @default(cuid())
   contractorId     String   @unique
@@ -750,13 +634,10 @@ model ContractorBalance {
   availableBalance Float    @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([companyId])
 }
-
 model BalanceTransaction {
   id           String   @id @default(cuid())
   contractorId String
@@ -767,13 +648,10 @@ model BalanceTransaction {
   referenceId  String? // workOrderId or invoiceId
   balanceAfter Float
   createdAt    DateTime @default(now())
-
   @@index([contractorId])
   @@index([createdAt])
 }
-
 // ─── Disputes ────────────────────────────────────────────────────────────────
-
 model Dispute {
   id               String     @id @default(cuid())
   workOrderId      String?
@@ -791,17 +669,13 @@ model Dispute {
   adjustmentType   String? // CREDIT, DEBIT
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([status])
   @@index([raisedById])
   @@index([companyId])
 }
-
 // ─── Withdrawals ─────────────────────────────────────────────────────────────
-
 model Withdrawal {
   id              String    @id @default(cuid())
   contractorId    String
@@ -815,21 +689,16 @@ model Withdrawal {
   rejectionReason String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([contractorId])
   @@index([status])
   @@index([companyId])
 }
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTRACTOR NETWORK COLLABORATION SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════════
-
 // ─── Feed Posts ──────────────────────────────────────────────────────────────
-
 model Post {
   id       String @id @default(cuid())
   title    String
@@ -838,11 +707,9 @@ model Post {
   status   String @default("ACTIVE")
   authorId String
   author   User   @relation("PostAuthor", fields: [authorId], references: [id])
-
   // Work Order linking
   workOrderId String?
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
-
   // Location
   location  String?
   city      String?
@@ -850,26 +717,21 @@ model Post {
   zipCode   String?
   latitude  Float?
   longitude Float?
-
   // Tags & metadata
   tags      String  @default("")
   isPinned  Boolean @default(false)
   isUrgent  Boolean @default(false)
   viewCount Int     @default(0)
-
   // Relations
   comments    PostComment[]
   reactions   PostReaction[]
   attachments PostAttachment[]
   jobRequest  JobRequest?
   reports     PostReport[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([authorId])
   @@index([category])
   @@index([status])
@@ -878,7 +740,6 @@ model Post {
   @@index([latitude, longitude])
   @@index([companyId])
 }
-
 model PostAttachment {
   id           String  @id @default(cuid())
   postId       String
@@ -891,12 +752,9 @@ model PostAttachment {
   url          String?
   thumbnailUrl String?
   uploaderId   String?
-
   createdAt DateTime @default(now())
-
   @@index([postId])
 }
-
 model PostComment {
   id       String        @id @default(cuid())
   content  String
@@ -909,18 +767,14 @@ model PostComment {
   replies  PostComment[] @relation("CommentReplies")
   isPinned Boolean       @default(false)
   isUrgent Boolean       @default(false)
-
   reactions PostReaction[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([postId])
   @@index([authorId])
   @@index([parentId])
   @@index([createdAt])
 }
-
 model PostReaction {
   id        String       @id @default(cuid())
   type      String       @default("LIKE")
@@ -930,35 +784,28 @@ model PostReaction {
   post      Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
   commentId String?
   comment   PostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
-
   createdAt DateTime @default(now())
-
   @@unique([userId, postId, type])
   @@unique([userId, commentId, type])
   @@index([postId])
   @@index([commentId])
 }
-
 // ─── Job Coverage Marketplace ────────────────────────────────────────────────
-
 model JobRequest {
   id          String @id @default(cuid())
   postId      String @unique
   post        Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
   requesterId String
   requester   User   @relation("JobRequester", fields: [requesterId], references: [id])
-
   // Work Order
   workOrderId String?
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
-
   // Job details
   scopeOfWork String
   budget      Float?
   deadline    DateTime?
   urgency     String    @default("MEDIUM")
   status      String    @default("OPEN")
-
   // Location
   location  String
   city      String?
@@ -966,7 +813,6 @@ model JobRequest {
   zipCode   String?
   latitude  Float?
   longitude Float?
-
   // Assignment
   assignedToId  String?
   assignedTo    User?     @relation("JobAssignedTo", fields: [assignedToId], references: [id])
@@ -975,16 +821,12 @@ model JobRequest {
   adminApproved Boolean   @default(false)
   approvedById  String?
   approvedBy    User?     @relation("JobApprovedBy", fields: [approvedById], references: [id])
-
   // Offers
   offers JobOffer[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([requesterId])
   @@index([assignedToId])
   @@index([status])
@@ -993,7 +835,6 @@ model JobRequest {
   @@index([latitude, longitude])
   @@index([companyId])
 }
-
 model JobOffer {
   id               String     @id @default(cuid())
   jobRequestId     String
@@ -1004,26 +845,20 @@ model JobOffer {
   proposedBudget   Float?
   proposedDeadline DateTime?
   status           String     @default("PENDING") // PENDING, ACCEPTED, REJECTED, WITHDRAWN
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@unique([jobRequestId, offerorId])
   @@index([jobRequestId])
   @@index([offerorId])
   @@index([companyId])
 }
-
 // ─── Reputation System ───────────────────────────────────────────────────────
-
 model ContractorProfile {
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation("ContractorProfile", fields: [userId], references: [id], onDelete: Cascade)
-
   // Stats
   completedJobs    Int   @default(0)
   totalJobs        Int   @default(0)
@@ -1031,13 +866,10 @@ model ContractorProfile {
   totalRatings     Int   @default(0)
   reliabilityScore Float @default(100) // 0-100
   responseTime     Int   @default(0) // avg minutes
-
   // Badges
   badges ContractorBadge[]
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   // Bio & skills
   bio           String?
   skills        String  @default("")
@@ -1045,7 +877,6 @@ model ContractorProfile {
   serviceRadius Int     @default(50) // miles
   isAvailable   Boolean @default(true)
   hourlyRate    Float?
-
   // Location (base of operations)
   address   String?
   city      String?
@@ -1053,10 +884,8 @@ model ContractorProfile {
   zipCode   String?
   latitude  Float?
   longitude Float?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@index([userId])
   @@index([avgRating])
   @@index([reliabilityScore])
@@ -1064,7 +893,6 @@ model ContractorProfile {
   @@index([isAvailable])
   @@index([companyId])
 }
-
 model ContractorBadge {
   id          String            @id @default(cuid())
   profileId   String
@@ -1073,11 +901,9 @@ model ContractorBadge {
   label       String
   description String?
   earnedAt    DateTime          @default(now())
-
   @@unique([profileId, type])
   @@index([profileId])
 }
-
 model Rating {
   id            String  @id @default(cuid())
   ratedId       String
@@ -1090,16 +916,12 @@ model Rating {
   punctuality   Int? // 1-5
   quality       Int? // 1-5
   communication Int? // 1-5
-
   createdAt DateTime @default(now())
-
   @@unique([ratedId, raterId, workOrderId])
   @@index([ratedId])
   @@index([raterId])
 }
-
 // ─── Moderation ──────────────────────────────────────────────────────────────
-
 model PostReport {
   id           String  @id @default(cuid())
   postId       String
@@ -1112,15 +934,12 @@ model PostReport {
   reviewedById String?
   reviewedBy   User?   @relation("ReportReviewer", fields: [reviewedById], references: [id])
   resolution   String?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@unique([postId, reporterId])
   @@index([postId])
   @@index([status])
 }
-
 // ─── Extend User model ──────────────────────────────────────────────────────
 // Note: User model relations are added via separate relation fields above
 // The following are referenced but defined via @relation in their respective models:
@@ -1129,9 +948,7 @@ model PostReport {
 // - ContractorProfile
 // - RatedUser, RaterUser
 // - ReportReporter, ReportReviewer
-
 // ─── Logistics / Supply Chain ────────────────────────────────────────────────
-
 model Supplier {
   id         String  @id @default(cuid())
   name       String
@@ -1143,20 +960,15 @@ model Supplier {
   rating     Float   @default(0)
   leadTime   String? // e.g. "1-2 days"
   notes      String?
-
   materials      Material[]
   purchaseOrders PurchaseOrder[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([name])
   @@index([companyId])
 }
-
 model Material {
   id       String  @id @default(cuid())
   name     String
@@ -1166,22 +978,17 @@ model Material {
   quantity Float   @default(0)
   minStock Float   @default(0)
   location String? // warehouse/location
-
   supplierId   String?
   supplier     Supplier?             @relation(fields: [supplierId], references: [id])
   transactions MaterialTransaction[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([category])
   @@index([supplierId])
   @@index([companyId])
 }
-
 model PurchaseOrder {
   id               String    @id @default(cuid())
   orderNumber      String    @unique
@@ -1197,21 +1004,16 @@ model PurchaseOrder {
   deliveredAt      DateTime?
   createdById      String?
   createdBy        User?     @relation("PurchaseOrderCreator", fields: [createdById], references: [id])
-
   items PurchaseOrderItem[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([supplierId])
   @@index([status])
   @@index([orderNumber])
   @@index([companyId])
 }
-
 model PurchaseOrderItem {
   id              String        @id @default(cuid())
   materialId      String?
@@ -1221,10 +1023,8 @@ model PurchaseOrderItem {
   total           Float
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-
   @@index([purchaseOrderId])
 }
-
 model MaterialTransaction {
   id          String   @id @default(cuid())
   materialId  String
@@ -1238,13 +1038,11 @@ model MaterialTransaction {
   userId      String?
   user        User?    @relation("MaterialTransactionUser", fields: [userId], references: [id])
   createdAt   DateTime @default(now())
-
   @@index([materialId])
   @@index([type])
   @@index([workOrderId])
   @@index([createdAt])
 }
-
 model SmsMessage {
   id         String   @id @default(cuid())
   from       String // Phone number of sender
@@ -1255,18 +1053,14 @@ model SmsMessage {
   authorName String? // Staff name for internal notes
   mediaUrl   String? // Base64 or public file attachment URL
   createdAt  DateTime @default(now())
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([from])
   @@index([createdAt])
   @@index([companyId])
   @@map("sms_messages")
 }
-
 // ─── Lead Intelligence CRM ───────────────────────────────────────────────────
-
 model Lead {
   id                String   @id @default(cuid())
   companyName       String
@@ -1291,21 +1085,17 @@ model Lead {
   instagramUrl      String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
   activities LeadActivity[]
   notes      LeadNote[]
   tags       LeadTag[]      @relation("LeadTags")
-
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
   @@index([state, city, zipCode])
   @@index([businessType])
   @@index([status])
   @@index([companyId])
   @@map("leads")
 }
-
 model LeadActivity {
   id         String   @id @default(cuid())
   leadId     String
@@ -1314,14 +1104,11 @@ model LeadActivity {
   authorId   String? // References User id loosely
   authorName String?
   createdAt  DateTime @default(now())
-
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-
   @@index([leadId])
   @@index([createdAt])
   @@map("lead_activities")
 }
-
 model LeadNote {
   id         String   @id @default(cuid())
   leadId     String
@@ -1330,23 +1117,17 @@ model LeadNote {
   authorName String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-
   @@index([leadId])
   @@map("lead_notes")
 }
-
 model LeadTag {
   id    String @id @default(cuid())
   name  String @unique
   color String @default("blue") // tag color for UI
-
   leads Lead[] @relation("LeadTags")
-
   @@map("lead_tags")
 }
-
 model Company {
   id                   String  @id @default(cuid())
   name                 String
@@ -1381,7 +1162,6 @@ model Company {
   smtpUser             String?
   smtpPass             String?
   smtpFrom             String?
-
   // Subscription plans
   plan             String  @default("TRIAL") // TRIAL, BASIC, PROFESSIONAL, ENTERPRISE, CUSTOM
   maxUsers         Int     @default(5)
@@ -1392,10 +1172,8 @@ model Company {
   crmAccess        Boolean @default(false)
   automationAccess Boolean @default(false)
   aiAccess         Boolean @default(false)
-
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
-
   // Relations
   users              User[]
   workOrders         WorkOrder[]
@@ -1421,12 +1199,12 @@ model Company {
   Thread             Thread[]
   Inspector             Inspector[]
   financialTransactions FinancialTransaction[]
-
+  chartOfAccounts       ChartOfAccount[]
+  bills                 Bill[]
+  chargebacks           Chargeback[]
   @@map("companies")
 }
-
 // ─── Financial Transactions ──────────────────────────────────────────────────
-
 model FinancialTransaction {
   id          String   @id @default(cuid())
   companyId   String   @map("company_id")
@@ -1437,17 +1215,17 @@ model FinancialTransaction {
   date        DateTime @default(now())
   description String?
   referenceId String?  // Optional link to WorkOrder, Invoice, etc.
+  workOrderId String?
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
   
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @map("updated_at")
-
   @@index([companyId])
   @@index([type])
   @@index([category])
   @@index([date])
   @@map("financial_transactions")
 }
-
 model WorkOrderFormSubmission {
   id          String   @id @default(cuid())
   workOrderId String
@@ -1456,9 +1234,79 @@ model WorkOrderFormSubmission {
   formData    String   // JSON blob of all field values
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
   workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-
   @@index([workOrderId])
   @@index([formType])
+}
+// ─── Accounting & Financial Management ───────────────────────────────────────
+model ChartOfAccount {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  subType     String?
+  qboId       String?
+  isActive    Boolean  @default(true)
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([companyId])
+}
+model Bill {
+  id              String     @id @default(cuid())
+  billNumber      String     @unique
+  vendorName      String?
+  vendorId        String?
+  vendor          User?      @relation("BillVendor", fields: [vendorId], references: [id])
+  workOrderId     String?
+  workOrder       WorkOrder? @relation(fields: [workOrderId], references: [id])
+  status          String     @default("OPEN") // OPEN, PAID, CANCELLED
+  subtotal        Float      @default(0)
+  tax             Float      @default(0)
+  total           Float      @default(0)
+  dueDate         DateTime?
+  paidAt          DateTime?
+  qboId           String?
+  syncStatus      String     @default("PENDING")
+  items BillItem[]
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([companyId])
+  @@index([vendorId])
+  @@index([workOrderId])
+}
+model BillItem {
+  id              String  @id @default(cuid())
+  description     String?
+  quantity        Float   @default(1)
+  unitPrice       Float
+  amount          Float
+  billId          String
+  bill            Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  @@index([billId])
+}
+model Chargeback {
+  id              String     @id @default(cuid())
+  contractorId    String
+  contractor      User       @relation("ChargebackContractor", fields: [contractorId], references: [id])
+  workOrderId     String?
+  workOrder       WorkOrder? @relation(fields: [workOrderId], references: [id])
+  clientInvoiceId String?
+  amount          Float
+  reason          String
+  status          String     @default("PENDING") // PENDING, APPLIED, DISPUTED
+  appliedAt       DateTime?
+
+  syncStatus      String     @default("PENDING") // PENDING, SYNCED, FAILED
+  qboJournalId    String?
+  
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([companyId])
+  @@index([contractorId])
+  @@index([workOrderId])
 }

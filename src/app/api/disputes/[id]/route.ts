@@ -100,6 +100,21 @@ export async function PATCH(
         },
       });
 
+      if (!isCredit) {
+        await prisma.chargeback.create({
+          data: {
+            contractorId,
+            workOrderId: updated.workOrderId,
+            amount: amount,
+            reason: `Dispute deduction: ${updated.title}`,
+            status: 'APPLIED',
+            appliedAt: new Date(),
+            companyId: updated.companyId || (session.user as any).companyId,
+          }
+        });
+      }
+
+
       // Notify contractor
       await prisma.notification.create({
         data: {

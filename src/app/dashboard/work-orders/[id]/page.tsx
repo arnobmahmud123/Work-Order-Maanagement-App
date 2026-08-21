@@ -71,8 +71,10 @@ import {
   Truck,
   AlertTriangle,
   ClipboardList,
+  Wallet,
 } from "lucide-react";
 import { WorkOrderFormsTab } from "@/components/work-orders/forms/WorkOrderFormsTab";
+import { WorkOrderFinancials } from "@/components/work-orders/financials/WorkOrderFinancials";
 import {
   cn,
   SERVICE_TYPE_LABELS,
@@ -2094,6 +2096,7 @@ export default function WorkOrderDetailPage({
     { id: "bids", label: "Bids", icon: DollarSign, count: bids.length },
     { id: "inspection", label: "Inspection", icon: Shield },
     { id: "photos", label: "Photos", icon: Camera, count: itemPhotoCount },
+    { id: "financials", label: "Financials", icon: Wallet },
     { id: "invoices", label: "Invoices", icon: Receipt },
     { id: "forms", label: "Forms", icon: ClipboardList },
     { id: "history", label: "Property History", icon: Calendar, count: (propertyHistoryData?.workOrders?.length || 0) },
@@ -3443,6 +3446,10 @@ export default function WorkOrderDetailPage({
             )}
           </div>
         </div>
+      )}
+
+      {activeTab === "financials" && (
+        <WorkOrderFinancials workOrderId={id} />
       )}
 
       {activeTab === "invoices" && (

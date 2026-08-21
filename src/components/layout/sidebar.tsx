@@ -32,7 +32,7 @@ import {
   Hash,
   PanelLeftClose,
   PanelLeftOpen,
-  FileSpreadsheet,
+  FileSpreadsheet, Receipt, Wallet,
   Image,
   DollarSign,
   AlertTriangle,
@@ -59,6 +59,8 @@ const navItems = [
   { label: "Performance", href: "/dashboard/performance", icon: BarChart3 },
   { label: "Support", href: "/dashboard/support", icon: LifeBuoy },
   { label: "Accounting", href: "/dashboard/accounting", icon: FileSpreadsheet },
+  { label: "Accounts Receivable", href: "/dashboard/accounting/ar", icon: Receipt },
+  { label: "Accounts Payable", href: "/dashboard/accounting/ap", icon: Wallet },
   { label: "EXIF Tools", href: "/dashboard/exif-tools", icon: Image },
   { label: "Balance", href: "/dashboard/contractor/balance", icon: DollarSign },
   { label: "Disputes", href: "/dashboard/disputes", icon: AlertTriangle },
@@ -124,7 +126,7 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     if (isContractor) {
       if (["/dashboard/vendors", "/dashboard/logistics", "/dashboard/accounting", "/dashboard/performance", "/dashboard/sms-chat"].includes(item.href)) return false;
     }
-    if (item.href === "/dashboard/accounting" && !isAdmin && !isAccountant) return false;
+    if (item.href.startsWith("/dashboard/accounting") && !isAdmin && !isAccountant) return false;
     return true;
   });
 
