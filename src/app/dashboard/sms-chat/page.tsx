@@ -59,6 +59,7 @@ const TEMPLATES = [
 ];
 
 export default function SmsChatDashboard() {
+  const { topNavHidden } = useAppStore();
   const { data: session } = useSession();
   const [threads, setThreads] = useState<SmsThread[]>([]);
   const [activePhone, setActivePhone] = useState<string | null>(null);
