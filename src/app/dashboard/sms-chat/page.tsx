@@ -472,7 +472,7 @@ export default function SmsChatDashboard() {
 
         {/* Main Conversation Window */}
         <div className={cn(
-          "lg:col-span-8 flex flex-col bg-surface/60 border border-border-subtle rounded-2xl overflow-hidden backdrop-blur-xl",
+          "flex-1 flex flex-col bg-surface/60 overflow-hidden backdrop-blur-xl relative",
           activePhone ? "flex" : "hidden lg:flex"
         )}>
           {activePhone ? (
