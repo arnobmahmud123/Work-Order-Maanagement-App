@@ -778,7 +778,6 @@ function BulkActionsDropdown({
     </>
   );
 }
-}
 
 // ─── Draggable Column Header ─────────────────────────────────────────────────
 
