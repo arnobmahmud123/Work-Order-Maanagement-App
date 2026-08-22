@@ -51,7 +51,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
   const [isRemoved, setIsRemoved] = useState(false);
   useEffect(() => {
     const stored = localStorage.getItem('ai-widget-removed');
-    if (stored === 'true') handleRemove();
+    if (stored === 'true') setIsRemoved(true);
     
     const handleToggle = () => {
       setIsRemoved(prev => {
@@ -67,7 +67,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
 
   const handleRemove = () => {
     setIsOpen(false);
-    handleRemove();
+    setIsRemoved(true);
     localStorage.setItem('ai-widget-removed', 'true');
   };
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -295,7 +295,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
           title="Drag to move · Click to open AI Assistant"
           onContextMenu={(e) => {
             e.preventDefault();
-            handleRemove();
+            setIsRemoved(true);
           }}
           data-floating-chat
         >
@@ -349,7 +349,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  handleRemove();
+                  setIsRemoved(true);
                 }}
                 className="p-1.5 hover:bg-surface-hover rounded-lg text-text-muted hover:text-text-secondary transition-colors"
               >
