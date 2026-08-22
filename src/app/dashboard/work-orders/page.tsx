@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useWorkOrders, useUsers, usePropertyHistory } from "@/hooks/use-data";
 import { useSession } from "next-auth/react";
@@ -1590,6 +1591,7 @@ function PropertyHistoryPopup({
   const [searchBids, setSearchBids] = useState("");
   const [searchTasks, setSearchTasks] = useState("");
   const [searchPhotos, setSearchPhotos] = useState("");
+  const [activeTab, setActiveTab] = useState("Past WOs");
   const [searchCreated, setSearchCreated] = useState("");
   const [photoPopup, setPhotoPopup] = useState<{ open: boolean; photos: any[]; title: string }>({ open: false, photos: [], title: "" });
 
@@ -1621,11 +1623,15 @@ function PropertyHistoryPopup({
     return true;
   });
 
-  return (
-    <>
-      <div className="fixed inset-0 z-[2147483646] flex items-start justify-center pt-[2vh]">
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
-        <div className="relative w-full max-w-[95vw] max-h-[96vh] mx-4 bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col">
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[2147483646] flex items-start justify-center pt-[2vh]">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-full max-w-[95vw] max-h-[96vh] mx-4 bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-6 py-3 border-b border-border-subtle flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl bg-cyan-500/10 flex items-center justify-center">
@@ -1634,13 +1640,27 @@ function PropertyHistoryPopup({
               <div>
                 <h2 className="text-base font-bold text-text-primary">Property History</h2>
                 <p className="text-[11px] text-text-muted">
-                  {workOrder?.address || "All work orders"} &bull; {filteredOrders.length} of {historyWorkOrders.length} orders
+                  {workOrder?.address || "All work orders"} &bull; {historyWorkOrders.length} orders
                 </p>
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
               <X className="h-5 w-5" />
             </button>
+          </div>
+          <div className="flex px-6 pt-2 bg-surface-hover/30 border-b border-border-subtle overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+            {["Past WOs", "Bid History", "Completion History", "Damage History", "Appliance History", "Violation History", "Hazard History", "Contractor Invoice History", "Client Invoice History"].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "px-4 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors",
+                  activeTab === tab ? "border-cyan-500 text-cyan-400" : "border-transparent text-text-muted hover:text-text-primary"
+                )}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
 
           <div className="flex-1 overflow-auto">
@@ -1655,6 +1675,7 @@ function PropertyHistoryPopup({
                 <p className="text-text-secondary font-medium">No property history</p>
               </div>
             ) : (
+              {activeTab === "Past WOs" && (
               <table className="w-full border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-surface border-b border-border-subtle">
@@ -1822,6 +1843,62 @@ function PropertyHistoryPopup({
                   })}
                 </tbody>
               </table>
+              )}
+              {activeTab === "Bid History" && (
+              <table className="w-full border-collapse">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-surface border-b border-border-subtle">
+                    <th className="p-2 min-w-[20px]"><div className="w-3 h-3 border border-border-subtle rounded-sm" /></th>
+                    <th className="p-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Action</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Order #</th>
+                    <th className="p-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Pics</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Type</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contractor</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Date</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Task</th>
+                    <th className="p-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Qty</th>
+                    <th className="p-2 text-right text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contractor</th>
+                    <th className="p-2 text-right text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Client</th>
+                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Comments</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {historyWorkOrders.flatMap((wo: any) => {
+                    const bids = (wo.metadata?.bids as any[]) || [];
+                    if (bids.length === 0) return [];
+                    const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                    return bids.map((bid: any, i: number) => (
+                      <tr key={wo.id + i} className="hover:bg-surface-hover transition-colors">
+                        <td className="px-2 py-2"><div className="w-3 h-3 border border-border-subtle rounded-sm" /></td>
+                        <td className="px-2 py-2 flex gap-1 justify-center">
+                          <button className="bg-[#2E6B8D] text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:opacity-90 transition-opacity">Copy</button>
+                          <button className="bg-[#4CAF50] text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:opacity-90 transition-opacity">Approve</button>
+                          <button className="bg-[#F44336] text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:opacity-90 transition-opacity">Reject</button>
+                        </td>
+                        <td className="px-2 py-2"><span className="bg-yellow-500/20 text-yellow-500 text-[9px] px-2 py-0.5 rounded-full">Pending</span></td>
+                        <td className="px-2 py-2 text-xs font-mono">{woNum}</td>
+                        <td className="px-2 py-2 text-center text-xs text-green-500 flex items-center justify-center gap-1"><Camera className="h-3 w-3" /> {wo.files?.length || 0}</td>
+                        <td className="px-2 py-2 text-xs">{wo.serviceType || "—"}</td>
+                        <td className="px-2 py-2"><span className="text-[10px] font-medium text-blue-500 bg-blue-500/10 rounded px-1.5 py-0.5">{wo.contractor?.name || "Harold Burns"}</span></td>
+                        <td className="px-2 py-2 text-xs">{new Date(wo.createdAt).toLocaleDateString()}</td>
+                        <td className="px-2 py-2 text-xs">{bid.title}</td>
+                        <td className="px-2 py-2 text-center text-xs">1</td>
+                        <td className="px-2 py-2 text-right text-xs">
+                          <div className="text-[9px] text-text-muted">Price: $0.00</div>
+                          <div className="font-bold text-[10px]">Total: $0.00</div>
+                        </td>
+                        <td className="px-2 py-2 text-right text-xs">
+                          <div className="text-[9px] text-text-muted">Price: ${(bid.amount || 0).toFixed(2)}</div>
+                          <div className="font-bold text-[10px]">Total: ${(bid.amount || 0).toFixed(2)}</div>
+                        </td>
+                        <td className="px-2 py-2 text-xs">{bid.description || bid.title} <span className="text-blue-400 text-[10px] cursor-pointer hover:underline ml-1">See more</span></td>
+                      </tr>
+                    ));
+                  })}
+                </tbody>
+              </table>
+              )}
             )}
           </div>
 
