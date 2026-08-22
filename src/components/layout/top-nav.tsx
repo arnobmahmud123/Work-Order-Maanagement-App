@@ -226,16 +226,30 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
                 </div>
                 
                 <div className="p-1.5">
-                  <Link
-                    href="/dashboard/settings"
+                  
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-chat'))}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Toggle AI Widget
+                  </button>
+                  <Link href="/dashboard/settings"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/5 rounded-xl transition-all"
                     onClick={() => setDropdownOpen(false)}
                   >
                     <User className="h-4 w-4" />
                     My Profile
                   </Link>
-                  <Link
-                    href="/dashboard/settings"
+                  
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-chat'))}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Toggle AI Widget
+                  </button>
+                  <Link href="/dashboard/settings"
                     className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-purple-400 hover:bg-purple-500/5 rounded-xl transition-all"
                     onClick={() => setDropdownOpen(false)}
                   >

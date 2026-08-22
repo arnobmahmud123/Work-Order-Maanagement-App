@@ -49,6 +49,27 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
   const [isOpen, setIsOpen] = useState(embedded);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isRemoved, setIsRemoved] = useState(false);
+  useEffect(() => {
+    const stored = localStorage.getItem('ai-widget-removed');
+    if (stored === 'true') handleRemove();
+    
+    const handleToggle = () => {
+      setIsRemoved(prev => {
+        const next = !prev;
+        localStorage.setItem('ai-widget-removed', next ? 'true' : 'false');
+        if (!next) setIsOpen(false);
+        return next;
+      });
+    };
+    window.addEventListener('toggle-ai-chat', handleToggle);
+    return () => window.removeEventListener('toggle-ai-chat', handleToggle);
+  }, []);
+
+  const handleRemove = () => {
+    setIsOpen(false);
+    handleRemove();
+    localStorage.setItem('ai-widget-removed', 'true');
+  };
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -253,23 +274,6 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
     };
   }, [isDragging]);
 
-  // If user removed the assistant, show a small restore button
-  if (isRemoved && !isOpen && (!isMobile || embedded)) {
-    return (
-      <button
-        onClick={() => setIsRemoved(false)}
-        className={cn(
-          "fixed z-50 h-10 w-10 bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-full shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all flex items-center justify-center",
-          isMobile ? "bottom-24 right-6" : "bottom-6 right-6"
-        )}
-        title="Restore AI Assistant"
-        data-floating-chat
-      >
-        <Brain className="h-5 w-5" />
-      </button>
-    );
-  }
-
   if (isRemoved) return null;
   if (!embedded && isMobile) return null;
 
@@ -291,7 +295,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
           title="Drag to move · Click to open AI Assistant"
           onContextMenu={(e) => {
             e.preventDefault();
-            setIsRemoved(true);
+            handleRemove();
           }}
           data-floating-chat
         >
@@ -345,7 +349,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  setIsRemoved(true);
+                  handleRemove();
                 }}
                 className="p-1.5 hover:bg-surface-hover rounded-lg text-text-muted hover:text-text-secondary transition-colors"
               >
