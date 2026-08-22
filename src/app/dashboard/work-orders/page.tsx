@@ -1960,7 +1960,8 @@ function PropertyHistoryPopup({
           </div>
         </div>
       )}
-    </>), document.body);
+    </>, document.body
+  );
 }
 
 export default function WorkOrdersPage() {
