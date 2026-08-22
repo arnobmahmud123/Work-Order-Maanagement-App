@@ -1416,6 +1416,20 @@ function WorkOrdersContent() {
                       );
                     })}
                   </tr>
+                  <tr className="bg-surface-hover/30 border-b border-border-subtle">
+                    {visibleColumns.map((col) => (
+                      <th key={col.id + "-filter"} className="px-1 py-1.5 align-middle">
+                        {col.id !== "checkbox" && col.id !== "arrow" && col.id !== "photos" && col.id !== "history" ? (
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-1.5 flex items-center pointer-events-none">
+                              <Filter className="h-3 w-3 text-text-dim" />
+                            </div>
+                            <input type="text" placeholder={`${col.label}...`} className="w-full text-[10px] bg-surface border border-border-subtle rounded pl-5 pr-1.5 py-1 outline-none focus:border-cyan-500/50 text-text-primary placeholder:text-text-dim" />
+                          </div>
+                        ) : null}
+                      </th>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
                   {workOrders.map((wo: any) => (
