@@ -295,7 +295,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
           title="Drag to move · Click to open AI Assistant"
           onContextMenu={(e) => {
             e.preventDefault();
-            setIsRemoved(true);
+            handleRemove();
           }}
           data-floating-chat
         >
@@ -348,8 +348,7 @@ export function AIChat({ context, embedded = false, className }: AIChatProps) {
               </button>
               <button
                 onClick={() => {
-                  setIsOpen(false);
-                  setIsRemoved(true);
+                  handleRemove();
                 }}
                 className="p-1.5 hover:bg-surface-hover rounded-lg text-text-muted hover:text-text-secondary transition-colors"
               >
