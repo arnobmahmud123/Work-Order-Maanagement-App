@@ -23,7 +23,9 @@ export function ElevenLabsChat() {
       });
     };
     window.addEventListener('toggle-ai-chat', handleToggle);
-    return () => window.removeEventListener('toggle-ai-chat', handleToggle);
+    if (isRemoved) return null;
+
+  return () => window.removeEventListener('toggle-ai-chat', handleToggle);
   }, []);
 
   useEffect(() => {
@@ -67,7 +69,6 @@ export function ElevenLabsChat() {
     localStorage.setItem('elevenlabs-widget-removed', 'true');
   };
 
-  if (isRemoved) return null;
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string; timestamp: string }[]>([]);
