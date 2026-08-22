@@ -1,3 +1,4 @@
+import { triggerAutomationEvent } from "@/lib/automation/engine";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -175,6 +176,21 @@ export async function POST(
     });
 
     const signedPath = `/api/work-orders/${workOrderId}/files/${fileId}/content`;
+
+    // Trigger Automation for Photo/Document Upload
+    prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      include: { contractor: true, processor: true, coordinator: true },
+    }).then((wo) => {
+      if (wo) {
+        triggerAutomationEvent("CONTRACTOR_PHOTOS_UPLOADED", {
+          workOrder: wo,
+          user: session.user,
+          fileCount: 1,
+          meta: { uploadedFileName: originalName, category: fileCategory },
+        }, companyId).catch(() => {});
+      }
+    }).catch(() => {});
 
     return NextResponse.json({
       id: fileId,

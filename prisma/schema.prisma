@@ -98,6 +98,7 @@ model User {
   ratingsGiven         Rating[]              @relation("RaterUser")
   ratingsReceived      Rating[]              @relation("RatedUser")
   postReports          PostReport[]          @relation("ReportReporter")
+  createdRules         AutomationRule[]      @relation("RuleCreator")
   reviewedReports      PostReport[]          @relation("ReportReviewer")
   purchaseOrders       PurchaseOrder[]       @relation("PurchaseOrderCreator")
   materialTransactions MaterialTransaction[] @relation("MaterialTransactionUser")
@@ -157,6 +158,7 @@ model WorkOrder {
   posts       Post[]
   jobRequests JobRequest[]
   formSubmissions WorkOrderFormSubmission[]
+  automationExecutions AutomationExecution[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   companyId  String?  @map("company_id")
@@ -377,22 +379,28 @@ model TicketComment {
 }
 // ─── System ──────────────────────────────────────────────────────────────────
 model Notification {
-  id          String         @id @default(cuid())
-  title       String
-  message     String
-  type        String
-  isRead      Boolean        @default(false)
-  userId      String
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workOrderId String?
-  workOrder   WorkOrder?     @relation(fields: [workOrderId], references: [id])
-  ticketId    String?
-  ticket      SupportTicket? @relation(fields: [ticketId], references: [id])
-  createdAt   DateTime       @default(now())
-  companyId  String?  @map("company_id")
-  companyRef Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id             String         @id @default(cuid())
+  title          String
+  message        String
+  type           String
+  priority       String         @default("NORMAL") // NORMAL, IMPORTANT, URGENT, CRITICAL
+  actionRequired Boolean        @default(false)
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  link           String?
+  isRead         Boolean        @default(false)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workOrderId    String?
+  workOrder      WorkOrder?     @relation(fields: [workOrderId], references: [id])
+  ticketId       String?
+  ticket         SupportTicket? @relation(fields: [ticketId], references: [id])
+  createdAt      DateTime       @default(now())
+  companyId      String?        @map("company_id")
+  companyRef     Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   @@index([userId, isRead])
   @@index([companyId])
+  @@index([priority])
 }
 model ActivityLog {
   id          String     @id @default(cuid())
@@ -1178,6 +1186,10 @@ model Company {
   users              User[]
   workOrders         WorkOrder[]
   properties         Property[]
+  automationRules    AutomationRule[]
+  automationExecutions AutomationExecution[]
+  automationAuditLogs AutomationAuditLog[]
+  urgencyKeywords    UrgencyKeyword[]
   invoices           Invoice[]
   supportTickets     SupportTicket[]
   notifications      Notification[]
@@ -1309,4 +1321,100 @@ model Chargeback {
   @@index([companyId])
   @@index([contractorId])
   @@index([workOrderId])
+}
+
+
+// ─── Automation Engine ──────────────────────────────────────────────────────────
+
+model AutomationRule {
+  id                  String   @id @default(cuid())
+  name                String
+  description         String?
+  isActive            Boolean  @default(true)
+  trigger             String   // e.g. WO_CREATED, WO_ASSIGNED, WO_STATUS_CHANGED, WO_FIELD_COMPLETE, WO_REJECTED, etc.
+  conditions          String   @default("[]") // JSON array of condition objects
+  actions             String   @default("[]") // JSON array of action objects
+  priority            String   @default("NORMAL") // NORMAL, IMPORTANT, URGENT, CRITICAL
+  delayMinutes        Int      @default(0)
+  escalationChain     String?  @default("[]") // JSON array of escalation tiers
+  clientSpecific      String?  // Optional client filter
+  serviceTypeSpecific String?  // Optional service type filter
+  companyId           String?  @map("company_id")
+  companyRef          Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById         String?
+  createdBy           User?    @relation("RuleCreator", fields: [createdById], references: [id])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  executions          AutomationExecution[]
+  auditLogs           AutomationAuditLog[]
+
+  @@index([trigger, isActive])
+  @@index([companyId])
+}
+
+model AutomationExecution {
+  id              String         @id @default(cuid())
+  ruleId          String
+  rule            AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  workOrderId     String?
+  workOrder       WorkOrder?     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  status          String         @default("PENDING") // PENDING, RUNNING, COMPLETED, CANCELLED, ESCALATED, FAILED
+  currentStep     Int            @default(0)
+  nextRunAt       DateTime?
+  resolvedAt      DateTime?
+  cancelledAt     DateTime?
+  contextData     String?        // JSON string with trigger context, changes, etc.
+  companyId       String?        @map("company_id")
+  companyRef      Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  auditLogs       AutomationAuditLog[]
+
+  @@index([status, nextRunAt])
+  @@index([workOrderId])
+  @@index([ruleId])
+  @@index([companyId])
+}
+
+model AutomationAuditLog {
+  id              String               @id @default(cuid())
+  executionId     String?
+  execution       AutomationExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  ruleId          String?
+  rule            AutomationRule?      @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  ruleName        String
+  workOrderId     String?
+  workOrderNumber String?
+  triggerEvent    String
+  actionType      String               // EMAIL, IN_APP_NOTIF, ESCALATION, STATUS_CHANGE, PRIORITY_CHANGE
+  recipients      String               // JSON array of recipient identifiers/emails
+  details         String?              // HTML or text summary of what was executed
+  escalationLevel Int                  @default(0)
+  status          String               @default("SUCCESS") // SUCCESS, SKIPPED, FAILED, ACKNOWLEDGED
+  companyId       String?              @map("company_id")
+  companyRef      Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime             @default(now())
+
+  @@index([executionId])
+  @@index([ruleId])
+  @@index([workOrderId])
+  @@index([createdAt])
+  @@index([companyId])
+}
+
+model UrgencyKeyword {
+  id             String   @id @default(cuid())
+  keyword        String   @unique
+  targetPriority String   @default("URGENT") // URGENT, CRITICAL, IMPORTANT
+  category       String   @default("general") // general, client, deadline, hazard
+  isActive       Boolean  @default(true)
+  companyId      String?  @map("company_id")
+  companyRef     Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([companyId])
 }

@@ -15,6 +15,7 @@ import {
   Building2,
   BarChart3,
   Settings,
+  Zap,
   Wrench,
   Shield,
   Bell,
@@ -147,6 +148,11 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
   }
 
   if (isAdmin || role === "SUPER_ADMIN") {
+    visibleNavItems.push({
+      label: "Automation Rules",
+      href: "/dashboard/admin/automation-rules",
+      icon: Zap,
+    });
     visibleNavItems.push({
       label: "Company Settings",
       href: "/dashboard/admin/company-settings",

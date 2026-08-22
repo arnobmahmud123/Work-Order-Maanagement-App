@@ -1,3 +1,4 @@
+import { triggerAutomationEvent } from "@/lib/automation/engine";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -368,43 +369,44 @@ export async function PATCH(
         },
       }).catch(() => {});
 
-      // Create notifications for important changes — fire-and-forget
+      // Trigger comprehensive Automation Events
+      const contextData = {
+        workOrder,
+        user: session.user,
+        previousState: existing,
+        meta: { changedFields, previousStatus: existing.status, newStatus: updates.status },
+      };
+
       if (changedFields.includes("status")) {
-        const statusLabel = updates.status;
-        if (workOrder.contractorId) {
-          prisma.notification.create({
-            data: {
-              type: "WORK_ORDER",
-              title: "Work Order Status Changed",
-              message: `"${workOrder.title}" status changed to ${statusLabel}`,
-              userId: workOrder.contractorId,
-              workOrderId: id,
-            },
-          }).catch(() => {});
-        }
-        if (workOrder.coordinatorId && workOrder.coordinatorId !== workOrder.contractorId) {
-          prisma.notification.create({
-            data: {
-              type: "WORK_ORDER",
-              title: "Work Order Status Changed",
-              message: `"${workOrder.title}" status changed to ${statusLabel}`,
-              userId: workOrder.coordinatorId,
-              workOrderId: id,
-            },
-          }).catch(() => {});
+        triggerAutomationEvent("WO_STATUS_CHANGED", contextData, workOrder.companyId || undefined).catch(() => {});
+
+        if (updates.status === "FIELD_COMPLETE") {
+          triggerAutomationEvent("WO_FIELD_COMPLETE", contextData, workOrder.companyId || undefined).catch(() => {});
+        } else if (updates.status === "REJECTED") {
+          triggerAutomationEvent("WO_REJECTED", {
+            ...contextData,
+            rejectionReason: (typeof updates.metadata === "object" ? updates.metadata?.rejectionReason : null) || updates.specialInstructions || "Revisions requested by client.",
+          }, workOrder.companyId || undefined).catch(() => {});
+        } else if (updates.status === "RETURNED") {
+          triggerAutomationEvent("WO_RETURNED", contextData, workOrder.companyId || undefined).catch(() => {});
+        } else if (updates.status === "CANCELLED") {
+          triggerAutomationEvent("WO_CANCELLED", contextData, workOrder.companyId || undefined).catch(() => {});
+        } else if (updates.status === "CLOSED" || updates.status === "COMPLETED") {
+          triggerAutomationEvent("WO_CLOSED", contextData, workOrder.companyId || undefined).catch(() => {});
         }
       }
 
-      if (changedFields.includes("contractorId") && workOrder.contractorId) {
-        prisma.notification.create({
-          data: {
-            type: "WORK_ORDER",
-            title: "New Work Order Assignment",
-            message: `You have been assigned to "${workOrder.title}"`,
-            userId: workOrder.contractorId,
-            workOrderId: id,
-          },
-        }).catch(() => {});
+      if (changedFields.includes("contractorId") || changedFields.includes("processorId")) {
+        const isReassigned = existing.contractorId && updates.contractorId && existing.contractorId !== updates.contractorId;
+        triggerAutomationEvent(isReassigned ? "WO_REASSIGNED" : "WO_ASSIGNED", contextData, workOrder.companyId || undefined).catch(() => {});
+      }
+
+      if (changedFields.includes("priority")) {
+        triggerAutomationEvent("WO_PRIORITY_CHANGED", contextData, workOrder.companyId || undefined).catch(() => {});
+      }
+
+      if (changedFields.includes("dueDate")) {
+        triggerAutomationEvent("WO_DUE_DATE_CHANGED", contextData, workOrder.companyId || undefined).catch(() => {});
       }
     }
 

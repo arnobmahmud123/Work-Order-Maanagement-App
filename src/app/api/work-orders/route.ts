@@ -1,3 +1,4 @@
+import { triggerAutomationEvent } from "@/lib/automation/engine";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -347,20 +348,17 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Notify contractor if assigned
-  if (contractorId) {
-    try {
-      await prisma.notification.create({
-        data: {
-          type: "WORK_ORDER",
-          title: "New Work Order Assignment",
-          message: `You have been assigned to "${title}" at ${address}`,
-          userId: contractorId,
-          workOrderId: workOrder.id,
-          companyId: targetCompanyId,
-        },
-      });
-    } catch {}
+  // Trigger Automation Events (Fire-and-forget background execution)
+  triggerAutomationEvent("WO_CREATED", {
+    workOrder,
+    user: currentUser,
+  }, targetCompanyId).catch(() => {});
+
+  if (contractorId || processorId) {
+    triggerAutomationEvent("WO_ASSIGNED", {
+      workOrder,
+      user: currentUser,
+    }, targetCompanyId).catch(() => {});
   }
 
   return NextResponse.json(workOrder, { status: 201 });
