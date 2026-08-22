@@ -107,17 +107,20 @@ interface ColumnDef {
 
 const DEFAULT_COLUMNS: ColumnDef[] = [
   { id: "checkbox", label: "", className: "w-10", headerClassName: "w-10 px-3" },
-  { id: "wo", label: "WO #", className: "", headerClassName: "text-left px-3" },
-  { id: "property", label: "Property", className: "", headerClassName: "text-left px-3" },
-  { id: "workOrderType", label: "Work Order Type", className: "", headerClassName: "text-left px-3 hidden lg:table-cell" },
-  { id: "location", label: "Location", className: "", headerClassName: "text-left px-3 hidden lg:table-cell" },
-  { id: "status", label: "Status", className: "", headerClassName: "text-left px-3" },
-  { id: "contractor", label: "Contractor", className: "", headerClassName: "text-left px-3 hidden lg:table-cell" },
+  { id: "action", label: "Action", className: "w-16", headerClassName: "w-16 px-3" },
+  { id: "property", label: "Address", className: "", headerClassName: "text-left px-3" },
+  { id: "wo", label: "Work Order #", className: "", headerClassName: "text-left px-3" },
+  { id: "city", label: "City", className: "", headerClassName: "text-left px-3 hidden lg:table-cell" },
   { id: "client", label: "Client", className: "", headerClassName: "text-left px-3 hidden xl:table-cell" },
-  { id: "due", label: "Due", className: "", headerClassName: "text-left px-3 hidden md:table-cell" },
-  { id: "photos", label: "📷", className: "", headerClassName: "text-center px-3 hidden sm:table-cell" },
-  { id: "history", label: "📋", className: "", headerClassName: "text-center px-3 hidden sm:table-cell" },
-  { id: "arrow", label: "", className: "w-8", headerClassName: "w-8 px-2" },
+  { id: "contractor", label: "Contractor", className: "", headerClassName: "text-left px-3 hidden lg:table-cell" },
+  { id: "due", label: "Due Date", className: "", headerClassName: "text-left px-3 hidden md:table-cell" },
+  { id: "history", label: "History", className: "", headerClassName: "text-center px-3 hidden sm:table-cell" },
+  { id: "photos", label: "Photos", className: "", headerClassName: "text-center px-3 hidden sm:table-cell" },
+  { id: "state", label: "State", className: "", headerClassName: "text-left px-3 hidden xl:table-cell" },
+  { id: "status", label: "Status", className: "", headerClassName: "text-left px-3" },
+  { id: "zip", label: "Zip", className: "", headerClassName: "text-left px-3 hidden xl:table-cell" },
+  { id: "ipl", label: "IPL #", className: "", headerClassName: "text-left px-3 hidden xl:table-cell" },
+  { id: "workOrderType", label: "Work Type", className: "", headerClassName: "text-left px-3 hidden lg:table-cell" },
 ];
 
 // ─── Multi-Select Status Dropdown ────────────────────────────────────────────
@@ -944,6 +947,16 @@ function WorkOrdersContent() {
     const propertyImage = wo.files?.find((f: any) => f.mimeType?.startsWith("image/"))?.path;
 
     switch (columnId) {
+      case "action": return (
+    <div className="flex gap-1">
+      <Link href={`/dashboard/work-orders/${wo.id}`} className="text-blue-500 hover:bg-blue-500/10 p-1 rounded transition-colors"><Eye className="h-4 w-4" /></Link>
+      <button className="text-green-500 hover:bg-green-500/10 p-1 rounded transition-colors"><FileText className="h-4 w-4" /></button>
+    </div>
+  );
+      case "city": return <span className="text-xs text-text-secondary">{wo.city || wo.property?.city || "—"}</span>;
+      case "state": return <span className="text-xs text-text-secondary">{wo.state || wo.property?.state || "—"}</span>;
+      case "zip": return <span className="text-xs text-text-secondary">{wo.zipCode || wo.property?.zipCode || "—"}</span>;
+      case "ipl": return <span className="text-xs text-text-secondary">{wo.id.slice(0, 8)}</span>;
       case "checkbox":
         return (
           <button onClick={() => toggleSelect(wo.id)}>
