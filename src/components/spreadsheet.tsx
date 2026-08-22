@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   Plus, Trash2, Download, Upload, Search, ArrowUpDown, ArrowUp, ArrowDown,
@@ -191,6 +192,8 @@ export function Spreadsheet({ sheet, onChange }: SpreadsheetProps) {
   const [resizing, setResizing] = useState<{ type: "row" | "col"; index: number | string; startPos: number; startSize: number } | null>(null);
   const [clipboard, setClipboard] = useState<Cell | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [formulaBarVisible, setFormulaBarVisible] = useState(true);
   const [showGridLines, setShowGridLines] = useState(true);
@@ -1383,11 +1386,12 @@ export function Spreadsheet({ sheet, onChange }: SpreadsheetProps) {
     </div>
   );
 
-  if (isFullscreen) {
-    return (
+  if (isFullscreen && mounted) {
+    return createPortal(
       <div className="fixed inset-0 flex flex-col" style={{ zIndex: 2147483647, backgroundColor: C.inputBg }}>
         {spreadsheetContent}
-      </div>
+      </div>,
+      document.body
     );
   }
 

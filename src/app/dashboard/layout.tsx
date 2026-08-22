@@ -16,7 +16,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { sidebarCollapsed } = useAppStore();
+  const { sidebarCollapsed, sidebarHidden } = useAppStore();
 
   return (
     <div className="flex min-h-screen bg-background text-text-primary" data-dashboard>
@@ -44,7 +44,7 @@ export default function DashboardLayout({
         data-sidebar="desktop"
         className={cn(
           "hidden lg:block transition-all duration-300 ease-in-out flex-shrink-0 z-50",
-          sidebarCollapsed ? "w-20" : "w-64"
+          sidebarHidden ? "w-0 overflow-hidden opacity-0" : sidebarCollapsed ? "w-20" : "w-64"
         )}
       >
         <Sidebar />
