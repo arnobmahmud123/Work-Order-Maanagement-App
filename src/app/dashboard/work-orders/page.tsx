@@ -1613,18 +1613,16 @@ function PropertyHistoryPopup({
   );
   
   // Navigation
-  const [activeTab, setActiveTab] = useState("Bid History");
+  const [activeTab, setActiveTab] = useState("Past WOs");
 
   // Filter states for Past WOs
-  const [searchWO, setSearchWO] = useState("");
-  const [searchStatus, setSearchStatus] = useState("");
-  const [searchDesc, setSearchDesc] = useState("");
-  const [searchAddress, setSearchAddress] = useState("");
-  const [searchService, setSearchService] = useState("");
-  const [searchBids, setSearchBids] = useState("");
-  const [searchTasks, setSearchTasks] = useState("");
-  const [searchPhotos, setSearchPhotos] = useState("");
-  const [searchCreated, setSearchCreated] = useState("");
+  const [pastFilterWO, setPastFilterWO] = useState("");
+  const [pastFilterStatus, setPastFilterStatus] = useState("");
+  const [pastFilterWorkType, setPastFilterWorkType] = useState("");
+  const [pastFilterPics, setPastFilterPics] = useState("");
+  const [pastFilterContractor, setPastFilterContractor] = useState("");
+  const [pastFilterDueDate, setPastFilterDueDate] = useState("");
+  const [pastFilterAddress, setPastFilterAddress] = useState("");
 
   // Filter states for Bid History
   const [bidFilterStatus, setBidFilterStatus] = useState("");
@@ -1717,6 +1715,28 @@ function PropertyHistoryPopup({
     return list;
   }, [historyWorkOrders, bidStatusOverrides]);
 
+  // Filter Past WOs
+  const filteredPastWOs = useMemo(() => {
+    return historyWorkOrders.filter((wo: any) => {
+      const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+      const statusLabel = STATUS_LABELS[wo.status] || wo.status || "";
+      const workType = SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType || "";
+      const contractorName = wo.contractor?.name || wo.metadata?.contractorName || "Unassigned";
+      const dueDate = wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : (wo.createdAt ? new Date(wo.createdAt).toLocaleDateString() : "—");
+      const addr = [wo.address || "", wo.city || "", wo.state || "", wo.zipCode || ""].filter(Boolean).join(" ");
+      const picsCount = String(wo.files?.length || 0);
+
+      if (pastFilterWO && !woNum.toLowerCase().includes(pastFilterWO.toLowerCase()) && !wo.id.toLowerCase().includes(pastFilterWO.toLowerCase())) return false;
+      if (pastFilterStatus && !statusLabel.toLowerCase().includes(pastFilterStatus.toLowerCase())) return false;
+      if (pastFilterWorkType && !workType.toLowerCase().includes(pastFilterWorkType.toLowerCase())) return false;
+      if (pastFilterPics && !picsCount.includes(pastFilterPics)) return false;
+      if (pastFilterContractor && !contractorName.toLowerCase().includes(pastFilterContractor.toLowerCase())) return false;
+      if (pastFilterDueDate && !dueDate.toLowerCase().includes(pastFilterDueDate.toLowerCase())) return false;
+      if (pastFilterAddress && !addr.toLowerCase().includes(pastFilterAddress.toLowerCase())) return false;
+      return true;
+    });
+  }, [historyWorkOrders, pastFilterWO, pastFilterStatus, pastFilterWorkType, pastFilterPics, pastFilterContractor, pastFilterDueDate, pastFilterAddress]);
+
   // Filter Bids
   const filteredBids = useMemo(() => {
     return allBids.filter((b) => {
@@ -1786,33 +1806,6 @@ function PropertyHistoryPopup({
       setSelectedBids(paginatedBids.map((b) => b.uniqueId));
     }
   };
-
-  // Filter Past WOs
-  const filteredOrders = historyWorkOrders.filter((wo: any) => {
-    const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
-    const bids = (wo.metadata?.bids as any[]) || [];
-    const bidDesc = bids.map((b: any) => b.title).join(" ");
-    const addr = [wo.address || "", wo.city || "", wo.state || ""].filter(Boolean).join(" ");
-    const statusLabel = STATUS_LABELS[wo.status] || wo.status || "";
-    const serviceLabel = SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType || "";
-    const totalBidAmount = bids.reduce((s: number, b: any) => s + (b.amount || 0), 0);
-    const bidsStr = totalBidAmount > 0 ? "$" + totalBidAmount.toLocaleString() : "";
-    const tasks = (wo.tasks as any[]) || [];
-    const tasksStr = tasks.map((t: any) => t.title || t.description || "").join(" ");
-    const files = wo.files || [];
-    const photosStr = files.length > 0 ? String(files.length) : "0";
-    const createdStr = formatDate(wo.createdAt);
-    if (searchWO && !woNum.toLowerCase().includes(searchWO.toLowerCase())) return false;
-    if (searchStatus && !statusLabel.toLowerCase().includes(searchStatus.toLowerCase())) return false;
-    if (searchDesc && !bidDesc.toLowerCase().includes(searchDesc.toLowerCase())) return false;
-    if (searchAddress && !addr.toLowerCase().includes(searchAddress.toLowerCase())) return false;
-    if (searchService && !serviceLabel.toLowerCase().includes(searchService.toLowerCase())) return false;
-    if (searchBids && !bidsStr.toLowerCase().includes(searchBids.toLowerCase())) return false;
-    if (searchTasks && !tasksStr.toLowerCase().includes(searchTasks.toLowerCase())) return false;
-    if (searchPhotos && !photosStr.includes(searchPhotos)) return false;
-    if (searchCreated && !createdStr.toLowerCase().includes(searchCreated.toLowerCase())) return false;
-    return true;
-  });
 
   if (!mounted) return null;
 
@@ -1889,9 +1882,9 @@ function PropertyHistoryPopup({
               </div>
             ) : (
               <>
-                {/* ── TAB 1: PAST WORK ORDERS ── */}
+                {/* ── TAB 1: PAST WORK ORDERS (MATCHING DESIGN) ── */}
                 {activeTab === "Past WOs" && (
-                  historyWorkOrders.length === 0 ? (
+                  filteredPastWOs.length === 0 ? (
                     <div className="text-center py-16">
                       <History className="h-12 w-12 text-text-dim mx-auto mb-3" />
                       <p className="text-text-secondary font-medium">No past work orders found</p>
@@ -1899,137 +1892,165 @@ function PropertyHistoryPopup({
                   ) : (
                     <table className="w-full border-collapse">
                       <thead className="sticky top-0 z-10 bg-surface">
-                        <tr className="border-b border-border-subtle">
-                          <th className="p-2 min-w-[140px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchWO} onChange={(e) => setSearchWO(e.target.value)} placeholder="Search WO #..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                        {/* Filter Input Row */}
+                        <tr className="border-b border-border-subtle bg-surface-hover/20">
+                          <th className="p-1.5 w-16 text-center"></th>
+                          <th className="p-1.5 min-w-[130px]">
+                            <input
+                              type="text"
+                              value={pastFilterWO}
+                              onChange={(e) => setPastFilterWO(e.target.value)}
+                              placeholder="Work Order #..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[100px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchStatus} onChange={(e) => setSearchStatus(e.target.value)} placeholder="Search status..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                          <th className="p-1.5 min-w-[110px]">
+                            <input
+                              type="text"
+                              value={pastFilterStatus}
+                              onChange={(e) => setPastFilterStatus(e.target.value)}
+                              placeholder="Status..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[200px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchDesc} onChange={(e) => setSearchDesc(e.target.value)} placeholder="Search bid desc..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                          <th className="p-1.5 min-w-[140px]">
+                            <input
+                              type="text"
+                              value={pastFilterWorkType}
+                              onChange={(e) => setPastFilterWorkType(e.target.value)}
+                              placeholder="Work Type..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[200px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchAddress} onChange={(e) => setSearchAddress(e.target.value)} placeholder="Search address..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                          <th className="p-1.5 min-w-[70px]">
+                            <input
+                              type="text"
+                              value={pastFilterPics}
+                              onChange={(e) => setPastFilterPics(e.target.value)}
+                              placeholder="Pics..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[100px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchService} onChange={(e) => setSearchService(e.target.value)} placeholder="Search service..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                          <th className="p-1.5 min-w-[120px]">
+                            <input
+                              type="text"
+                              value={pastFilterContractor}
+                              onChange={(e) => setPastFilterContractor(e.target.value)}
+                              placeholder="Contractor..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[100px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchBids} onChange={(e) => setSearchBids(e.target.value)} placeholder="Search bids $..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                          <th className="p-1.5 min-w-[100px]">
+                            <input
+                              type="text"
+                              value={pastFilterDueDate}
+                              onChange={(e) => setPastFilterDueDate(e.target.value)}
+                              placeholder="Due Date..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[180px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchTasks} onChange={(e) => setSearchTasks(e.target.value)} placeholder="Search tasks..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
+                          <th className="p-1.5 min-w-[220px]">
+                            <input
+                              type="text"
+                              value={pastFilterAddress}
+                              onChange={(e) => setPastFilterAddress(e.target.value)}
+                              placeholder="Address..."
+                              className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                            />
                           </th>
-                          <th className="p-2 min-w-[80px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchPhotos} onChange={(e) => setSearchPhotos(e.target.value)} placeholder="Pics..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
-                          </th>
-                          <th className="p-2 min-w-[100px]">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                              <input type="text" value={searchCreated} onChange={(e) => setSearchCreated(e.target.value)} placeholder="Date..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                            </div>
-                          </th>
-                          <th className="p-2 min-w-[50px]"></th>
                         </tr>
-                        <tr className="bg-surface-hover border-b border-border-medium">
-                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">WO #</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Bid Description</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Address</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Service</th>
-                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Bids $</th>
-                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Tasks</th>
-                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Photos</th>
-                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Created</th>
-                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Go</th>
+
+                        {/* Column Titles */}
+                        <tr className="bg-surface-hover/60 border-b border-border-medium">
+                          <th className="px-3 py-2.5 w-16 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Action</th>
+                          <th className="px-3 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Order</th>
+                          <th className="px-3 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
+                          <th className="px-3 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Type</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Pics</th>
+                          <th className="px-3 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contractor</th>
+                          <th className="px-3 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Due Date</th>
+                          <th className="px-3 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Address</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border-subtle">
-                        {filteredOrders.map((wo: any) => {
+                      <tbody className="divide-y divide-border-subtle text-xs">
+                        {filteredPastWOs.map((wo: any) => {
                           const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
-                          const tasks = (wo.tasks as any[]) || [];
+                          const fullAddress = [wo.address || "", wo.city || "", wo.state || "", wo.zipCode || ""].filter(Boolean).join(" ");
                           const files = wo.files || [];
-                          const bids = (wo.metadata?.bids as any[]) || [];
-                          const totalBidAmount = bids.reduce((s: number, b: any) => s + (b.amount || 0), 0);
+                          const contractorName = wo.contractor?.name || wo.metadata?.contractorName || "Unassigned";
                           const isCurrent = wo.id === workOrder?.id;
+                          const dueDateStr = wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : (wo.createdAt ? new Date(wo.createdAt).toLocaleDateString() : "—");
+
                           return (
                             <tr key={wo.id} className={cn("hover:bg-surface-hover transition-colors", isCurrent && "bg-cyan-500/[0.04] border-l-2 border-l-cyan-500")}>
-                              <td className="px-3 py-2">
-                                <span className="text-xs font-mono font-semibold text-cyan-400">{woNum}</span>
-                                {isCurrent && <span className="ml-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">CURRENT</span>}
+                              {/* Action */}
+                              <td className="px-3 py-2.5 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <Link
+                                    href={`/dashboard/work-orders/${wo.id}`}
+                                    onClick={onClose}
+                                    className="p-1 rounded text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                                    title="View Work Order"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Link>
+                                  <Link
+                                    href={`/dashboard/work-orders/${wo.id}`}
+                                    onClick={onClose}
+                                    className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                                    title="Work Order Documents / Details"
+                                  >
+                                    <FileText className="h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
                               </td>
-                              <td className="px-3 py-2">
-                                <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded-md border", STATUS_PILL_COLORS[wo.status] || "bg-gray-500/10 text-text-secondary border-gray-500/20")}>
+
+                              {/* Work Order */}
+                              <td className="px-3 py-2.5">
+                                <Link href={`/dashboard/work-orders/${wo.id}`} onClick={onClose} className="font-mono font-bold text-cyan-400 hover:underline">
+                                  {woNum}
+                                </Link>
+                                {isCurrent && <span className="ml-1.5 text-[8px] px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">CURRENT</span>}
+                              </td>
+
+                              {/* Status */}
+                              <td className="px-3 py-2.5">
+                                <span className={cn("inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-md border", STATUS_PILL_COLORS[wo.status] || "bg-amber-500/10 text-amber-400 border-amber-500/20")}>
                                   {STATUS_LABELS[wo.status] || wo.status}
                                 </span>
                               </td>
-                              <td className="px-3 py-2">
-                                {bids.length > 0 ? (
-                                  <div className="space-y-0.5">
-                                    {bids.slice(0, 3).map((bid: any, i: number) => (
-                                      <div key={i} className="text-xs text-text-primary flex items-center gap-1">
-                                        <span className="text-amber-400 font-mono text-[10px]">$</span>
-                                        <span className="truncate max-w-[200px]">{bid.title}</span>
-                                        {bid.amount ? <span className="text-text-muted text-[10px] font-mono">${bid.amount}</span> : null}
-                                      </div>
-                                    ))}
-                                    {bids.length > 3 && <span className="text-[9px] text-text-muted">+{bids.length - 3} more</span>}
-                                  </div>
-                                ) : <span className="text-[11px] text-text-dim">No bids</span>}
+
+                              {/* Work Type */}
+                              <td className="px-3 py-2.5 text-text-secondary">
+                                {SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType?.replace(/_/g, " ") || "—"}
                               </td>
-                              <td className="px-3 py-2 text-xs text-text-secondary truncate max-w-[200px]">{wo.address || "—"}</td>
-                              <td className="px-3 py-2 text-xs text-text-secondary">{SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType || "—"}</td>
-                              <td className="px-3 py-2 text-center text-xs font-mono font-medium text-amber-400">{totalBidAmount > 0 ? "$" + totalBidAmount.toLocaleString() : "—"}</td>
-                              <td className="px-3 py-2">
-                                {tasks.length > 0 ? (
-                                  <div className="space-y-0.5">
-                                    {tasks.slice(0, 3).map((task: any, i: number) => (
-                                      <div key={i} className="text-xs text-text-secondary flex items-center gap-1.5">
-                                        {task.completed ? <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" /> : <div className="h-3 w-3 rounded-full border border-text-dim shrink-0" />}
-                                        <span className="truncate max-w-[200px]">{task.title || task.description}</span>
-                                      </div>
-                                    ))}
-                                    {tasks.length > 3 && <span className="text-[9px] text-text-muted">+{tasks.length - 3} more</span>}
-                                  </div>
-                                ) : <span className="text-[11px] text-text-dim">No tasks</span>}
-                              </td>
-                              <td className="px-3 py-2 text-center">
+
+                              {/* Pics */}
+                              <td className="px-3 py-2.5 text-center">
                                 {files.length > 0 ? (
-                                  <button onClick={() => setPhotoPopup({ open: true, photos: files, title: `${woNum} Photos` })} className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
-                                    <Camera className="h-3 w-3" /> {files.length}
+                                  <button onClick={() => setPhotoPopup({ open: true, photos: files, title: `${woNum} Photos` })} className="inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
+                                    <Camera className="h-3.5 w-3.5" /> {files.length}
                                   </button>
-                                ) : <span className="text-[11px] text-text-dim">0</span>}
+                                ) : (
+                                  <span className="text-[11px] text-text-dim">0</span>
+                                )}
                               </td>
-                              <td className="px-3 py-2 text-center"><span className="text-[10px] text-text-muted">{formatDate(wo.createdAt)}</span></td>
-                              <td className="px-3 py-2 text-center">
-                                <Link href={"/dashboard/work-orders/" + wo.id} onClick={onClose} className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors">
-                                  <ChevronRight className="h-3.5 w-3.5" />
-                                </Link>
+
+                              {/* Contractor */}
+                              <td className="px-3 py-2.5">
+                                <span className="inline-block bg-blue-500/15 text-blue-400 border border-blue-500/25 rounded px-2 py-0.5 text-[10px] font-medium truncate max-w-[130px]">
+                                  {contractorName}
+                                </span>
+                              </td>
+
+                              {/* Due Date */}
+                              <td className="px-3 py-2.5 text-text-muted text-[11px] whitespace-nowrap">
+                                {dueDateStr}
+                              </td>
+
+                              {/* Address */}
+                              <td className="px-3 py-2.5 text-text-secondary truncate max-w-[260px]" title={fullAddress}>
+                                {fullAddress || "—"}
                               </td>
                             </tr>
                           );
@@ -2425,7 +2446,7 @@ function PropertyHistoryPopup({
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-2.5 border-t border-border-subtle bg-surface-hover flex-shrink-0">
             <span className="text-xs text-text-muted">
-              {activeTab === "Bid History" ? `${filteredBids.length} Bids Total` : `${historyWorkOrders.length} work orders recorded`}
+              {activeTab === "Bid History" ? `${filteredBids.length} Bids Total` : `${filteredPastWOs.length} of ${historyWorkOrders.length} work orders`}
             </span>
             <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
           </div>
