@@ -1611,6 +1611,11 @@ function PropertyHistoryPopup({
     workOrder?.propertyId || undefined,
     workOrder?.address || undefined
   );
+  
+  // Navigation
+  const [activeTab, setActiveTab] = useState("Bid History");
+
+  // Filter states for Past WOs
   const [searchWO, setSearchWO] = useState("");
   const [searchStatus, setSearchStatus] = useState("");
   const [searchDesc, setSearchDesc] = useState("");
@@ -1619,12 +1624,170 @@ function PropertyHistoryPopup({
   const [searchBids, setSearchBids] = useState("");
   const [searchTasks, setSearchTasks] = useState("");
   const [searchPhotos, setSearchPhotos] = useState("");
-  const [activeTab, setActiveTab] = useState("Past WOs");
   const [searchCreated, setSearchCreated] = useState("");
+
+  // Filter states for Bid History
+  const [bidFilterStatus, setBidFilterStatus] = useState("");
+  const [bidFilterWO, setBidFilterWO] = useState("");
+  const [bidFilterPics, setBidFilterPics] = useState("");
+  const [bidFilterWorkType, setBidFilterWorkType] = useState("");
+  const [bidFilterContractor, setBidFilterContractor] = useState("");
+  const [bidFilterDate, setBidFilterDate] = useState("");
+  const [bidFilterTask, setBidFilterTask] = useState("");
+  const [bidFilterQty, setBidFilterQty] = useState("");
+  const [bidFilterContractorPrice, setBidFilterContractorPrice] = useState("");
+  const [bidFilterClientPrice, setBidFilterClientPrice] = useState("");
+  const [bidFilterComments, setBidFilterComments] = useState("");
+
+  // Pagination & selection for Bid History
+  const [bidPage, setBidPage] = useState(1);
+  const [bidPageSize, setBidPageSize] = useState(15);
+  const [selectedBids, setSelectedBids] = useState<string[]>([]);
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+
+  // Local bid status overrides for interactive approve/reject
+  const [bidStatusOverrides, setBidStatusOverrides] = useState<Record<string, string>>({});
+
   const [photoPopup, setPhotoPopup] = useState<{ open: boolean; photos: any[]; title: string }>({ open: false, photos: [], title: "" });
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  const historyWorkOrders = data?.workOrders || [];
+  const historyWorkOrders = useMemo(() => {
+    return (data?.workOrders || []).map((wo: any) => {
+      let parsedMeta = wo.metadata;
+      if (typeof parsedMeta === "string") {
+        try { parsedMeta = JSON.parse(parsedMeta); } catch (e) { parsedMeta = {}; }
+      }
+      let parsedTasks = wo.tasks;
+      if (typeof parsedTasks === "string") {
+        try { parsedTasks = JSON.parse(parsedTasks); } catch (e) { parsedTasks = []; }
+      }
+      return {
+        ...wo,
+        metadata: parsedMeta || {},
+        tasks: parsedTasks || [],
+      };
+    });
+  }, [data]);
 
+  // Extract all individual bids across all work orders
+  const allBids = useMemo(() => {
+    const list: any[] = [];
+    historyWorkOrders.forEach((wo: any) => {
+      const woBids = (wo.metadata?.bids as any[]) || [];
+      const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+      const contractorName = wo.contractor?.name || wo.metadata?.contractorName || "Unassigned";
+      const workType = SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType?.replace(/_/g, " ") || "—";
+      const woDate = wo.createdAt ? new Date(wo.createdAt).toLocaleDateString() : (wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "—");
+      const picsCount = wo.files?.length || 0;
+
+      woBids.forEach((bid: any, index: number) => {
+        const uniqueId = `${wo.id}-bid-${bid.id || index}`;
+        const qty = bid.quantity || bid.qty || 1;
+        const unit = bid.unit || "";
+        const clientTotal = bid.amount || ((bid.price || 0) * qty) || 0;
+        const clientPrice = bid.price || (clientTotal / qty) || 0;
+        
+        // Contractor pricing (custom or 70% standard)
+        const contractorPrice = bid.contractorPrice ?? (clientPrice > 0 ? clientPrice * 0.7 : 0);
+        const contractorTotal = bid.contractorTotal ?? (clientTotal > 0 ? clientTotal * 0.7 : 0);
+
+        list.push({
+          uniqueId,
+          rawBid: bid,
+          woId: wo.id,
+          woNum,
+          status: bidStatusOverrides[uniqueId] || bid.status || wo.status || "PENDING",
+          picsCount: bid.photos?.length || picsCount,
+          photos: (bid.photos && bid.photos.length > 0) ? bid.photos : (wo.files || []),
+          workType,
+          contractorName,
+          date: woDate,
+          task: bid.title || "Custom Item",
+          qty,
+          unit,
+          contractorPrice,
+          contractorTotal,
+          clientPrice,
+          clientTotal,
+          comments: bid.description || bid.comments || bid.title || "—",
+        });
+      });
+    });
+    return list;
+  }, [historyWorkOrders, bidStatusOverrides]);
+
+  // Filter Bids
+  const filteredBids = useMemo(() => {
+    return allBids.filter((b) => {
+      if (bidFilterStatus && !b.status.toLowerCase().includes(bidFilterStatus.toLowerCase())) return false;
+      if (bidFilterWO && !b.woNum.toLowerCase().includes(bidFilterWO.toLowerCase())) return false;
+      if (bidFilterPics && !String(b.picsCount).includes(bidFilterPics)) return false;
+      if (bidFilterWorkType && !b.workType.toLowerCase().includes(bidFilterWorkType.toLowerCase())) return false;
+      if (bidFilterContractor && !b.contractorName.toLowerCase().includes(bidFilterContractor.toLowerCase())) return false;
+      if (bidFilterDate && !b.date.toLowerCase().includes(bidFilterDate.toLowerCase())) return false;
+      if (bidFilterTask && !b.task.toLowerCase().includes(bidFilterTask.toLowerCase())) return false;
+      if (bidFilterQty && !String(b.qty).includes(bidFilterQty)) return false;
+      if (bidFilterContractorPrice && !b.contractorTotal.toString().includes(bidFilterContractorPrice)) return false;
+      if (bidFilterClientPrice && !b.clientTotal.toString().includes(bidFilterClientPrice)) return false;
+      if (bidFilterComments && !b.comments.toLowerCase().includes(bidFilterComments.toLowerCase())) return false;
+      return true;
+    });
+  }, [
+    allBids,
+    bidFilterStatus,
+    bidFilterWO,
+    bidFilterPics,
+    bidFilterWorkType,
+    bidFilterContractor,
+    bidFilterDate,
+    bidFilterTask,
+    bidFilterQty,
+    bidFilterContractorPrice,
+    bidFilterClientPrice,
+    bidFilterComments,
+  ]);
+
+  // Paginated Bids
+  const paginatedBids = useMemo(() => {
+    const start = (bidPage - 1) * bidPageSize;
+    return filteredBids.slice(start, start + bidPageSize);
+  }, [filteredBids, bidPage, bidPageSize]);
+
+  const totalBidPages = Math.ceil(filteredBids.length / bidPageSize) || 1;
+
+  // Actions
+  const handleCopyBid = (bid: any) => {
+    const text = `${bid.task} | Qty: ${bid.qty}${bid.unit ? " " + bid.unit : ""} | Price: $${bid.clientPrice.toFixed(2)} | Total: $${bid.clientTotal.toFixed(2)} | Comments: ${bid.comments}`;
+    navigator.clipboard.writeText(text);
+    toast.success("Bid details copied to clipboard!");
+  };
+
+  const handleApproveBid = (uniqueId: string) => {
+    setBidStatusOverrides((prev) => ({ ...prev, [uniqueId]: "APPROVED" }));
+    toast.success("Bid approved successfully!");
+  };
+
+  const handleRejectBid = (uniqueId: string) => {
+    setBidStatusOverrides((prev) => ({ ...prev, [uniqueId]: "REJECTED" }));
+    toast.error("Bid rejected");
+  };
+
+  const toggleSelectBid = (id: string) => {
+    setSelectedBids((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllBids = () => {
+    if (selectedBids.length === paginatedBids.length) {
+      setSelectedBids([]);
+    } else {
+      setSelectedBids(paginatedBids.map((b) => b.uniqueId));
+    }
+  };
+
+  // Filter Past WOs
   const filteredOrders = historyWorkOrders.filter((wo: any) => {
     const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
     const bids = (wo.metadata?.bids as any[]) || [];
@@ -1651,301 +1814,628 @@ function PropertyHistoryPopup({
     return true;
   });
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   if (!mounted) return null;
+
+  const TABS = [
+    { id: "Past WOs", label: "Past WO's", count: historyWorkOrders.length },
+    { id: "Bid History", label: "Bid History", count: allBids.length },
+    { id: "Completion History", label: "Completion History" },
+    { id: "Damage History", label: "Damage History" },
+    { id: "Appliance History", label: "Appliance History" },
+    { id: "Violation History", label: "Violation History" },
+    { id: "Hazard History", label: "Hazard History" },
+    { id: "Contractor Invoice History", label: "Contractor Invoice History" },
+    { id: "Client Invoice History", label: "Client Invoice History" },
+  ];
 
   return createPortal(
     <>
-    <div className="fixed inset-0 z-[2147483646] flex items-start justify-center pt-[2vh]">
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
-      <div className="relative w-full max-w-[95vw] max-h-[96vh] mx-4 bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-6 py-3 border-b border-border-subtle flex-shrink-0">
+      <div className="fixed inset-0 z-[2147483646] flex items-start justify-center pt-[2vh]">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
+        <div className="relative w-full max-w-[96vw] max-h-[96vh] mx-4 bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-3.5 border-b border-border-subtle flex-shrink-0 bg-surface">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
                 <History className="h-4 w-4 text-cyan-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-text-primary">Property History</h2>
+                <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  Property History
+                  <span className="text-xs font-normal text-text-muted">({workOrder?.address || "Address"})</span>
+                </h2>
                 <p className="text-[11px] text-text-muted">
-                  {workOrder?.address || "All work orders"} &bull; {historyWorkOrders.length} orders
+                  {historyWorkOrders.length} work order{historyWorkOrders.length !== 1 ? "s" : ""} recorded &bull; {allBids.length} total bids
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors">
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="flex px-6 pt-2 bg-surface-hover/30 border-b border-border-subtle overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-            {["Past WOs", "Bid History", "Completion History", "Damage History", "Appliance History", "Violation History", "Hazard History", "Contractor Invoice History", "Client Invoice History"].map(tab => (
+
+          {/* Navigation Tabs */}
+          <div className="flex px-4 bg-surface-hover/30 border-b border-border-subtle overflow-x-auto scrollbar-none" style={{ scrollbarWidth: "none" }}>
+            {TABS.map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "px-4 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors",
-                  activeTab === tab ? "border-cyan-500 text-cyan-400" : "border-transparent text-text-muted hover:text-text-primary"
+                  "px-4 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-all flex items-center gap-1.5",
+                  activeTab === tab.id
+                    ? "border-cyan-500 text-cyan-400 bg-cyan-500/[0.04]"
+                    : "border-transparent text-text-muted hover:text-text-primary hover:bg-surface-hover/50"
                 )}
               >
-                {tab}
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.2 rounded-full",
+                    activeTab === tab.id ? "bg-cyan-500/20 text-cyan-300" : "bg-surface-hover text-text-dim"
+                  )}>
+                    {tab.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-auto">
+          {/* Content Body */}
+          <div className="flex-1 overflow-auto bg-background/50">
             {isLoading ? (
-              <div className="text-center py-16">
-                <div className="h-6 w-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-xs text-text-muted">Loading property history...</p>
-              </div>
-            ) : historyWorkOrders.length === 0 ? (
-              <div className="text-center py-16">
-                <History className="h-12 w-12 text-text-dim mx-auto mb-3" />
-                <p className="text-text-secondary font-medium">No property history</p>
+              <div className="text-center py-20">
+                <div className="h-7 w-7 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-xs text-text-muted">Loading property records...</p>
               </div>
             ) : (
               <>
-              {activeTab === "Past WOs" && (
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-surface border-b border-border-subtle">
-                    <th className="p-2 min-w-[140px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchWO} onChange={(e) => setSearchWO(e.target.value)} placeholder="Search WO #..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[100px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchStatus} onChange={(e) => setSearchStatus(e.target.value)} placeholder="Search status..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[200px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchDesc} onChange={(e) => setSearchDesc(e.target.value)} placeholder="Search bid desc..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[200px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchAddress} onChange={(e) => setSearchAddress(e.target.value)} placeholder="Search address..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[80px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchService} onChange={(e) => setSearchService(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[100px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchBids} onChange={(e) => setSearchBids(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[200px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchTasks} onChange={(e) => setSearchTasks(e.target.value)} placeholder="Search tasks..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[80px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchPhotos} onChange={(e) => setSearchPhotos(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[100px]">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
-                        <input type="text" value={searchCreated} onChange={(e) => setSearchCreated(e.target.value)} placeholder="Search..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
-                      </div>
-                    </th>
-                    <th className="p-2 min-w-[60px] text-center"><span className="text-[10px] font-semibold text-text-muted uppercase">Link</span></th>
-                  </tr>
-                  <tr className="bg-surface-hover border-b border-border-medium">
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">WO #</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Bid Description</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Address</th>
-                    <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Service</th>
-                    <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Bids $</th>
-                    <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Tasks</th>
-                    <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Photos</th>
-                    <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Created</th>
-                    <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Go</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {filteredOrders.map((wo: any) => {
-                    const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
-                    const tasks = (wo.tasks as any[]) || [];
-                    const files = wo.files || [];
-                    const bids = (wo.metadata?.bids as any[]) || [];
-                    const totalBidAmount = bids.reduce((s: number, b: any) => s + (b.amount || 0), 0);
-                    const isCurrent = wo.id === workOrder?.id;
-                    return (
-                      <tr key={wo.id} className={cn("hover:bg-surface-hover transition-colors", isCurrent && "bg-cyan-500/[0.04] border-l-2 border-l-cyan-500")}>
-                        <td className="px-3 py-2">
-                          <span className="text-xs font-mono font-semibold text-cyan-400">{woNum}</span>
-                          {isCurrent && <span className="ml-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">CURRENT</span>}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded border", STATUS_PILL_COLORS[wo.status] || "bg-gray-500/10 text-text-secondary border-gray-500/20")}>
-                            {STATUS_LABELS[wo.status]}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {bids.length > 0 ? (
-                            <div className="space-y-0.5">
-                              {bids.slice(0, 3).map((bid: any, i: number) => (
-                                <div key={i} className="flex items-center gap-1.5">
-                                  <DollarSign className="h-2.5 w-2.5 text-amber-400 flex-shrink-0" />
-                                  <span className="text-[11px] text-text-secondary truncate max-w-[180px]">{bid.title}</span>
-                                  <span className="text-[9px] text-text-muted">${(bid.amount || 0).toLocaleString()}</span>
-                                </div>
-                              ))}
-                              {bids.length > 3 && <span className="text-[9px] text-text-muted">+{bids.length - 3} more</span>}
+                {/* ── TAB 1: PAST WORK ORDERS ── */}
+                {activeTab === "Past WOs" && (
+                  historyWorkOrders.length === 0 ? (
+                    <div className="text-center py-16">
+                      <History className="h-12 w-12 text-text-dim mx-auto mb-3" />
+                      <p className="text-text-secondary font-medium">No past work orders found</p>
+                    </div>
+                  ) : (
+                    <table className="w-full border-collapse">
+                      <thead className="sticky top-0 z-10 bg-surface">
+                        <tr className="border-b border-border-subtle">
+                          <th className="p-2 min-w-[140px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchWO} onChange={(e) => setSearchWO(e.target.value)} placeholder="Search WO #..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
                             </div>
-                          ) : <span className="text-[11px] text-text-dim">No bids</span>}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className="text-[11px] text-text-secondary truncate max-w-[200px] block">
-                            {wo.address}{wo.city ? ", " + wo.city : ""}{wo.state ? ", " + wo.state : ""}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-center"><span className="text-[10px] text-text-secondary">{SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType}</span></td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={cn("text-xs font-medium", totalBidAmount > 0 ? "text-amber-400" : "text-text-dim")}>
-                            {totalBidAmount > 0 ? "$" + totalBidAmount.toLocaleString() : "\u2014"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {tasks.length > 0 ? (
-                            <div className="space-y-0.5">
-                              {tasks.slice(0, 4).map((task: any, i: number) => (
-                                <div key={i} className="flex items-center gap-1.5">
-                                  <div className={cn(
-                                    "w-3 h-3 rounded-full border flex-shrink-0 flex items-center justify-center",
-                                    task.completed
-                                      ? "bg-emerald-500 border-emerald-500"
-                                      : "border-gray-600 bg-transparent"
-                                  )}>
-                                    {task.completed && (
-                                      <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
+                          </th>
+                          <th className="p-2 min-w-[100px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchStatus} onChange={(e) => setSearchStatus(e.target.value)} placeholder="Search status..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[200px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchDesc} onChange={(e) => setSearchDesc(e.target.value)} placeholder="Search bid desc..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[200px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchAddress} onChange={(e) => setSearchAddress(e.target.value)} placeholder="Search address..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[100px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchService} onChange={(e) => setSearchService(e.target.value)} placeholder="Search service..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[100px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchBids} onChange={(e) => setSearchBids(e.target.value)} placeholder="Search bids $..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[180px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchTasks} onChange={(e) => setSearchTasks(e.target.value)} placeholder="Search tasks..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[80px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchPhotos} onChange={(e) => setSearchPhotos(e.target.value)} placeholder="Pics..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[100px]">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted" />
+                              <input type="text" value={searchCreated} onChange={(e) => setSearchCreated(e.target.value)} placeholder="Date..." className="w-full pl-7 pr-2 py-1 bg-surface-hover border border-border-subtle rounded-md text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none" />
+                            </div>
+                          </th>
+                          <th className="p-2 min-w-[50px]"></th>
+                        </tr>
+                        <tr className="bg-surface-hover border-b border-border-medium">
+                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">WO #</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Bid Description</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Address</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Service</th>
+                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Bids $</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Tasks</th>
+                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Photos</th>
+                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Created</th>
+                          <th className="px-3 py-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Go</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-subtle">
+                        {filteredOrders.map((wo: any) => {
+                          const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                          const tasks = (wo.tasks as any[]) || [];
+                          const files = wo.files || [];
+                          const bids = (wo.metadata?.bids as any[]) || [];
+                          const totalBidAmount = bids.reduce((s: number, b: any) => s + (b.amount || 0), 0);
+                          const isCurrent = wo.id === workOrder?.id;
+                          return (
+                            <tr key={wo.id} className={cn("hover:bg-surface-hover transition-colors", isCurrent && "bg-cyan-500/[0.04] border-l-2 border-l-cyan-500")}>
+                              <td className="px-3 py-2">
+                                <span className="text-xs font-mono font-semibold text-cyan-400">{woNum}</span>
+                                {isCurrent && <span className="ml-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">CURRENT</span>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded-md border", STATUS_PILL_COLORS[wo.status] || "bg-gray-500/10 text-text-secondary border-gray-500/20")}>
+                                  {STATUS_LABELS[wo.status] || wo.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2">
+                                {bids.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    {bids.slice(0, 3).map((bid: any, i: number) => (
+                                      <div key={i} className="text-xs text-text-primary flex items-center gap-1">
+                                        <span className="text-amber-400 font-mono text-[10px]">$</span>
+                                        <span className="truncate max-w-[200px]">{bid.title}</span>
+                                        {bid.amount ? <span className="text-text-muted text-[10px] font-mono">${bid.amount}</span> : null}
+                                      </div>
+                                    ))}
+                                    {bids.length > 3 && <span className="text-[9px] text-text-muted">+{bids.length - 3} more</span>}
+                                  </div>
+                                ) : <span className="text-[11px] text-text-dim">No bids</span>}
+                              </td>
+                              <td className="px-3 py-2 text-xs text-text-secondary truncate max-w-[200px]">{wo.address || "—"}</td>
+                              <td className="px-3 py-2 text-xs text-text-secondary">{SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType || "—"}</td>
+                              <td className="px-3 py-2 text-center text-xs font-mono font-medium text-amber-400">{totalBidAmount > 0 ? "$" + totalBidAmount.toLocaleString() : "—"}</td>
+                              <td className="px-3 py-2">
+                                {tasks.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    {tasks.slice(0, 3).map((task: any, i: number) => (
+                                      <div key={i} className="text-xs text-text-secondary flex items-center gap-1.5">
+                                        {task.completed ? <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" /> : <div className="h-3 w-3 rounded-full border border-text-dim shrink-0" />}
+                                        <span className="truncate max-w-[200px]">{task.title || task.description}</span>
+                                      </div>
+                                    ))}
+                                    {tasks.length > 3 && <span className="text-[9px] text-text-muted">+{tasks.length - 3} more</span>}
+                                  </div>
+                                ) : <span className="text-[11px] text-text-dim">No tasks</span>}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {files.length > 0 ? (
+                                  <button onClick={() => setPhotoPopup({ open: true, photos: files, title: `${woNum} Photos` })} className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                                    <Camera className="h-3 w-3" /> {files.length}
+                                  </button>
+                                ) : <span className="text-[11px] text-text-dim">0</span>}
+                              </td>
+                              <td className="px-3 py-2 text-center"><span className="text-[10px] text-text-muted">{formatDate(wo.createdAt)}</span></td>
+                              <td className="px-3 py-2 text-center">
+                                <Link href={"/dashboard/work-orders/" + wo.id} onClick={onClose} className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors">
+                                  <ChevronRight className="h-3.5 w-3.5" />
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )
+                )}
+
+                {/* ── TAB 2: BID HISTORY (EXACT DESIGN MATCH) ── */}
+                {activeTab === "Bid History" && (
+                  allBids.length === 0 ? (
+                    <div className="text-center py-16">
+                      <DollarSign className="h-12 w-12 text-text-dim mx-auto mb-3" />
+                      <p className="text-text-secondary font-medium">No bid history found for this property</p>
+                      <p className="text-xs text-text-muted mt-1">Bids created on work orders at this address will show up here.</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col h-full">
+                      <table className="w-full border-collapse">
+                        <thead className="sticky top-0 z-10 bg-surface">
+                          {/* Search Inputs Row */}
+                          <tr className="border-b border-border-subtle bg-surface-hover/20">
+                            <th className="p-2 w-8 text-center">
+                              <input
+                                type="checkbox"
+                                checked={paginatedBids.length > 0 && selectedBids.length === paginatedBids.length}
+                                onChange={toggleSelectAllBids}
+                                className="rounded border-border-subtle text-cyan-500 focus:ring-0 cursor-pointer"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[130px]"></th>
+                            <th className="p-1.5 min-w-[90px]">
+                              <input
+                                type="text"
+                                value={bidFilterStatus}
+                                onChange={(e) => setBidFilterStatus(e.target.value)}
+                                placeholder="Status..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[110px]">
+                              <input
+                                type="text"
+                                value={bidFilterWO}
+                                onChange={(e) => setBidFilterWO(e.target.value)}
+                                placeholder="WO #..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[65px]">
+                              <input
+                                type="text"
+                                value={bidFilterPics}
+                                onChange={(e) => setBidFilterPics(e.target.value)}
+                                placeholder="Pics..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[110px]">
+                              <input
+                                type="text"
+                                value={bidFilterWorkType}
+                                onChange={(e) => setBidFilterWorkType(e.target.value)}
+                                placeholder="Type..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[110px]">
+                              <input
+                                type="text"
+                                value={bidFilterContractor}
+                                onChange={(e) => setBidFilterContractor(e.target.value)}
+                                placeholder="Contractor..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[90px]">
+                              <input
+                                type="text"
+                                value={bidFilterDate}
+                                onChange={(e) => setBidFilterDate(e.target.value)}
+                                placeholder="Date..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[180px]">
+                              <input
+                                type="text"
+                                value={bidFilterTask}
+                                onChange={(e) => setBidFilterTask(e.target.value)}
+                                placeholder="Task / Title..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[50px]">
+                              <input
+                                type="text"
+                                value={bidFilterQty}
+                                onChange={(e) => setBidFilterQty(e.target.value)}
+                                placeholder="Qty..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[110px]">
+                              <input
+                                type="text"
+                                value={bidFilterContractorPrice}
+                                onChange={(e) => setBidFilterContractorPrice(e.target.value)}
+                                placeholder="Cost..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[110px]">
+                              <input
+                                type="text"
+                                value={bidFilterClientPrice}
+                                onChange={(e) => setBidFilterClientPrice(e.target.value)}
+                                placeholder="Price..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                            <th className="p-1.5 min-w-[200px]">
+                              <input
+                                type="text"
+                                value={bidFilterComments}
+                                onChange={(e) => setBidFilterComments(e.target.value)}
+                                placeholder="Comments..."
+                                className="w-full px-2 py-1 bg-surface border border-border-subtle rounded text-[11px] text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 outline-none"
+                              />
+                            </th>
+                          </tr>
+
+                          {/* Column Title Row */}
+                          <tr className="bg-surface-hover/60 border-b border-border-medium">
+                            <th className="px-2 py-2.5 w-8 text-center text-[10px] font-bold text-text-muted">#</th>
+                            <th className="px-2 py-2.5 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Action</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Order #</th>
+                            <th className="px-2 py-2.5 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Pics</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Type</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contractor</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Date</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Task</th>
+                            <th className="px-2 py-2.5 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Qty</th>
+                            <th className="px-2 py-2.5 text-right text-[10px] font-bold text-blue-400 uppercase tracking-wider bg-blue-500/[0.04]">Contractor</th>
+                            <th className="px-2 py-2.5 text-right text-[10px] font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/[0.04]">Client</th>
+                            <th className="px-2 py-2.5 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Comments</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-subtle">
+                          {paginatedBids.map((b) => {
+                            const isExpanded = !!expandedComments[b.uniqueId];
+                            const isSelected = selectedBids.includes(b.uniqueId);
+
+                            // Status badge colors
+                            const statusColor =
+                              b.status === "APPROVED"
+                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                : b.status === "REJECTED"
+                                ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
+                                : "bg-amber-500/15 text-amber-400 border-amber-500/30";
+
+                            return (
+                              <tr
+                                key={b.uniqueId}
+                                className={cn(
+                                  "hover:bg-surface-hover/40 transition-colors text-xs",
+                                  isSelected && "bg-cyan-500/[0.04]"
+                                )}
+                              >
+                                {/* Checkbox */}
+                                <td className="px-2 py-2.5 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleSelectBid(b.uniqueId)}
+                                    className="rounded border-border-subtle text-cyan-500 focus:ring-0 cursor-pointer"
+                                  />
+                                </td>
+
+                                {/* Actions */}
+                                <td className="px-2 py-2.5">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      onClick={() => handleCopyBid(b)}
+                                      className="bg-[#2E6B8D] hover:bg-[#255670] text-white text-[9px] font-semibold px-2 py-1 rounded shadow-sm transition-all"
+                                      title="Copy bid details"
+                                    >
+                                      Copy
+                                    </button>
+                                    <button
+                                      onClick={() => handleApproveBid(b.uniqueId)}
+                                      className="bg-[#4CAF50] hover:bg-[#439c47] text-white text-[9px] font-semibold px-2 py-1 rounded shadow-sm transition-all"
+                                      title="Approve bid"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectBid(b.uniqueId)}
+                                      className="bg-[#F44336] hover:bg-[#d6382c] text-white text-[9px] font-semibold px-2 py-1 rounded shadow-sm transition-all"
+                                      title="Reject bid"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                </td>
+
+                                {/* Status */}
+                                <td className="px-2 py-2.5">
+                                  <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-semibold border", statusColor)}>
+                                    {b.status}
+                                  </span>
+                                </td>
+
+                                {/* Work Order # */}
+                                <td className="px-2 py-2.5 font-mono text-cyan-400 font-medium">
+                                  <Link href={`/dashboard/work-orders/${b.woId}`} onClick={onClose} className="hover:underline">
+                                    {b.woNum}
+                                  </Link>
+                                </td>
+
+                                {/* Photos */}
+                                <td className="px-2 py-2.5 text-center">
+                                  {b.picsCount > 0 ? (
+                                    <button
+                                      onClick={() => setPhotoPopup({ open: true, photos: b.photos, title: `${b.woNum} - ${b.task}` })}
+                                      className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-semibold"
+                                    >
+                                      <Camera className="h-3.5 w-3.5" />
+                                      <span>{b.picsCount}</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-text-dim text-[11px]">0</span>
+                                  )}
+                                </td>
+
+                                {/* Work Type */}
+                                <td className="px-2 py-2.5 text-text-secondary truncate max-w-[110px]">
+                                  {b.workType}
+                                </td>
+
+                                {/* Contractor */}
+                                <td className="px-2 py-2.5">
+                                  <span className="inline-block bg-blue-500/15 text-blue-400 border border-blue-500/25 rounded px-2 py-0.5 text-[10px] font-medium truncate max-w-[120px]">
+                                    {b.contractorName}
+                                  </span>
+                                </td>
+
+                                {/* Date */}
+                                <td className="px-2 py-2.5 text-text-muted text-[11px] whitespace-nowrap">
+                                  {b.date}
+                                </td>
+
+                                {/* Task Name */}
+                                <td className="px-2 py-2.5 font-medium text-text-primary max-w-[200px]">
+                                  <span className="truncate block" title={b.task}>{b.task}</span>
+                                </td>
+
+                                {/* Qty */}
+                                <td className="px-2 py-2.5 text-center text-text-primary font-medium">
+                                  {b.qty} {b.unit}
+                                </td>
+
+                                {/* Contractor Pricing */}
+                                <td className="px-2 py-2.5 text-right font-mono bg-blue-500/[0.02]">
+                                  <div className="text-[10px] text-text-muted">Price: ${b.contractorPrice.toFixed(2)}</div>
+                                  <div className="font-bold text-text-primary text-[11px]">Total: ${b.contractorTotal.toFixed(2)}</div>
+                                </td>
+
+                                {/* Client Pricing */}
+                                <td className="px-2 py-2.5 text-right font-mono bg-emerald-500/[0.02]">
+                                  <div className="text-[10px] text-text-muted">Price: ${b.clientPrice.toFixed(2)}</div>
+                                  <div className="font-bold text-emerald-400 text-[11px]">Total: ${b.clientTotal.toFixed(2)}</div>
+                                </td>
+
+                                {/* Comments */}
+                                <td className="px-2 py-2.5 text-text-muted max-w-[240px]">
+                                  <div className="leading-tight">
+                                    <span className={cn(!isExpanded && "line-clamp-2")}>
+                                      {b.comments}
+                                    </span>
+                                    {b.comments.length > 60 && (
+                                      <button
+                                        onClick={() => setExpandedComments(prev => ({ ...prev, [b.uniqueId]: !prev[b.uniqueId] }))}
+                                        className="text-cyan-400 hover:text-cyan-300 font-semibold text-[10px] ml-1 inline-block"
+                                      >
+                                        {isExpanded ? "See less" : "See more"}
+                                      </button>
                                     )}
                                   </div>
-                                  <span className={cn(
-                                    "text-[11px] truncate max-w-[180px]",
-                                    task.completed ? "text-text-muted line-through" : "text-text-secondary"
-                                  )}>
-                                    {task.title || task.description || "Untitled task"}
-                                  </span>
-                                </div>
-                              ))}
-                              {tasks.length > 4 && (
-                                <span className="text-[9px] text-text-muted pl-4">+{tasks.length - 4} more</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+
+                      {/* Pagination Bar */}
+                      <div className="flex items-center justify-between px-6 py-3 border-t border-border-subtle bg-surface-hover/30 mt-auto">
+                        <span className="text-xs text-text-muted">
+                          Showing {filteredBids.length > 0 ? (bidPage - 1) * bidPageSize + 1 : 0}-
+                          {Math.min(bidPage * bidPageSize, filteredBids.length)} of {filteredBids.length} Bids
+                        </span>
+                        
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                            <span>Items per page:</span>
+                            <select
+                              value={bidPageSize}
+                              onChange={(e) => { setBidPageSize(Number(e.target.value)); setBidPage(1); }}
+                              className="bg-surface border border-border-subtle rounded px-2 py-1 text-xs text-text-primary outline-none"
+                            >
+                              <option value={10}>10</option>
+                              <option value={15}>15</option>
+                              <option value={25}>25</option>
+                              <option value={50}>50</option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              disabled={bidPage <= 1}
+                              onClick={() => setBidPage(p => Math.max(1, p - 1))}
+                              className="px-2.5 py-1 text-xs bg-surface border border-border-subtle rounded hover:bg-surface-hover disabled:opacity-40 disabled:pointer-events-none text-text-secondary"
+                            >
+                              Previous
+                            </button>
+                            <span className="px-2 text-xs text-text-muted">
+                              Page {bidPage} of {totalBidPages}
+                            </span>
+                            <button
+                              disabled={bidPage >= totalBidPages}
+                              onClick={() => setBidPage(p => Math.min(totalBidPages, p + 1))}
+                              className="px-2.5 py-1 text-xs bg-surface border border-border-subtle rounded hover:bg-surface-hover disabled:opacity-40 disabled:pointer-events-none text-text-secondary"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* ── TAB 3: COMPLETION HISTORY / TASKS ── */}
+                {activeTab === "Completion History" && (
+                  <div className="p-6">
+                    <h3 className="text-sm font-bold text-text-primary mb-4">Completed Work Orders & Tasks</h3>
+                    <div className="space-y-4">
+                      {historyWorkOrders.map((wo: any) => {
+                        const tasks = (wo.tasks as any[]) || [];
+                        const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                        return (
+                          <div key={wo.id} className="p-4 rounded-xl bg-surface border border-border-subtle">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-mono text-cyan-400 font-bold">{woNum} - {wo.title}</span>
+                              <span className="text-xs text-text-muted">{wo.completedAt ? formatDate(wo.completedAt) : formatDate(wo.createdAt)}</span>
+                            </div>
+                            <div className="space-y-1.5 mt-2">
+                              {tasks.length > 0 ? (
+                                tasks.map((t: any, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-2 text-xs text-text-secondary">
+                                    <CheckCircle2 className={cn("h-3.5 w-3.5", t.completed ? "text-emerald-400" : "text-text-dim")} />
+                                    <span>{t.title || t.description}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-xs text-text-dim italic">No task records available.</p>
                               )}
                             </div>
-                          ) : (
-                            <span className="text-[11px] text-text-dim">No tasks</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {files.length > 0 ? (
-                            <button onClick={(e) => { e.stopPropagation(); const imgs = files.filter((f: any) => f.mimeType?.startsWith("image/")); if (imgs.length > 0) setPhotoPopup({ open: true, photos: imgs, title: woNum + " Photos" }); }} className="inline-flex items-center gap-1 text-[11px] text-text-secondary hover:text-cyan-400 cursor-pointer transition-colors">
-                              <Camera className="h-3 w-3" />{files.length}
-                            </button>
-                          ) : <span className="text-[11px] text-text-dim">0</span>}
-                        </td>
-                        <td className="px-3 py-2 text-center"><span className="text-[10px] text-text-muted">{formatDate(wo.createdAt)}</span></td>
-                        <td className="px-3 py-2 text-center">
-                          <Link href={"/dashboard/work-orders/" + wo.id} onClick={onClose} className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors">
-                            <ChevronRight className="h-3.5 w-3.5" />
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              )}
-              {activeTab === "Bid History" && (
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-surface border-b border-border-subtle">
-                    <th className="p-2 min-w-[20px]"><div className="w-3 h-3 border border-border-subtle rounded-sm" /></th>
-                    <th className="p-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Action</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Status</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Order #</th>
-                    <th className="p-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Pics</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Work Type</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contractor</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Date</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Task</th>
-                    <th className="p-2 text-center text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Qty</th>
-                    <th className="p-2 text-right text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Contractor</th>
-                    <th className="p-2 text-right text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Client</th>
-                    <th className="p-2 text-left text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Comments</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {historyWorkOrders.flatMap((wo: any) => {
-                    const bids = (wo.metadata?.bids as any[]) || [];
-                    if (bids.length === 0) return [];
-                    const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
-                    return bids.map((bid: any, i: number) => (
-                      <tr key={wo.id + i} className="hover:bg-surface-hover transition-colors">
-                        <td className="px-2 py-2"><div className="w-3 h-3 border border-border-subtle rounded-sm" /></td>
-                        <td className="px-2 py-2 flex gap-1 justify-center">
-                          <button className="bg-[#2E6B8D] text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:opacity-90 transition-opacity">Copy</button>
-                          <button className="bg-[#4CAF50] text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:opacity-90 transition-opacity">Approve</button>
-                          <button className="bg-[#F44336] text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:opacity-90 transition-opacity">Reject</button>
-                        </td>
-                        <td className="px-2 py-2"><span className="bg-yellow-500/20 text-yellow-500 text-[9px] px-2 py-0.5 rounded-full">Pending</span></td>
-                        <td className="px-2 py-2 text-xs font-mono">{woNum}</td>
-                        <td className="px-2 py-2 text-center text-xs text-green-500 flex items-center justify-center gap-1"><Camera className="h-3 w-3" /> {wo.files?.length || 0}</td>
-                        <td className="px-2 py-2 text-xs">{wo.serviceType || "—"}</td>
-                        <td className="px-2 py-2"><span className="text-[10px] font-medium text-blue-500 bg-blue-500/10 rounded px-1.5 py-0.5">{wo.contractor?.name || "Harold Burns"}</span></td>
-                        <td className="px-2 py-2 text-xs">{new Date(wo.createdAt).toLocaleDateString()}</td>
-                        <td className="px-2 py-2 text-xs">{bid.title}</td>
-                        <td className="px-2 py-2 text-center text-xs">1</td>
-                        <td className="px-2 py-2 text-right text-xs">
-                          <div className="text-[9px] text-text-muted">Price: $0.00</div>
-                          <div className="font-bold text-[10px]">Total: $0.00</div>
-                        </td>
-                        <td className="px-2 py-2 text-right text-xs">
-                          <div className="text-[9px] text-text-muted">Price: ${(bid.amount || 0).toFixed(2)}</div>
-                          <div className="font-bold text-[10px]">Total: ${(bid.amount || 0).toFixed(2)}</div>
-                        </td>
-                        <td className="px-2 py-2 text-xs">{bid.description || bid.title} <span className="text-blue-400 text-[10px] cursor-pointer hover:underline ml-1">See more</span></td>
-                      </tr>
-                    ));
-                  })}
-                </tbody>
-              </table>
-              )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── GENERIC FALLBACK FOR OTHER CATEGORY TABS ── */}
+                {!["Past WOs", "Bid History", "Completion History"].includes(activeTab) && (
+                  <div className="text-center py-20">
+                    <History className="h-12 w-12 text-text-dim mx-auto mb-3" />
+                    <h3 className="text-sm font-bold text-text-primary mb-1">{activeTab}</h3>
+                    <p className="text-xs text-text-muted max-w-sm mx-auto">
+                      No historical {activeTab.toLowerCase()} incidents or records have been flagged for this property address yet.
+                    </p>
+                  </div>
+                )}
               </>
             )}
           </div>
 
+          {/* Footer */}
           <div className="flex items-center justify-between px-6 py-2.5 border-t border-border-subtle bg-surface-hover flex-shrink-0">
             <span className="text-xs text-text-muted">
-              {filteredOrders.length} work order{filteredOrders.length !== 1 ? "s" : ""}
-              {(searchWO || searchStatus || searchDesc || searchAddress || searchService || searchBids || searchTasks || searchPhotos || searchCreated) && " (filtered from " + historyWorkOrders.length + ")"}
+              {activeTab === "Bid History" ? `${filteredBids.length} Bids Total` : `${historyWorkOrders.length} work orders recorded`}
             </span>
             <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
           </div>
         </div>
       </div>
 
+      {/* Photo Popup */}
       {photoPopup.open && (
-        <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md" onClick={() => setPhotoPopup({ open: false, photos: [], title: "" })}>
-          <div className="relative max-w-5xl max-h-[90vh] mx-4">
+        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/90 backdrop-blur-md" onClick={() => setPhotoPopup({ open: false, photos: [], title: "" })}>
+          <div className="relative max-w-5xl max-h-[90vh] mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <p className="text-sm font-medium text-white bg-black/60 px-3 py-1.5 rounded-lg">{photoPopup.title}</p>
               <button onClick={() => setPhotoPopup({ open: false, photos: [], title: "" })} className="p-2 rounded-lg bg-black/60 text-white hover:bg-black/80"><X className="h-5 w-5" /></button>
@@ -1960,9 +2450,11 @@ function PropertyHistoryPopup({
           </div>
         </div>
       )}
-    </>, document.body
+    </>,
+    document.body
   );
 }
+
 
 export default function WorkOrdersPage() {
   return (
