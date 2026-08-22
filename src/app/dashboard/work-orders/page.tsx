@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { Button, Badge, Card, Avatar } from "@/components/ui";
 import { WorkOrderImportModal } from "@/components/work-orders/import-modal";
 import {
+  Eye,
   Search,
   ChevronLeft,
   ChevronRight,
