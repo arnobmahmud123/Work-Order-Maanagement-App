@@ -1078,11 +1078,28 @@ function ChatArea({
     const formats: Record<string, { prefix: string; suffix: string }> = {
       bold: { prefix: "**", suffix: "**" },
       italic: { prefix: "_", suffix: "_" },
-      code: { prefix: "`", suffix: "`" },
+      code: { prefix: "" },
       link: { prefix: "[", suffix: "](url)" },
     };
     const { prefix, suffix } = formats[format];
-    setMessage((prev) => prev + prefix + suffix);
+    
+    if (textareaRef.current) {
+      const start = textareaRef.current.selectionStart;
+      const end = textareaRef.current.selectionEnd;
+      const text = textareaRef.current.value;
+      const selected = text.slice(start, end);
+      const newText = text.slice(0, start) + prefix + selected + suffix + text.slice(end);
+      setMessage(newText);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const newPos = selected ? end + prefix.length + suffix.length : start + prefix.length;
+          textareaRef.current.setSelectionRange(newPos, newPos);
+        }
+      }, 0);
+    } else {
+      setMessage((prev) => prev + prefix + suffix);
+    }
   }
 
   function handlePin(messageId: string) {
