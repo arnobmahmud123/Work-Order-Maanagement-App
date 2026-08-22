@@ -555,7 +555,8 @@ export function PhotoViewer({
         </Suspense>,
         document.body
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
