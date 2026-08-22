@@ -775,8 +775,7 @@ function BulkActionsDropdown({
           </div>
         </div>
       )}
-    </>,
-    document.body
+    </>
   );
 }
 
