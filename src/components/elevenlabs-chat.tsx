@@ -281,8 +281,8 @@ export function ElevenLabsChat() {
         title="Drag to move · Right click to remove"
         onClick={() => { if (!isDragging) toggleWidget(); }}
         style={{
-          bottom: ,
-          right: ,
+          bottom: `calc(1.5rem - ${position.y}px)`,
+          right: `calc(1.5rem - ${position.x}px)`,
         }}
         className={cn(
           "fixed z-[9999] h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 active:scale-95",
