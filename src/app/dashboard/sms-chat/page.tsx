@@ -357,14 +357,14 @@ export default function SmsChatDashboard() {
   const activeThread = threads.find((t) => t.phone === activePhone);
 
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 -m-3 md:-mb-4 lg:-m-8">
       <div className={cn(
-        "grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[500px]",
-        topNavHidden ? "h-[100vh] -m-3 lg:-m-8 p-3 lg:p-8" : "h-[calc(100vh-140px)]"
+        "flex bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl",
+        topNavHidden ? "h-[100dvh] md:h-[100vh] rounded-none border-0" : "h-[calc(100dvh-11rem)] md:h-[calc(100vh-4rem)]"
       )}>
         {/* Thread Sidebar Panel */}
         <div className={cn(
-          "lg:col-span-4 flex flex-col bg-surface/60 border border-border-subtle rounded-2xl overflow-hidden backdrop-blur-xl",
+          "w-full lg:w-80 flex-shrink-0 flex flex-col bg-surface/60 border-r border-border-subtle overflow-hidden backdrop-blur-xl",
           activePhone ? "hidden lg:flex" : "flex"
         )}>
           {/* Compact Sidebar Header */}
