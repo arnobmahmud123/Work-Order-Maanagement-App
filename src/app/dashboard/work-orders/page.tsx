@@ -1448,7 +1448,7 @@ function WorkOrdersContent() {
                   {workOrders.map((wo: any) => (
                     <tr key={wo.id} className={cn("hover:bg-surface-hover transition-colors", selected.includes(wo.id) && "bg-cyan-500/[0.04]")}>
                       {visibleColumns.map((col) => (
-                        <td key={col.id} className={cn("px-3 py-3", col.className, col.id === "checkbox" && "px-3", col.id === "arrow" && "px-2", col.id === "workOrderType" && "hidden lg:table-cell", col.id === "location" && "hidden lg:table-cell", col.id === "client" && "hidden xl:table-cell", col.id === "due" && "hidden md:table-cell", col.id === "photos" && "text-center hidden sm:table-cell", col.id === "history" && "text-center hidden sm:table-cell")}>
+                        <td key={col.id} className={cn("px-3 py-3", col.className, col.headerClassName?.includes("hidden") ? col.headerClassName.match(/hidden [a-z0-9:-]+/g)?.join(" ") : "", col.id === "checkbox" && "px-3")}>
                           {renderCell(col.id, wo)}
                         </td>
                       ))}
