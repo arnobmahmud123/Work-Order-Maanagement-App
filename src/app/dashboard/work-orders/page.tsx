@@ -1702,6 +1702,7 @@ function PropertyHistoryPopup({
                 <p className="text-text-secondary font-medium">No property history</p>
               </div>
             ) : (
+              <>
               {activeTab === "Past WOs" && (
               <table className="w-full border-collapse">
                 <thead className="sticky top-0 z-10">
@@ -1926,6 +1927,7 @@ function PropertyHistoryPopup({
                 </tbody>
               </table>
               )}
+              </>
             )}
           </div>
 
