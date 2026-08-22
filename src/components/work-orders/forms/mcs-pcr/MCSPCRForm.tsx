@@ -370,28 +370,57 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-[1500px] h-[92vh] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl rounded-3xl overflow-hidden border border-slate-200/50 dark:border-slate-800/80 my-0">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-0 sm:p-4 md:p-6 lg:p-8">
+      <div className="w-full max-w-[1500px] h-full sm:h-[92vh] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl rounded-none sm:rounded-3xl overflow-hidden border-0 sm:border border-slate-200/50 dark:border-slate-800/80 my-0">
         
         {/* Header - Glassmorphic styled */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200/60 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-8 sm:py-5 border-b border-slate-200/60 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shrink-0">
           <div>
-            <h2 className="text-xl font-black bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent tracking-tight">MCS Maintenance Form</h2>
-            <p className="text-[11px] text-slate-400 uppercase tracking-wider font-bold mt-0.5">Complete property checklist, securing info, and conditions reporting</p>
+            <h2 className="text-base sm:text-xl font-black bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent tracking-tight">MCS Maintenance Form</h2>
+            <p className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-bold mt-0.5 truncate max-w-[240px] sm:max-w-none">Complete property checklist & reporting</p>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all duration-200 border border-white/10"
+            className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all duration-200 border border-white/10"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
+        {/* Mobile Horizontal Chapter Navigation */}
+        <div className="flex md:hidden overflow-x-auto p-2 gap-1.5 border-b border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 shrink-0 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+          {mcsTabs.map((tab) => {
+            const active = activeTab === tab.id;
+            const disabled = isTabDisabled(tab.id);
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  if (!disabled) {
+                    setActiveTab(tab.id);
+                  }
+                }}
+                disabled={disabled}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 shrink-0 ${
+                  active
+                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20"
+                    : disabled
+                    ? "text-slate-400 dark:text-slate-600 opacity-40 cursor-not-allowed pointer-events-none"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/40 bg-slate-50 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-800"
+                }`}
+              >
+                {renderTabIcon(tab.id)}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Layout Body: Left Sidebar + Right Main Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
           
-          {/* Left Vertical Tabs list */}
-          <div className="w-64 border-r border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900/40 overflow-y-auto p-4 space-y-1">
+          {/* Desktop Left Vertical Tabs list */}
+          <div className="hidden md:block w-64 shrink-0 border-r border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900/40 overflow-y-auto p-4 space-y-1">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-2">Form Chapters</p>
             {mcsTabs.map((tab) => {
               const active = activeTab === tab.id;
@@ -420,8 +449,8 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
             })}
           </div>
 
-          {/* Right Content View */}
-          <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50 dark:bg-slate-950/20">
+          {/* Main Form Content View */}
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 md:p-8 bg-slate-50/50 dark:bg-slate-950/20">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <Loader2 className="h-8 w-8 text-cyan-500 animate-spin" />
@@ -494,7 +523,7 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
         </div>
 
         {/* Sticky Action Footer */}
-        <div className="flex items-center justify-between px-8 py-5 border-t border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-8 sm:py-4 border-t border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
           {/* Live Status indicator */}
           <div className="text-[10px] text-slate-500 dark:text-slate-400 font-black uppercase tracking-wider flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${isDirty ? "bg-amber-500 animate-pulse ring-4 ring-amber-500/10" : "bg-emerald-500 ring-4 ring-emerald-500/10"}`} />

@@ -148,7 +148,7 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
       <div className="w-full max-w-[1400px] h-[90vh] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl rounded-3xl overflow-hidden border border-slate-200/50 dark:border-slate-800/80 my-0">
         
         {/* Header - Glassmorphic styled */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200/60 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-8 sm:py-5 border-b border-slate-200/60 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shrink-0">
           <div>
             <h2 className="text-xl font-black bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent tracking-tight">ServiceLink PCR Form</h2>
             <p className="text-[11px] text-slate-400 uppercase tracking-wider font-bold mt-0.5">Complete property details, occupancy checks, and conditions reporting</p>
@@ -162,7 +162,7 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
         </div>
 
         {/* Tab Selection - Glassmorphic pill controls */}
-        <div className="flex px-8 py-3 border-b border-slate-200/60 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 overflow-x-auto gap-2 scrollbar-none">
+        <div className="flex px-3 sm:px-8 py-2.5 sm:py-3 border-b border-slate-200/60 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 overflow-x-auto gap-1.5 sm:gap-2 scrollbar-none shrink-0">
           {subTabs.map((tab) => {
             const active = activeSubTab === tab.id;
             return (
@@ -182,7 +182,7 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
         </div>
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-800">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 md:p-8 space-y-6 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-800">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <Loader2 className="h-8 w-8 text-cyan-500 animate-spin" />
@@ -216,7 +216,7 @@ export function ServiceLinkPCRForm({ workOrderId, submissionId, onClose, onSaved
         </div>
 
         {/* Sticky Action Footer - Print/Export Removed as requested */}
-        <div className="flex items-center justify-between px-8 py-5 border-t border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-8 sm:py-4 border-t border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
           {/* Live Status indicator */}
           <div className="text-[10px] text-slate-500 dark:text-slate-400 font-black uppercase tracking-wider flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${isDirty ? "bg-amber-500 animate-pulse ring-4 ring-amber-500/10" : "bg-emerald-500 ring-4 ring-emerald-500/10"}`} />
