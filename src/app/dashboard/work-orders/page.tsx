@@ -774,7 +774,8 @@ function BulkActionsDropdown({
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -1656,6 +1657,7 @@ function PropertyHistoryPopup({
   if (!mounted) return null;
 
   return createPortal(
+    <>
     <div className="fixed inset-0 z-[2147483646] flex items-start justify-center pt-[2vh]">
       <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       <div className="relative w-full max-w-[95vw] max-h-[96vh] mx-4 bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col">
