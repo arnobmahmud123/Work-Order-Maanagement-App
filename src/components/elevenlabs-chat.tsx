@@ -5,6 +5,70 @@ import { MessageSquare, Send, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ElevenLabsChat() {
+  const [isRemoved, setIsRemoved] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('elevenlabs-widget-removed');
+    if (stored === 'true') setIsRemoved(true);
+    
+    const handleToggle = () => {
+      setIsRemoved(prev => {
+        const next = !prev;
+        localStorage.setItem('elevenlabs-widget-removed', next ? 'true' : 'false');
+        if (!next) setIsOpen(false);
+        return next;
+      });
+    };
+    window.addEventListener('toggle-ai-chat', handleToggle);
+    return () => window.removeEventListener('toggle-ai-chat', handleToggle);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    function handleMove(e: MouseEvent) {
+      if (!dragStartRef.current) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setPosition({
+        x: dragStartRef.current.posX + dx,
+        y: dragStartRef.current.posY + dy,
+      });
+    }
+    function handleUp() {
+      setIsDragging(false);
+      dragStartRef.current = null;
+    }
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+    };
+  }, [isDragging]);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    if (isOpen) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      posX: position.x,
+      posY: position.y,
+    };
+  };
+
+  const handleRemove = () => {
+    setIsOpen(false);
+    setIsRemoved(true);
+    localStorage.setItem('elevenlabs-widget-removed', 'true');
+  };
+
+  if (isRemoved) return null;
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string; timestamp: string }[]>([]);
   const [input, setInput] = useState("");
@@ -212,9 +276,16 @@ export function ElevenLabsChat() {
     <>
       {/* Floating button */}
       <button
-        onClick={toggleWidget}
+        onMouseDown={handleDragStart}
+        onContextMenu={(e) => { e.preventDefault(); handleRemove(); }}
+        title="Drag to move · Right click to remove"
+        onClick={() => { if (!isDragging) toggleWidget(); }}
+        style={{
+          bottom: ,
+          right: ,
+        }}
         className={cn(
-          "fixed bottom-6 right-6 z-[9999] h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 active:scale-95",
+          "fixed z-[9999] h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 active:scale-95",
           "hidden md:flex",
           isOpen 
             ? "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-white/10" 
