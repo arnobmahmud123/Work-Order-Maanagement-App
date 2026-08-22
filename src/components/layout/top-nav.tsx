@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useNotifications } from "@/hooks/use-data";
 import { Avatar } from "@/components/ui/avatar";
-import { Bell, Menu, LogOut, ChevronDown, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles } from "lucide-react";
+import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { formatRelativeTime, cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
   const { data: notifData } = useNotifications();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -72,6 +73,20 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
     }
   }
 
+  if (isHidden) {
+    return (
+      <div className="absolute top-0 inset-x-0 flex justify-center z-50 pointer-events-none">
+        <button
+          onClick={() => setIsHidden(false)}
+          className="pointer-events-auto px-6 py-1.5 bg-surface border border-t-0 border-border-subtle rounded-b-2xl shadow-lg text-text-muted hover:text-cyan-400 hover:bg-surface-hover transition-all group flex items-center justify-center"
+          title="Show Top Navigation"
+        >
+          <ChevronDown className="h-4 w-4 group-hover:translate-y-0.5 transition-transform" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border-subtle relative pt-[env(safe-area-inset-top,0px)]">
       {/* Gradient accent line */}
@@ -97,6 +112,15 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
         <div className="flex-1" />
 
         <div className="flex items-center gap-3">
+          {/* Hide TopNav Button */}
+          <button
+            onClick={() => setIsHidden(true)}
+            className="hidden md:flex p-2.5 rounded-xl hover:bg-surface-hover text-text-muted hover:text-cyan-400 transition-all group"
+            title="Hide Navigation Bar"
+          >
+            <ChevronUp className="h-5 w-5 group-hover:-translate-y-0.5 transition-transform" />
+          </button>
+          
           {/* Theme Toggle */}
           {mounted && (
             <button
