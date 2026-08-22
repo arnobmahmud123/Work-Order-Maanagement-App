@@ -775,9 +775,9 @@ function BulkActionsDropdown({
           </div>
         </div>
       )}
-    </>,
-    document.body
+    </>
   );
+}
 }
 
 // ─── Draggable Column Header ─────────────────────────────────────────────────
