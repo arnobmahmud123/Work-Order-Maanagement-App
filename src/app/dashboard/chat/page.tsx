@@ -1078,7 +1078,7 @@ function ChatArea({
     const formats: Record<string, { prefix: string; suffix: string }> = {
       bold: { prefix: "**", suffix: "**" },
       italic: { prefix: "_", suffix: "_" },
-      code: { prefix: "" },
+      code: { prefix: "`", suffix: "`" },
       link: { prefix: "[", suffix: "](url)" },
     };
     const { prefix, suffix } = formats[format];
