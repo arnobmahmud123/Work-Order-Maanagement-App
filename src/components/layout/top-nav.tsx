@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
+import { useAppStore } from "@/stores/app-store";
 
 
 export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -15,7 +16,7 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
   const { data: notifData } = useNotifications();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [isHidden, setIsHidden] = useState(false);
+  const { topNavHidden: isHidden, setTopNavHidden: setIsHidden } = useAppStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

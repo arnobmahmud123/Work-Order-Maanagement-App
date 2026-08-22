@@ -15,6 +15,7 @@ import {
   useUsers,
 } from "@/hooks/use-data";
 import { useSession } from "next-auth/react";
+import { useAppStore } from "@/stores/app-store";
 import { Button, Badge, Avatar, Modal } from "@/components/ui";
 import { UserPopover } from "@/components/chat/user-popover";
 import { CallOverlay } from "@/components/chat/call-overlay";
@@ -150,6 +151,7 @@ function getGradientForUser(userId: string) {
 }
 
 export default function ChatPage() {
+  const { topNavHidden } = useAppStore();
   const { data: session } = useSession();
   const userId = (session?.user as any)?.id;
   const { data: channelsData, isLoading: channelsLoading } = useChatChannels();
@@ -232,7 +234,12 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-11rem)] md:h-[calc(100vh-4rem)] -m-3 md:-mb-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl">
+    <div className={cn(
+      "flex -m-3 md:-mb-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl",
+      topNavHidden 
+        ? "h-[100dvh] md:h-[100vh] rounded-none border-0" 
+        : "h-[calc(100dvh-11rem)] md:h-[calc(100vh-4rem)]"
+    )}>
       {/* Sidebar Toggle (when hidden) */}
       {!showSidebar && (
         <div className="flex-shrink-0 flex items-start pt-4 pl-3">
