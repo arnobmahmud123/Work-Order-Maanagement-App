@@ -59,6 +59,8 @@ export function PhotoViewer({
   className,
 }: PhotoViewerProps) {
   const [exifData, setExifData] = useState<EXIFInfo | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [address, setAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showExifPanel, setShowExifPanel] = useState(false);
@@ -164,7 +166,9 @@ export function PhotoViewer({
     ? new Date(timestamp)
     : null;
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/90 backdrop-blur-md overflow-hidden">
       <div className={cn("relative w-full max-w-[95vw] max-h-[95vh] mx-4 flex flex-col overflow-hidden", className)}>
         {/* Top bar */}
