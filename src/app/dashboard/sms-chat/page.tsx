@@ -22,6 +22,7 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/stores/app-store";
 
 interface SmsThread {
   phone: string;
@@ -356,7 +357,10 @@ export default function SmsChatDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)] min-h-[500px]">
+      <div className={cn(
+        "grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[500px]",
+        topNavHidden ? "h-[100vh] -m-3 lg:-m-8 p-3 lg:p-8" : "h-[calc(100vh-140px)]"
+      )}>
         {/* Thread Sidebar Panel */}
         <div className={cn(
           "lg:col-span-4 flex flex-col bg-surface/60 border border-border-subtle rounded-2xl overflow-hidden backdrop-blur-xl",
