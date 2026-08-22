@@ -23,8 +23,6 @@ export function ElevenLabsChat() {
       });
     };
     window.addEventListener('toggle-ai-chat', handleToggle);
-    if (isRemoved) return null;
-
   return () => window.removeEventListener('toggle-ai-chat', handleToggle);
   }, []);
 
@@ -272,6 +270,8 @@ export function ElevenLabsChat() {
   }
 
   if (!mounted) return null;
+
+  if (isRemoved) return null;
 
   return (
     <>
