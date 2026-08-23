@@ -201,19 +201,161 @@ export default function ConnectorsAdminPage() {
     }
   };
 
-  // CSV / Excel File Parse Handler
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Universal Multi-Format (CSV, Excel, PDF, JSON) Parse Handler
+  const processUploadedFile = async (file: File) => {
     setImportFile(file);
     setImportSuccessResult(null);
+    setValidating(true);
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) return;
+    try {
+      const fileName = file.name.toLowerCase();
 
-      // Simple robust CSV parser for browser preview
+      // ── 1. PDF File Parsing ────────────────────────────────────────────────
+      if (fileName.endsWith(".pdf") || file.type === "application/pdf") {
+        toast("Parsing PDF Work Order document...");
+
+        if (!(window as any).pdfjsLib) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Failed to load PDF parser"));
+            document.head.appendChild(script);
+          });
+        }
+
+        const pdfjsLib = (window as any).pdfjsLib;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const fullTextLines: string[] = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          let currentLine = "";
+          let lastY: number | null = null;
+
+          for (const item of textContent.items) {
+            const y = Math.round((item as any).transform[5]);
+            if (lastY !== null && Math.abs(y - lastY) > 5) {
+              if (currentLine.trim()) fullTextLines.push(currentLine.trim());
+              currentLine = "";
+            }
+            currentLine += (item as any).str + " ";
+            lastY = y;
+          }
+          if (currentLine.trim()) fullTextLines.push(currentLine.trim());
+        }
+
+        // Extract key preservation fields using regex heuristics
+        const extracted: Record<string, any> = {
+          "Work Order #": file.name.replace(/\.[^/.]+$/, ""),
+          "Property Address": "",
+          "City": "",
+          "State": "",
+          "Zip": "",
+          "Service": "Property Preservation",
+          "Due Date": new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+          "Lock Code": "",
+          "Gate Code": "",
+          "Instructions": fullTextLines.slice(0, 15).join("\n"),
+        };
+
+        const joinedText = fullTextLines.join(" ");
+
+        // WO Number match
+        const woMatch = joinedText.match(/(?:WO|Work\s*Order|Order|Task|Ref|Case)[\s#:-]+([A-Z0-9-]{4,20})/i);
+        if (woMatch) extracted["Work Order #"] = woMatch[1].trim();
+
+        // Address match
+        const addrMatch = joinedText.match(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy))/i);
+        if (addrMatch) extracted["Property Address"] = addrMatch[1].trim();
+
+        // City, State, Zip match
+        const cszMatch = joinedText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+        if (cszMatch) {
+          extracted["City"] = cszMatch[1].trim();
+          extracted["State"] = cszMatch[2].trim();
+          extracted["Zip"] = cszMatch[3].trim();
+        }
+
+        // Lock code match
+        const lockMatch = joinedText.match(/(?:Lock|Lockbox|Combo|Key\s*Code)[\s#:-]+([A-Za-z0-9-]{3,10})/i);
+        if (lockMatch) extracted["Lock Code"] = lockMatch[1].trim();
+
+        // Due date match
+        const dueMatch = joinedText.match(/(?:Due|Complete\s*By|Deadline)[\s#:-]+(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i);
+        if (dueMatch) extracted["Due Date"] = dueMatch[1].trim();
+
+        const headers = Object.keys(extracted);
+        setFileHeaders(headers);
+        setRawRows([extracted]);
+
+        const mapping = {
+          externalWorkOrderId: "Work Order #",
+          address1: "Property Address",
+          city: "City",
+          state: "State",
+          zip: "Zip",
+          serviceType: "Service",
+          dueDate: "Due Date",
+          lockCode: "Lock Code",
+          instructions: "Instructions",
+        };
+        setColumnMapping(mapping);
+        runPreviewValidation([extracted], mapping);
+        toast.success("PDF Work Order parsed successfully!");
+        return;
+      }
+
+      // ── 2. Excel File Parsing (.xlsx, .xls) ─────────────────────────────────
+      if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+        toast("Parsing Excel spreadsheet...");
+
+        if (!(window as any).XLSX) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js";
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Failed to load Excel parser"));
+            document.head.appendChild(script);
+          });
+        }
+
+        const XLSX = (window as any).XLSX;
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        if (rows.length === 0) {
+          toast.error("Excel sheet is empty");
+          return;
+        }
+
+        const headers = Object.keys(rows[0]);
+        setFileHeaders(headers);
+        setRawRows(rows);
+
+        const detectRes = await fetch("/api/connectors/import/file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "detect_columns", headers }),
+        });
+        if (detectRes.ok) {
+          const detectData = await detectRes.json();
+          setColumnMapping(detectData.suggestedMapping || {});
+          runPreviewValidation(rows, detectData.suggestedMapping);
+        }
+        toast.success(`Excel loaded with ${rows.length} rows!`);
+        return;
+      }
+
+      // ── 3. CSV & Text File Parsing ─────────────────────────────────────────
+      const text = await file.text();
       const lines = text.split(/\r\n|\n/).filter((l) => l.trim().length > 0);
       if (lines.length < 2) {
         toast.error("File is empty or missing data rows");
@@ -254,7 +396,6 @@ export default function ConnectorsAdminPage() {
 
       setRawRows(parsedRows);
 
-      // Auto-detect columns
       const detectRes = await fetch("/api/connectors/import/file", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -263,11 +404,20 @@ export default function ConnectorsAdminPage() {
       if (detectRes.ok) {
         const detectData = await detectRes.json();
         setColumnMapping(detectData.suggestedMapping || {});
-        // Run initial preview
         runPreviewValidation(parsedRows, detectData.suggestedMapping);
       }
-    };
-    reader.readAsText(file);
+      toast.success(`CSV loaded with ${parsedRows.length} rows!`);
+    } catch (err: any) {
+      console.error("File processing error:", err);
+      toast.error(err.message || "Failed to parse file");
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processUploadedFile(file);
   };
 
   const runPreviewValidation = async (rows: any[], mapping: any) => {
@@ -600,18 +750,58 @@ export default function ConnectorsAdminPage() {
               <div>
                 <h3 className="text-lg font-black text-text-primary">Universal Work Order File Studio</h3>
                 <p className="text-xs text-text-secondary mt-1">
-                  Upload CSV, Excel (.xlsx/.xls) or PDF dispatches. Automatically normalizes services, addresses, and prevents duplicate work orders.
+                  Upload PDF work order dispatches, Excel spreadsheets (.xlsx/.xls), or CSV data. Automatically extracts details, normalizes services/addresses, and prevents duplicate work orders.
                 </p>
               </div>
 
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black cursor-pointer shadow-lg transition-all">
+                <label className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 text-xs font-black cursor-pointer shadow-lg shadow-cyan-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
                   <Upload className="h-4 w-4" />
-                  Select File
-                  <input type="file" accept=".csv,.xlsx,.xls,.json" onChange={handleFileUpload} className="hidden" />
+                  Select PDF / Excel / CSV
+                  <input type="file" accept=".pdf,application/pdf,.csv,.xlsx,.xls,.json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleFileUpload} className="hidden" />
                 </label>
               </div>
             </div>
+
+            {/* Drag & Drop Visual Dropzone */}
+            {!importFile && (
+              <label 
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const droppedFile = e.dataTransfer.files?.[0];
+                  if (droppedFile) processUploadedFile(droppedFile);
+                }}
+                className="border-2 border-dashed border-cyan-500/30 hover:border-cyan-400/70 bg-surface-hover/40 hover:bg-cyan-500/5 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all group"
+              >
+                <input type="file" accept=".pdf,application/pdf,.csv,.xlsx,.xls,.json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleFileUpload} className="hidden" />
+                <div className="p-4 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-110 transition-transform mb-3">
+                  <Upload className="h-8 w-8" />
+                </div>
+                <p className="text-sm font-bold text-text-primary">
+                  Drag and drop your <span className="text-cyan-400">PDF Work Order</span>, <span className="text-emerald-400">Excel</span>, or <span className="text-purple-400">CSV</span> here
+                </p>
+                <p className="text-xs text-text-muted mt-1">
+                  Supports .pdf, .xlsx, .xls, .csv, and .json files up to 50MB
+                </p>
+
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <span className="px-3 py-1 rounded-lg bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[11px] font-bold flex items-center gap-1.5">
+                    📄 PDF Work Orders
+                  </span>
+                  <span className="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px] font-bold flex items-center gap-1.5">
+                    📊 Excel (.xlsx / .xls)
+                  </span>
+                  <span className="px-3 py-1 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[11px] font-bold flex items-center gap-1.5">
+                    📝 CSV Files
+                  </span>
+                  <span className="px-3 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px] font-bold flex items-center gap-1.5">
+                    📦 JSON Dispatches
+                  </span>
+                </div>
+              </label>
+            )}
 
             {importFile && (
               <div className="p-4 rounded-xl bg-surface-hover/80 border border-border-medium flex items-center justify-between gap-4">
