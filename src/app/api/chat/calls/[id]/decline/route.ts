@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, context: any) {
     const resolvedParams = context?.params ? await context.params : null;
     const id = resolvedParams?.id || new URL(req.url).pathname.split("/")[4];
 
-    const call = declineCallSession(id);
+    const call = await declineCallSession(id);
     return NextResponse.json({ success: true, call });
   } catch (error: any) {
     return NextResponse.json({ error: "Failed to decline call" }, { status: 500 });

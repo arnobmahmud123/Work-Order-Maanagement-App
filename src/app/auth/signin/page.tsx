@@ -2,13 +2,11 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input } from "@/components/ui";
 import { Shield } from "lucide-react";
 
 export default function SignIn() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,8 +19,8 @@ export default function SignIn() {
 
     try {
       const result = await signIn("credentials", {
-        email,
-        password,
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
         redirect: false,
       });
 
@@ -30,14 +28,38 @@ export default function SignIn() {
         setError(
           result.error === "CredentialsSignin"
             ? "Invalid email or password"
-            : `Auth error: ${result.error} (code: ${result.code || "none"}, status: ${result.status || "none"})`
+            : `Login error: ${result.error}`
         );
       } else {
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }
-    } catch {
-      setError("Something went wrong");
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong during sign in");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleQuickLogin(demoEmail: string, demoPass: string) {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setError("");
+    setLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        email: demoEmail.trim().toLowerCase(),
+        password: demoPass.trim(),
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Invalid email or password");
+      } else {
+        window.location.href = "/dashboard";
+      }
+    } catch (err: any) {
+      setError(err?.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -88,6 +110,47 @@ export default function SignIn() {
               Sign in
             </Button>
           </form>
+
+          {/* Quick Demo Accounts */}
+          <div className="mt-6 pt-5 border-t border-border-subtle">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2.5 text-center">
+              1-Click Instant Login
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickLogin("admin@vanguard.com", "password123")}
+                className="px-2.5 py-2 rounded-xl bg-surface-hover hover:bg-surface-hover/80 border border-border-subtle text-[11px] font-bold text-cyan-400 text-left transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                🏢 Vanguard Admin
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickLogin("john@contractor.com", "password123")}
+                className="px-2.5 py-2 rounded-xl bg-surface-hover hover:bg-surface-hover/80 border border-border-subtle text-[11px] font-bold text-emerald-400 text-left transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                🔨 Contractor John
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickLogin("admin@proppreserve.com", "password123")}
+                className="px-2.5 py-2 rounded-xl bg-surface-hover hover:bg-surface-hover/80 border border-border-subtle text-[11px] font-bold text-purple-400 text-left transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                ⚡ PropPreserve Admin
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickLogin("superadmin@platform.com", "password123")}
+                className="px-2.5 py-2 rounded-xl bg-surface-hover hover:bg-surface-hover/80 border border-border-subtle text-[11px] font-bold text-amber-400 text-left transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                👑 Super Admin
+              </button>
+            </div>
+          </div>
 
           <div className="mt-6 text-center text-xs text-text-muted">
             Need access or an account?{" "}

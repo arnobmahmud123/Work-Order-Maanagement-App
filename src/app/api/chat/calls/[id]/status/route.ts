@@ -6,7 +6,7 @@ export async function GET(req: NextRequest, context: any) {
     const resolvedParams = context?.params ? await context.params : null;
     const id = resolvedParams?.id || new URL(req.url).pathname.split("/")[4];
 
-    const call = getCallSession(id);
+    const call = await getCallSession(id);
     if (!call) {
       return NextResponse.json({ status: "ended", call: null });
     }

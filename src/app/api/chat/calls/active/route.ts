@@ -12,8 +12,10 @@ export async function GET(req: NextRequest) {
     const userId = (session.user as any).id;
     const email = (session.user as any).email;
 
-    const incomingCall = getIncomingCallForUser(userId, email);
-    const activeCall = getActiveCallForUser(userId);
+    const [incomingCall, activeCall] = await Promise.all([
+      getIncomingCallForUser(userId, email),
+      getActiveCallForUser(userId),
+    ]);
 
     return NextResponse.json({
       incomingCall: incomingCall || null,

@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, Button, Input, Badge, Avatar } from "@/components/ui";
 import { User, Shield, Bell, Key, ChevronRight, Save, X, Camera, CheckCircle2, AlertCircle, Users, Zap, Building2, CreditCard, Sparkles, Settings as SettingsIcon } from "lucide-react";
@@ -9,6 +10,7 @@ import toast from "react-hot-toast";
 
 export default function SettingsPage() {
   const { data: session, update: updateSession } = useSession();
+  const qc = useQueryClient();
   const role = (session?.user as any)?.role;
 
   const [editing, setEditing] = useState(false);
@@ -22,15 +24,36 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    if (session?.user) {
-      setForm({
-        name: session.user.name || "",
-        email: session.user.email || "",
-        phone: (session.user as any).phone || "",
-        company: (session.user as any).company || "",
-        image: session.user.image || "",
-      });
+    async function loadProfile() {
+      try {
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setForm({
+              name: data.user.name || "",
+              email: data.user.email || "",
+              phone: data.user.phone || "",
+              company: data.user.company || "",
+              image: data.user.image || "",
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch profile:", err);
+      }
+      if (session?.user) {
+        setForm({
+          name: session.user.name || "",
+          email: session.user.email || "",
+          phone: (session.user as any).phone || "",
+          company: (session.user as any).company || "",
+          image: session.user.image || "",
+        });
+      }
     }
+    loadProfile();
   }, [session]);
 
   async function handleSave() {
@@ -48,6 +71,7 @@ export default function SettingsPage() {
       }
       toast.success("Profile updated successfully!");
       setEditing(false);
+      qc.invalidateQueries({ queryKey: ["profile"] });
       await updateSession({ ...session, user: { ...session?.user, ...data.user } });
     } catch {
       toast.error("Something went wrong");
@@ -205,14 +229,22 @@ export default function SettingsPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        if (ev.target?.result) {
+                          setForm((prev) => ({ ...prev, image: ev.target!.result as string }));
+                        }
+                      };
+                      reader.readAsDataURL(file);
+
                       const formData = new FormData();
                       formData.append("file", file);
                       try {
                         const res = await fetch("/api/upload", { method: "POST", body: formData });
                         const data = await res.json();
                         if (res.ok && data.url) {
-                          setForm({ ...form, image: data.url });
-                          toast.success("Image uploaded");
+                          setForm((prev) => ({ ...prev, image: data.url }));
+                          toast.success("Image uploaded!");
                         } else {
                           toast.error(data.error || "Upload failed");
                         }

@@ -1,4 +1,5 @@
 import { triggerAutomationEvent } from "@/lib/automation/engine";
+import { notifyContractorAssigned, notifyContractorUnassigned } from "@/lib/contractor-assignment";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -338,6 +339,10 @@ export async function PATCH(
       updates.completedAt = new Date();
     }
 
+    if (updates.status === "UNASSIGNED" && updates.contractorId === undefined) {
+      updates.contractorId = null;
+    }
+
     // D1-safe: serialize JSON fields explicitly before update
     if (updates.tasks !== undefined && typeof updates.tasks !== "string") {
       updates.tasks = JSON.stringify(updates.tasks);
@@ -399,6 +404,24 @@ export async function PATCH(
       if (changedFields.includes("contractorId") || changedFields.includes("processorId")) {
         const isReassigned = existing.contractorId && updates.contractorId && existing.contractorId !== updates.contractorId;
         triggerAutomationEvent(isReassigned ? "WO_REASSIGNED" : "WO_ASSIGNED", contextData, workOrder.companyId || undefined).catch(() => {});
+        
+        // If newly assigned
+        if (updates.contractorId && updates.contractorId !== existing.contractorId) {
+          notifyContractorAssigned({
+            workOrder,
+            assignedById: (session.user as any).id,
+            contractorId: updates.contractorId,
+          }).catch(() => {});
+        }
+        
+        // If unassigned or reassigned away from previous contractor
+        if (existing.contractorId && (!updates.contractorId || updates.contractorId !== existing.contractorId)) {
+          notifyContractorUnassigned({
+            workOrder,
+            unassignedById: (session.user as any).id,
+            previousContractorId: existing.contractorId,
+          }).catch(() => {});
+        }
       }
 
       if (changedFields.includes("priority")) {

@@ -72,6 +72,7 @@ export const SERVICE_TYPE_LABELS: Record<string, string> = {
 
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "New",
+  UNASSIGNED: "Unassigned",
   PENDING: "Pending",
   ASSIGNED: "Assigned",
   IN_PROGRESS: "In Progress",
@@ -87,6 +88,7 @@ export const STATUS_LABELS: Record<string, string> = {
 
 export const STATUS_COLORS: Record<string, string> = {
   NEW: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+  UNASSIGNED: "bg-slate-500/15 text-slate-400 border border-slate-500/30",
   PENDING: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
   ASSIGNED: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
   IN_PROGRESS: "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20",

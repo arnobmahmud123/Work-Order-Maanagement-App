@@ -31,6 +31,8 @@ import {
   MapPin,
   Calendar,
   User,
+  UserMinus,
+  UserX,
   Lock,
   Key,
   FileText,
@@ -2153,101 +2155,39 @@ export default function WorkOrderDetailPage({
   return (
     <div className="space-y-5">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl bg-surface/60 border border-border-subtle backdrop-blur-xl p-6 shadow-2xl">
-        <div className="absolute top-0 right-0 -mr-12 -mt-12 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-64 h-64 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-3xl bg-surface/60 border border-border-subtle backdrop-blur-xl p-6 lg:p-7 shadow-2xl space-y-4">
+        <div className="absolute top-0 right-0 -mr-12 -mt-12 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative flex flex-col md:flex-row md:items-start justify-between gap-6">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
-                WO-{workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
-              </span>
-              <h1 className="text-2xl md:text-3xl font-black text-text-primary tracking-tight leading-none">
-                {workOrder.title}
-              </h1>
-              <Badge
-                className={cn("px-3 py-1 text-[10px] font-bold uppercase tracking-wider shadow-lg", STATUS_COLORS[workOrder.status])}
-              >
-                {STATUS_LABELS[workOrder.status]}
-              </Badge>
-              <OverdueCountdown
-                dueDate={workOrder.dueDate}
-                status={workOrder.status}
-                size="md"
-                showIcon
-              />
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-text-secondary">
-              <span className="flex items-center gap-2 group transition-colors hover:text-cyan-700 dark:text-cyan-400">
-                <MapPin className="h-4 w-4 text-cyan-500/70" />
-                <span className="truncate max-w-[250px]">
-                  {workOrder.address}{workOrder.city && `, ${workOrder.city}`}{workOrder.state && `, ${workOrder.state}`}
-                </span>
-              </span>
-              <span className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-surface-hover text-[11px] font-bold uppercase tracking-wider text-text-muted border border-border-subtle">
-                <Activity className="h-3.5 w-3.5 text-text-muted" />
-                {SERVICE_TYPE_LABELS[workOrder.serviceType]}
-              </span>
-              <span className="flex items-center gap-2 group transition-colors hover:text-violet-700 dark:text-violet-400">
-                <Calendar className="h-4 w-4 text-violet-500/70" />
-                {workOrder.dueDate ? formatDate(workOrder.dueDate) : "No due date"}
-              </span>
-            </div>
+        {/* Top Badges & Actions Bar */}
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Left Badges */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+              WO-{workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
+            </span>
 
-            <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-border-subtle pt-6">
-              {workOrder.contractor && (
-                <div className="flex items-center gap-2.5 bg-surface-hover px-3 py-1.5 rounded-2xl border border-border-subtle">
-                  <Avatar name={workOrder.contractor.name} src={workOrder.contractor.image} size="xs" />
-                  <div className="text-[10px]">
-                    <p className="text-text-muted font-bold uppercase tracking-tighter leading-none mb-0.5">Contractor</p>
-                    <p className="text-text-primary font-semibold">{workOrder.contractor.name}</p>
-                  </div>
-                </div>
-              )}
-              {workOrder.coordinator && (
-                <div className="flex items-center gap-2.5 bg-surface-hover px-3 py-1.5 rounded-2xl border border-border-subtle">
-                  <Avatar name={workOrder.coordinator.name} src={workOrder.coordinator.image} size="xs" />
-                  <div className="text-[10px]">
-                    <p className="text-text-muted font-bold uppercase tracking-tighter leading-none mb-0.5">Coordinator</p>
-                    <p className="text-text-primary font-semibold">{workOrder.coordinator.name}</p>
-                  </div>
-                </div>
-              )}
-              {workOrder.createdBy && (
-                <div className="flex items-center gap-2.5 bg-surface-hover px-3 py-1.5 rounded-2xl border border-border-subtle">
-                  <Avatar name={workOrder.createdBy.name} src={workOrder.createdBy.image} size="xs" />
-                  <div className="text-[10px]">
-                    <p className="text-text-muted font-bold uppercase tracking-tighter leading-none mb-0.5">Client</p>
-                    <p className="text-text-primary font-semibold">{workOrder.createdBy.name}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 self-start w-full md:w-auto mt-4 md:mt-0">
-            {/* Quick Status Changer for Admin / Coordinator / Processor */}
-            {canEdit && (
-              <div className="flex items-center gap-1.5 bg-surface-hover/80 border border-cyan-500/30 rounded-xl px-2.5 py-1.5 shadow-md">
-                <Activity className="h-3.5 w-3.5 text-cyan-400" />
-                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider hidden sm:inline">Status:</span>
+            {/* Status Dropdown / Badge */}
+            {canEdit ? (
+              <div className="flex items-center gap-1.5 bg-surface-hover/80 border border-cyan-500/30 rounded-xl px-2.5 py-1 shadow-md">
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Status:</span>
                 <select
                   value={workOrder.status}
                   onChange={async (e) => {
                     const nextSt = e.target.value;
                     try {
-                      await updateMutation.mutateAsync({ status: nextSt });
+                      const payload: any = { status: nextSt };
+                      if (nextSt === "UNASSIGNED") {
+                        payload.contractorId = null;
+                      }
+                      await updateMutation.mutateAsync(payload);
                       toast.success(`Status changed to ${STATUS_LABELS[nextSt] || nextSt}`);
                     } catch {
                       toast.error("Failed to update status");
                     }
                   }}
                   disabled={updateMutation.isPending}
-                  className="bg-transparent text-xs font-bold text-cyan-300 focus:outline-none cursor-pointer"
+                  className="bg-transparent text-xs font-bold text-cyan-400 focus:outline-none cursor-pointer pr-1"
                 >
                   {Object.entries(STATUS_LABELS).map(([val, label]) => (
                     <option key={val} value={val} className="bg-slate-900 text-white">
@@ -2256,8 +2196,24 @@ export default function WorkOrderDetailPage({
                   ))}
                 </select>
               </div>
+            ) : (
+              <Badge
+                className={cn("px-3 py-1 text-[10px] font-bold uppercase tracking-wider shadow-lg", STATUS_COLORS[workOrder.status])}
+              >
+                {STATUS_LABELS[workOrder.status] || workOrder.status}
+              </Badge>
             )}
-            {/* Submit Work Order Button with Automated Quality & Photo Checks */}
+
+            <OverdueCountdown
+              dueDate={workOrder.dueDate}
+              status={workOrder.status}
+              size="md"
+              showIcon
+            />
+          </div>
+
+          {/* Right Action Buttons Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowSubmissionModal(true)}
               className={cn(
@@ -2282,7 +2238,7 @@ export default function WorkOrderDetailPage({
 
             <button
               onClick={() => setShowQuickView(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all text-xs font-bold uppercase tracking-wider"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all text-xs font-bold uppercase tracking-wider"
             >
               <FileText className="h-3.5 w-3.5" />
               Quick View
@@ -2294,11 +2250,11 @@ export default function WorkOrderDetailPage({
                   tasks,
                   bids,
                   photos: allPhotos,
-                  complianceItems,
+                  complianceItems: customInspectionItems,
                   invoices: workOrder.invoices || [],
                 })
               }
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all text-xs font-bold uppercase tracking-wider"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all text-xs font-bold uppercase tracking-wider"
             >
               <Printer className="h-3.5 w-3.5" />
               Print
@@ -2307,7 +2263,7 @@ export default function WorkOrderDetailPage({
               <>
                 <button
                   onClick={() => setShowEdit(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 border border-cyan-400/20 shadow-lg shadow-cyan-500/10 transition-all text-xs font-bold uppercase tracking-wider"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 border border-cyan-400/20 shadow-lg shadow-cyan-500/10 transition-all text-xs font-bold uppercase tracking-wider"
                 >
                   <Edit className="h-3.5 w-3.5" />
                   Edit
@@ -2336,7 +2292,7 @@ export default function WorkOrderDetailPage({
                       toast.error("Failed to duplicate work order");
                     }
                   }}
-                  className="p-2.5 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all shadow-lg"
+                  className="p-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all shadow-lg"
                   title="Duplicate Work Order"
                 >
                   <Copy className="h-4 w-4" />
@@ -2344,6 +2300,105 @@ export default function WorkOrderDetailPage({
               </>
             )}
           </div>
+        </div>
+
+        {/* Title - Full Width (Never squeezed) */}
+        <div className="pt-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-text-primary tracking-tight leading-tight">
+            {workOrder.title}
+          </h1>
+        </div>
+
+        {/* Property and Work Details */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-text-secondary">
+          <span className="flex items-center gap-2 group transition-colors hover:text-cyan-700 dark:text-cyan-400">
+            <MapPin className="h-4 w-4 text-cyan-500/70 flex-shrink-0" />
+            <span className="font-medium">
+              {workOrder.address}{workOrder.city && `, ${workOrder.city}`}{workOrder.state && `, ${workOrder.state}`}{workOrder.zipCode && ` ${workOrder.zipCode}`}
+            </span>
+          </span>
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-hover text-[11px] font-bold uppercase tracking-wider text-text-muted border border-border-subtle">
+            <Activity className="h-3.5 w-3.5 text-text-muted" />
+            {SERVICE_TYPE_LABELS[workOrder.serviceType] || workOrder.serviceType}
+          </span>
+          <span className="flex items-center gap-1.5 group transition-colors hover:text-violet-700 dark:text-violet-400">
+            <Calendar className="h-4 w-4 text-violet-500/70" />
+            <span className="text-xs font-semibold">{workOrder.dueDate ? formatDate(workOrder.dueDate) : "No due date"}</span>
+          </span>
+          {(workOrder.lockCode || workOrder.keyCode) && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-hover text-[11px] font-mono font-bold text-cyan-300 border border-border-subtle">
+              <Key className="h-3.5 w-3.5 text-cyan-400" />
+              Code: {workOrder.lockCode || workOrder.keyCode}
+            </span>
+          )}
+        </div>
+
+        {/* Assigned Team Chips */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border-subtle/60">
+          {workOrder.contractor ? (
+            <div className="group flex items-center gap-2.5 bg-surface-hover/90 hover:bg-surface-hover px-3.5 py-1.5 rounded-2xl border border-border-subtle transition-all">
+              <Avatar name={workOrder.contractor.name} src={workOrder.contractor.image} size="xs" />
+              <div className="text-xs">
+                <p className="text-text-muted font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Contractor</p>
+                <p className="text-text-primary font-bold">{workOrder.contractor.name}</p>
+              </div>
+              {canEdit && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Unassign ${workOrder.contractor.name} from this work order? An internal notification email will be sent automatically.`)) {
+                      try {
+                        await updateMutation.mutateAsync({ contractorId: null, status: "UNASSIGNED" });
+                        toast.success("Contractor unassigned successfully");
+                      } catch {
+                        toast.error("Failed to unassign contractor");
+                      }
+                    }
+                  }}
+                  className="ml-1 p-1 rounded-lg hover:bg-red-500/20 text-text-muted hover:text-red-400 transition-colors"
+                  title="Unassign contractor"
+                >
+                  <UserMinus className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 bg-amber-500/10 px-3.5 py-1.5 rounded-2xl border border-amber-500/20">
+              <UserX className="h-3.5 w-3.5 text-amber-400" />
+              <div className="text-xs">
+                <p className="text-amber-400/70 font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Contractor</p>
+                <p className="text-amber-300 font-bold">Unassigned</p>
+              </div>
+              {canEdit && (
+                <button
+                  onClick={() => setShowEdit(true)}
+                  className="ml-2 text-[10px] font-bold text-amber-400 underline hover:text-amber-300"
+                >
+                  Assign
+                </button>
+              )}
+            </div>
+          )}
+
+          {workOrder.coordinator && (
+            <div className="flex items-center gap-2.5 bg-surface-hover/90 px-3.5 py-1.5 rounded-2xl border border-border-subtle">
+              <Avatar name={workOrder.coordinator.name} src={workOrder.coordinator.image} size="xs" />
+              <div className="text-xs">
+                <p className="text-text-muted font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Coordinator</p>
+                <p className="text-text-primary font-bold">{workOrder.coordinator.name}</p>
+              </div>
+            </div>
+          )}
+
+          {workOrder.createdBy && (
+            <div className="flex items-center gap-2.5 bg-surface-hover/90 px-3.5 py-1.5 rounded-2xl border border-border-subtle">
+              <Avatar name={workOrder.createdBy.name} src={workOrder.createdBy.image} size="xs" />
+              <div className="text-xs">
+                <p className="text-text-muted font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Client / Created By</p>
+                <p className="text-text-primary font-bold">{workOrder.createdBy.name}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const callerEmail = session.user.email || undefined;
     const callerImage = session.user.image || null;
 
-    const callSession = createCallSession({
+    const callSession = await createCallSession({
       channelId: channelId || "general",
       channelName: channelName || "Direct Call",
       callerId,

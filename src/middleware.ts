@@ -15,19 +15,25 @@ export function middleware(request: NextRequest) {
     pathname === "/" ||
     pathname.startsWith("/services") ||
     pathname.startsWith("/about") ||
-    pathname.startsWith("/contact")
+    pathname.startsWith("/contact") ||
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms")
   ) {
     return NextResponse.next();
   }
 
-  // Check for session token cookie (NextAuth v5 uses authjs.session-token)
-  const sessionToken =
-    request.cookies.get("authjs.session-token")?.value ||
-    request.cookies.get("__Secure-authjs.session-token")?.value ||
-    request.cookies.get("next-auth.session-token")?.value ||
-    request.cookies.get("__Secure-next-auth.session-token")?.value;
-
-  const isAuthenticated = !!sessionToken;
+  // Check for session token cookie (support both regular and chunked cookies)
+  const allCookies = request.cookies.getAll();
+  const isAuthenticated = allCookies.some((cookie) => {
+    const name = cookie.name;
+    return (
+      name.startsWith("authjs.session-token") ||
+      name.startsWith("__Secure-authjs.session-token") ||
+      name.startsWith("next-auth.session-token") ||
+      name.startsWith("__Secure-next-auth.session-token") ||
+      name.includes("session-token")
+    );
+  });
 
   // Redirect authenticated users away from auth pages
   if (authRoutes.some((route) => pathname.startsWith(route))) {

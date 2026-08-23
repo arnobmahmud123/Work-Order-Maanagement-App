@@ -192,6 +192,7 @@ export default function ChatPage() {
     (c: any) => c.type === "DIRECT_MESSAGE"
   );
 
+
   const filteredGeneral = generalChannels.filter(
     (c: any) =>
       !channelSearch ||
@@ -238,7 +239,7 @@ export default function ChatPage() {
       "flex -m-3 md:-mb-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl",
       topNavHidden 
         ? "h-[100dvh] md:h-[100vh] rounded-none border-0" 
-        : "h-[calc(100dvh-11rem)] md:h-[calc(100vh-4rem)]"
+        : "h-[calc(100dvh-7.5rem)] md:h-[calc(100vh-4rem)]"
     )}>
       {/* Sidebar Toggle (when hidden) */}
       {!showSidebar && (
@@ -782,6 +783,30 @@ function ChatArea({
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [showCall, setShowCall] = useState(false);
   const [callType, setCallType] = useState<"audio" | "video">("audio");
+  const createChannel = useCreateChatChannel();
+
+  async function handleDirectMessage(targetUser: any) {
+    if (!targetUser?.id || targetUser.id === userId) return;
+    try {
+      const newChan = await createChannel.mutateAsync({
+        name: targetUser.name || "Direct Message",
+        type: "DIRECT_MESSAGE",
+        memberIds: [targetUser.id],
+      });
+      if (newChan?.id) {
+        window.location.reload();
+      }
+    } catch {
+      toast.error("Could not start direct conversation");
+    }
+  }
+
+  function handleDirectCall(targetUser: any, type: "audio" | "video") {
+    if (!targetUser?.id || targetUser.id === userId) return;
+    setCallType(type);
+    setShowCall(true);
+  }
+
 
   // Mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -1436,6 +1461,18 @@ function ChatArea({
                               image: msg.author?.image,
                               role: msg.author?.role,
                               status: "online",
+                            }}
+                            onMessage={() => {
+                              const target = isOwn ? session?.user : msg.author;
+                              if (target) handleDirectMessage(target);
+                            }}
+                            onCall={() => {
+                              const target = isOwn ? session?.user : msg.author;
+                              if (target) handleDirectCall(target, "audio");
+                            }}
+                            onVideoCall={() => {
+                              const target = isOwn ? session?.user : msg.author;
+                              if (target) handleDirectCall(target, "video");
                             }}
                           >
                             <Avatar

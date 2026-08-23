@@ -1226,3 +1226,18 @@ export function useDeleteChatMessage(channelId: string) {
     },
   });
 }
+
+export function useProfile() {
+  const { data: session } = useSession();
+  return useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/profile");
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data?.user || null;
+    },
+    enabled: !!session?.user,
+    staleTime: 10000,
+  });
+}

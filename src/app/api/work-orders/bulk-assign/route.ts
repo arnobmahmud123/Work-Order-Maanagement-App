@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { notifyContractorAssigned } from "@/lib/contractor-assignment";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -40,17 +41,18 @@ export async function POST(req: NextRequest) {
     })),
   });
 
-  // Notify contractor
+  // Notify contractor via Email & high-priority in-app notification
   try {
-    await prisma.notification.createMany({
-      data: workOrderIds.map((id: string) => ({
-        type: "WORK_ORDER",
-        title: "Work Order Assignment",
-        message: `You have been assigned ${workOrderIds.length} work order(s)`,
-        userId: contractorId,
-        workOrderId: id,
-      })),
+    const assignedWOs = await prisma.workOrder.findMany({
+      where: { id: { in: workOrderIds } },
     });
+    for (const wo of assignedWOs) {
+      notifyContractorAssigned({
+        workOrder: wo,
+        assignedById: (session.user as any).id,
+        contractorId,
+      }).catch(() => {});
+    }
   } catch {}
 
   return NextResponse.json({ updated: result.count });

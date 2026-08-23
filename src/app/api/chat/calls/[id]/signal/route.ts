@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, context: any) {
     const { searchParams } = new URL(req.url);
     const since = parseInt(searchParams.get("since") || "0", 10);
 
-    const signals = getCallSignalsForPeer(id, userId, since);
+    const signals = await getCallSignalsForPeer(id, userId, since);
     return NextResponse.json({ signals });
   } catch (error: any) {
     return NextResponse.json({ signals: [] });
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, context: any) {
     const body = await req.json();
     const { type, data } = body;
 
-    const success = addCallSignal(id, userId, type, data);
+    const success = await addCallSignal(id, userId, type, data);
     return NextResponse.json({ success });
   } catch (error: any) {
     return NextResponse.json({ error: "Failed to post signal" }, { status: 500 });

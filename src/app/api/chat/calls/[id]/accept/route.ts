@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, context: any) {
     const name = session.user.name || "User";
     const image = session.user.image || null;
 
-    const call = acceptCallSession(id, { id: userId, name, image });
+    const call = await acceptCallSession(id, { id: userId, name, image });
     if (!call) {
       return NextResponse.json({ error: "Call not found or ended" }, { status: 404 });
     }

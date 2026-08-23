@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useNotifications } from "@/hooks/use-data";
+import { useNotifications, useProfile } from "@/hooks/use-data";
 import { Avatar } from "@/components/ui/avatar";
 import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles, Users, CreditCard, Shield, Zap } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
@@ -14,6 +14,11 @@ import { useAppStore } from "@/stores/app-store";
 export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
   const { data: session } = useSession();
   const { data: notifData } = useNotifications();
+  const { data: profile } = useProfile();
+  const avatarSrc = profile?.image || session?.user?.image;
+  const displayName = profile?.name || session?.user?.name || "User";
+  const displayRole = profile?.role || (session?.user as any)?.role || "USER";
+  const displayEmail = profile?.email || session?.user?.email;
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const { topNavHidden: isHidden, setTopNavHidden: setIsHidden } = useAppStore();
@@ -226,15 +231,15 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
               )}
             >
               <div className="relative">
-                <Avatar src={session?.user?.image} name={session?.user?.name} size="sm" />
+                <Avatar src={avatarSrc} name={displayName} size="sm" />
                 <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md shadow-emerald-500/30" />
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-bold text-text-primary tracking-tight leading-none mb-1">
-                  {session?.user?.name}
+                  {displayName}
                 </p>
                 <p className="text-[10px] font-bold text-cyan-400/70 uppercase tracking-wider leading-none role-label">
-                  {(session?.user as any)?.role}
+                  {displayRole}
                 </p>
               </div>
               <ChevronDown className={cn("h-3.5 w-3.5 text-text-muted transition-transform duration-200", dropdownOpen && "rotate-180")} />
@@ -245,9 +250,12 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
                 <div className="relative">
                   <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-cyan-500/40 via-purple-500/30 to-pink-500/40" />
                 </div>
-                <div className="px-5 py-4 border-b border-border-subtle bg-background/50">
-                  <p className="text-sm font-bold text-text-primary">{session?.user?.name}</p>
-                  <p className="text-xs text-text-muted truncate mt-0.5">{session?.user?.email}</p>
+                <div className="px-5 py-4 border-b border-border-subtle bg-background/50 flex items-center gap-3">
+                  <Avatar src={avatarSrc} name={displayName} size="md" />
+                  <div className="overflow-hidden">
+                    <p className="text-sm font-bold text-text-primary truncate">{displayName}</p>
+                    <p className="text-xs text-text-muted truncate mt-0.5">{displayEmail}</p>
+                  </div>
                 </div>
                 
                 <div className="p-1.5 space-y-0.5">
