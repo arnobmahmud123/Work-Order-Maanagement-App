@@ -106,6 +106,7 @@ import {
   BidEntry,
 } from "@/components/work-orders/task-bid-entries";
 import { printWorkOrder } from "@/components/work-orders/print-report";
+import { WorkOrderSubmissionModal } from "@/components/work-orders/WorkOrderSubmissionModal";
 
 import { OverdueCountdown } from "@/components/work-orders/overdue-countdown";
 // Spreadsheet removed — invoice uses a regular table now
@@ -545,6 +546,7 @@ export default function WorkOrderDetailPage({
   const [gpsCameraInspectionId, setGpsCameraInspectionId] = useState<string | null>(null);
   const [gpsCameraMultiCapture, setGpsCameraMultiCapture] = useState(true);
   const [showQuickView, setShowQuickView] = useState(false);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editorPhoto, setEditorPhoto] = useState<{ url: string; name: string; category?: PhotoCategory; source?: "global" | "task" | "bid" | "inspection"; sourceId?: string } | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
@@ -1877,6 +1879,51 @@ export default function WorkOrderDetailPage({
     );
   }
 
+  async function handleSubmitWorkOrder(contractorNotes: string) {
+    try {
+      await updateMutation.mutateAsync({
+        status: "FIELD_COMPLETE",
+        tasks: tasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          completed: t.completed,
+          completedAt: t.completedAt || (t.completed ? new Date().toISOString() : undefined),
+          status: t.status || (t.completed ? "COMPLETED" : "PENDING"),
+          statusNote: t.statusNote || "",
+          unit: t.unit,
+          quantity: t.quantity,
+          price: t.price,
+          photos: (t.photos || [])
+            .filter((p) => p.persisted && p.id && !p.id.startsWith("temp-") && !p.id.startsWith("gps-"))
+            .map((p) => ({
+              id: p.id,
+              url: p.rawUrl && !p.rawUrl.startsWith("data:") ? p.rawUrl : (p.url && !p.url.startsWith("data:") && !p.url.startsWith("blob:") ? p.url : `fileref:${p.id}`),
+              name: p.name,
+              size: p.size,
+              category: p.category,
+              timestamp: p.timestamp,
+            })),
+        })),
+        metadata: {
+          ...(workOrder?.metadata || {}),
+          contractorSubmissionNotes: contractorNotes,
+          submittedAt: new Date().toISOString(),
+          submittedBy: (session?.user as any)?.name || (session?.user as any)?.email || "Contractor",
+        },
+      });
+
+      logActivity.mutate({
+        action: "WORK_ORDER_SUBMITTED_FIELD_COMPLETE",
+        details: `Work order submitted as Field Complete by ${(session?.user as any)?.name || "Contractor"}`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["work-order", id] });
+    } catch (e: any) {
+      throw new Error(e?.message || "Failed to submit work order");
+    }
+  }
+
   const invoiceStatusColors: Record<string, string> = {
     DRAFT: "bg-surface-hover text-text-muted",
     SENT: "bg-blue-100 text-blue-700",
@@ -2183,6 +2230,29 @@ export default function WorkOrderDetailPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start w-full md:w-auto mt-4 md:mt-0">
+            {/* Submit Work Order Button with Automated Quality & Photo Checks */}
+            <button
+              onClick={() => setShowSubmissionModal(true)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-xs font-black uppercase tracking-wider shadow-lg",
+                workOrder.status === "FIELD_COMPLETE" || workOrder.status === "READY_FOR_CLIENT" || workOrder.status === "COMPLETED" || workOrder.status === "CLOSED"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 shadow-emerald-500/5"
+                  : "bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white hover:opacity-95 border border-emerald-400/30 shadow-emerald-500/20 animate-pulse"
+              )}
+            >
+              {workOrder.status === "FIELD_COMPLETE" || workOrder.status === "READY_FOR_CLIENT" || workOrder.status === "COMPLETED" || workOrder.status === "CLOSED" ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  Field Complete (Review)
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  Submit Work Order
+                </>
+              )}
+            </button>
+
             <button
               onClick={() => setShowQuickView(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-hover text-text-primary hover:bg-surface-hover border border-border-medium transition-all text-xs font-bold uppercase tracking-wider"
@@ -2960,6 +3030,29 @@ export default function WorkOrderDetailPage({
 
       {activeTab === "tasks" && (
         <div className="space-y-4">
+          {/* Quick Submission Banner in Tasks Tab */}
+          {workOrder.status !== "FIELD_COMPLETE" && workOrder.status !== "READY_FOR_CLIENT" && workOrder.status !== "COMPLETED" && workOrder.status !== "CLOSED" && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-500/10 via-teal-500/10 to-emerald-500/10 border border-cyan-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-cyan-500/20">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-text-primary">Ready to Submit Field Completion?</h4>
+                  <p className="text-[11px] text-text-muted">
+                    Run the automated quality validation check to verify before/after photos and submit for processor review.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSubmissionModal(true)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:opacity-95 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0 shadow-md shadow-emerald-500/15"
+              >
+                <Send className="h-3.5 w-3.5" />
+                Validate & Submit
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-text-muted" />
@@ -4174,6 +4267,23 @@ export default function WorkOrderDetailPage({
       )}
 
 
+      {/* ── Work Order Quality & Photo Submission Modal ── */}
+      <WorkOrderSubmissionModal
+        isOpen={showSubmissionModal}
+        onClose={() => setShowSubmissionModal(false)}
+        workOrder={workOrder}
+        tasks={tasks}
+        onTasksChange={setTasks}
+        bids={bids}
+        customInspectionItems={customInspectionItems}
+        onCustomInspectionItemsChange={setCustomInspectionItems}
+        allPhotos={allPhotos}
+        propertyFrontPhotos={propertyFrontPhotos}
+        onUploadPhoto={handlePhotoUpload}
+        onOpenCamera={(target, category, taskId) => openGPSCamera(target as any, category, taskId)}
+        onSubmitWorkOrder={handleSubmitWorkOrder}
+        isSubmitting={updateMutation.isPending}
+      />
     </div>
   );
 }
