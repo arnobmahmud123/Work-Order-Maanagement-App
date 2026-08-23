@@ -276,20 +276,30 @@ export default function ConnectorsAdminPage() {
 
         // Address Match - Avoid vendor address by checking near "Mortgager Information" or just grabbing standard pattern
         // Usually the first address after vendor is the property
-        const addresses = [...joinedText.matchAll(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))/gi)];
-        if (addresses.length > 0) {
-          // If we find multiple, usually the property is either the 1st or 2nd. 
-          // We will just take the first one for now, or second if we know the first is the vendor.
-          // Let's use the first one that appears, unless it's explicitly labeled Vendor.
-          extracted["Property Address"] = addresses[0][1].trim();
+        const mortgagorIndex = joinedText.indexOf("Mortgager Information");
+        if (mortgagorIndex !== -1) {
+            const block = joinedText.substring(mortgagorIndex, mortgagorIndex + 300);
+            const addrMatch = block.match(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))/i);
+            if (addrMatch) extracted["Property Address"] = addrMatch[1].trim();
+            const cszMatch = block.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+            if (cszMatch) {
+                extracted["City"] = cszMatch[1].trim();
+                extracted["State"] = cszMatch[2].trim();
+                extracted["Zip"] = cszMatch[3].trim();
+            }
         }
-
-        // City, State, Zip match
-        const cszMatch = joinedText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
-        if (cszMatch) {
-          extracted["City"] = cszMatch[1].trim();
-          extracted["State"] = cszMatch[2].trim();
-          extracted["Zip"] = cszMatch[3].trim();
+        
+        if (!extracted["Property Address"]) {
+            const addresses = [...joinedText.matchAll(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))/gi)];
+            if (addresses.length > 0) {
+              extracted["Property Address"] = addresses[addresses.length > 1 ? 1 : 0][1].trim();
+            }
+            const cszMatch = joinedText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+            if (cszMatch) {
+              extracted["City"] = cszMatch[1].trim();
+              extracted["State"] = cszMatch[2].trim();
+              extracted["Zip"] = cszMatch[3].trim();
+            }
         }
 
         // Specific MCS Fields
@@ -325,6 +335,8 @@ export default function ConnectorsAdminPage() {
         const descIndex = joinedText.indexOf("Description Additional Instructions");
         const damagesIndex = joinedText.indexOf("Current Damages");
         
+        const parsedServices: any[] = [];
+        
         if (descIndex !== -1 && damagesIndex !== -1 && damagesIndex > descIndex) {
             tasksRaw = joinedText.substring(descIndex + "Description Additional Instructions".length, damagesIndex);
         } else if (descIndex !== -1) {
@@ -333,9 +345,40 @@ export default function ConnectorsAdminPage() {
         
         if (tasksRaw) {
             extracted["Instructions"] = "Tasks:\n" + tasksRaw.trim();
+            
+            // Try to split tasks intelligently based on common task names or just use a generic list.
+            // A simple heuristic: pdfjs often interleaves or appends.
+            // We will just create 1 main task with the full text, OR split it if we see "approved"
+            const taskSegments = tasksRaw.split(/(?=Remove Saplings|TRIM TREE\(S\)|Remove Vines|Trim Shrubs|Grass Cut|Winterization|Debris Removal|Boarding)/gi);
+            
+            if (taskSegments.length > 1) {
+                for (const seg of taskSegments) {
+                    if (seg.trim().length > 3) {
+                        // The first few words are likely the task name
+                        const words = seg.trim().split(" ");
+                        const name = words.slice(0, 2).join(" ");
+                        parsedServices.push({
+                            name: name,
+                            description: seg.trim(),
+                            instructions: seg.trim(),
+                            quantity: 1,
+                        });
+                    }
+                }
+            } else {
+                 parsedServices.push({
+                    name: "Property Preservation",
+                    description: tasksRaw.trim(),
+                    instructions: tasksRaw.trim(),
+                    quantity: 1,
+                 });
+            }
         } else {
             extracted["Instructions"] = fullTextLines.slice(0, 20).join("\n");
         }
+        
+        // Expose parsed services
+        extracted["_parsedServices"] = parsedServices.length > 0 ? parsedServices : undefined;
 
         const headers = Object.keys(extracted);
         setFileHeaders(headers);

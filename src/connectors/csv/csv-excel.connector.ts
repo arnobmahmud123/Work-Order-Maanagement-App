@@ -208,6 +208,7 @@ export class CsvExcelConnector implements WorkOrderConnector {
           gateCode: mapping.gateCode ? String(row[mapping.gateCode] || "") : undefined,
           keyCode: mapping.keyCode ? String(row[mapping.keyCode] || "") : undefined,
           instructions: mapping.instructions ? String(row[mapping.instructions] || "") : undefined,
+          services: row._parsedServices || undefined,
           rawPayload: row,
           metadata: { ...row },
         });
