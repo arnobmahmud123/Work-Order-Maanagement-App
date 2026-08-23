@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useNotifications, useProfile } from "@/hooks/use-data";
 import { Avatar } from "@/components/ui/avatar";
-import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles, Users, CreditCard, Shield, Zap } from "lucide-react";
+import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles, Users, CreditCard, Shield, Zap, Cable } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { formatRelativeTime, cn } from "@/lib/utils";
@@ -261,6 +261,14 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
                 <div className="p-1.5 space-y-0.5">
                   {((session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN") && (
                     <>
+                      <Link
+                        href="/dashboard/admin/connectors"
+                        className="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        <Cable className="h-4 w-4" />
+                        Client Connectors
+                      </Link>
                       <Link
                         href="/dashboard/admin/users"
                         className="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"

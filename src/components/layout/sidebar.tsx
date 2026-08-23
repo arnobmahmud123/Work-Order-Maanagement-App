@@ -42,6 +42,7 @@ import {
   Briefcase,
   Star,
   Target,
+  Cable,
 } from "lucide-react";
 
 const navItems = [
@@ -77,6 +78,7 @@ const networkItems = [
 ];
 
 const adminItems = [
+  { label: "Client Connectors", href: "/dashboard/admin/connectors", icon: Cable },
   { label: "User Management", href: "/dashboard/admin/users", icon: Users },
   { label: "Company Settings", href: "/dashboard/admin/company-settings", icon: Settings },
   { label: "Automation Rules", href: "/dashboard/admin/automation-rules", icon: Zap },
