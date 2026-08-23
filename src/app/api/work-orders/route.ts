@@ -126,96 +126,96 @@ async function findOrCreateProperty({
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const statusParam = searchParams.get("status");
-  const serviceType = searchParams.get("serviceType");
-  const contractorId = searchParams.get("contractorId");
-  const search = searchParams.get("search");
-  const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
-  const parsedLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
-  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
-  const limit =
-    Number.isFinite(parsedLimit) && parsedLimit > 0
-      ? Math.min(parsedLimit, 100)
-      : 20;
-
-  const currentUser = await getSessionUser(session.user);
-  if (!currentUser?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const role = currentUser.role;
-  const userId = currentUser.id;
-  const companyId = (session.user as any).companyId;
-
-  console.log(`[GET WorkOrders] Email: ${session?.user?.email} | Role: ${role} | ID: ${userId} | CompanyId: ${companyId}`);
-
-  const where: any = {};
-
-  applyWorkOrderVisibility(where, role, userId);
-
-  // Enforce company scoping
-  if (role !== "SUPER_ADMIN") {
-    if (!companyId) {
-      return NextResponse.json({ error: "Forbidden: User has no assigned company tenant context" }, { status: 403 });
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    where.companyId = companyId;
-  } else {
-    // Super admins can optionally filter by companyId via query string
-    const filterCompanyId = searchParams.get("companyId");
-    if (filterCompanyId) {
-      where.companyId = filterCompanyId;
+
+    const { searchParams } = new URL(req.url);
+    const statusParam = searchParams.get("status");
+    const serviceType = searchParams.get("serviceType");
+    const contractorId = searchParams.get("contractorId");
+    const search = searchParams.get("search");
+    const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+    const parsedLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
+    const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 100)
+        : 20;
+
+    const currentUser = await getSessionUser(session.user);
+    if (!currentUser?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  }
 
-  // Support multiple statuses (comma-separated: "NEW,ASSIGNED,IN_PROGRESS")
-  if (statusParam) {
-    const statuses = statusParam.split(",").filter(Boolean);
-    if (statuses.length === 1) {
-      where.status = statuses[0];
-    } else if (statuses.length > 1) {
-      where.status = { in: statuses };
+    const role = currentUser.role;
+    const userId = currentUser.id;
+    const companyId = (session.user as any).companyId;
+
+    const where: any = {};
+
+    applyWorkOrderVisibility(where, role, userId);
+
+    // Enforce company scoping
+    if (role !== "SUPER_ADMIN") {
+      if (companyId) {
+        where.companyId = companyId;
+      }
+    } else {
+      const filterCompanyId = searchParams.get("companyId");
+      if (filterCompanyId) {
+        where.companyId = filterCompanyId;
+      }
     }
-  }
-  if (serviceType) where.serviceType = serviceType;
-  if (contractorId && role !== "CONTRACTOR") where.contractorId = contractorId;
-  if (search) {
-    where.OR = [
-      { title: { contains: search } },
-      { address: { contains: search } },
-      { description: { contains: search } },
-      { contractor: { name: { contains: search } } },
-    ];
-  }
 
-  const [workOrders, total] = await Promise.all([
-    prisma.workOrder.findMany({
-      where,
-      include: {
-        contractor: { select: { id: true, name: true, email: true, image: true } },
-        coordinator: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
-        property: { select: { id: true, address: true, city: true, state: true, zipCode: true, imageUrl: true } },
-        _count: { select: { threads: true, files: true, invoices: true, history: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.workOrder.count({ where }),
-  ]);
+    // Support multiple statuses
+    if (statusParam) {
+      const statuses = statusParam.split(",").filter(Boolean);
+      if (statuses.length === 1) {
+        where.status = statuses[0];
+      } else if (statuses.length > 1) {
+        where.status = { in: statuses };
+      }
+    }
+    if (serviceType) where.serviceType = serviceType;
+    if (contractorId && role !== "CONTRACTOR") where.contractorId = contractorId;
+    if (search) {
+      where.OR = [
+        { title: { contains: search } },
+        { address: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
 
-  return NextResponse.json({
-    workOrders,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
-  });
+    const [workOrders, total] = await Promise.all([
+      prisma.workOrder.findMany({
+        where,
+        include: {
+          contractor: { select: { id: true, name: true, email: true, image: true } },
+          coordinator: { select: { id: true, name: true, email: true } },
+          createdBy: { select: { id: true, name: true, email: true } },
+          property: { select: { id: true, address: true, city: true, state: true, zipCode: true, imageUrl: true } },
+          _count: { select: { threads: true, files: true, invoices: true, history: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.workOrder.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      workOrders,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error: any) {
+    console.error("[GET WorkOrders Error]:", error);
+    return NextResponse.json({ error: error.message || "Failed to fetch work orders" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
