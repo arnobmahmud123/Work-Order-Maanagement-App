@@ -575,32 +575,41 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
             {[
               {
                 name: "Starter",
                 price: "$49",
                 period: "/mo",
-                desc: "For small teams getting started",
-                features: ["Up to 5 users", "50 work orders/mo", "Basic invoicing", "Email support"],
-                cta: "Start free trial",
+                desc: "For small contractor teams",
+                features: ["Up to 5 users", "50 work orders/mo", "Basic invoicing & GPS photos", "Email support"],
+                cta: "Get Started",
                 popular: false,
               },
               {
                 name: "Professional",
                 price: "$149",
                 period: "/mo",
-                desc: "For growing preservation companies",
-                features: ["Up to 25 users", "Unlimited work orders", "Advanced invoicing & reports", "Priority support", "API access"],
-                cta: "Start free trial",
+                desc: "For growing preservation vendors",
+                features: ["Up to 25 users", "Unlimited work orders", "Automated email workflows", "Priority support", "API access"],
+                cta: "Get Started",
+                popular: false,
+              },
+              {
+                name: "Premium",
+                price: "$499",
+                period: "/mo",
+                desc: "For regional & multi-crew operations",
+                features: ["Up to 500 users", "Unlimited work orders", "Full Automation Engine & AI", "Internal chat & voice calling", "Dedicated account manager"],
+                cta: "Get Started",
                 popular: true,
               },
               {
                 name: "Enterprise",
                 price: "Custom",
                 period: "",
-                desc: "For large-scale operations",
-                features: ["Unlimited users", "Custom integrations", "Dedicated account manager", "SLA guarantee", "White-label option"],
+                desc: "For national preservation enterprises",
+                features: ["Unlimited users", "Custom integrations & SSO", "SLA guarantee (99.9%)", "White-label & custom branding", "24/7 VIP support"],
                 cta: "Contact sales",
                 popular: false,
               },

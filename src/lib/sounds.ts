@@ -296,3 +296,78 @@ export function toggleSoundEnabled(): boolean {
   setSoundEnabled(!current);
   return !current;
 }
+
+// ─── Call Audio Effects ──────────────────────────────────────────────────
+
+export function playRingtoneSound() {
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+
+    // US standard ringback tone: 440 Hz + 480 Hz
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.frequency.value = 440;
+    osc2.frequency.value = 480;
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.setValueAtTime(0.08, now + 1.5);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 1.6);
+    osc2.stop(now + 1.6);
+  } catch {}
+}
+
+export function playCallConnectSound() {
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch {}
+}
+
+export function playCallEndSound() {
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.setValueAtTime(330, now + 0.15);
+
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc.start(now);
+    osc.stop(now + 0.35);
+  } catch {}
+}

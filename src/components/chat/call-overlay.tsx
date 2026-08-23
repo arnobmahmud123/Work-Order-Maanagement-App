@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,9 @@ import {
   Monitor,
   MoreHorizontal,
   X,
+  Volume2,
 } from "lucide-react";
+import { playRingtoneSound, playCallConnectSound, playCallEndSound } from "@/lib/sounds";
 
 type CallStatus = "ringing" | "connected" | "ended";
 
@@ -46,17 +48,53 @@ export function CallOverlay({
   const [isVideoOff, setIsVideoOff] = useState(callType === "audio");
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setStatus("ringing");
       setElapsed(0);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
       return;
     }
-    // Auto-connect after 2s for demo
-    const timer = setTimeout(() => setStatus("connected"), 2000);
-    return () => clearTimeout(timer);
-  }, [isOpen]);
+
+    // Play ringtone on dial
+    playRingtoneSound();
+    const ringInterval = setInterval(() => {
+      playRingtoneSound();
+    }, 2500);
+
+    // Auto-connect after 2.5s
+    const connectTimer = setTimeout(() => {
+      clearInterval(ringInterval);
+      setStatus("connected");
+      playCallConnectSound();
+
+      // Attempt to access local mic / camera
+      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+        navigator.mediaDevices
+          .getUserMedia({ audio: true, video: callType === "video" })
+          .then((stream) => {
+            streamRef.current = stream;
+            if (localVideoRef.current && callType === "video") {
+              localVideoRef.current.srcObject = stream;
+            }
+          })
+          .catch(() => {
+            // Safe fallback if browser permissions denied
+          });
+      }
+    }, 2500);
+
+    return () => {
+      clearInterval(ringInterval);
+      clearTimeout(connectTimer);
+    };
+  }, [isOpen, callType]);
 
   useEffect(() => {
     if (status !== "connected") return;
@@ -71,8 +109,27 @@ export function CallOverlay({
   }
 
   function handleEnd() {
+    playCallEndSound();
     setStatus("ended");
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
     setTimeout(onClose, 1000);
+  }
+
+  function toggleMute() {
+    setIsMuted(!isMuted);
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach((t) => (t.enabled = isMuted));
+    }
+  }
+
+  function toggleVideo() {
+    setIsVideoOff(!isVideoOff);
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach((t) => (t.enabled = isVideoOff));
+    }
   }
 
   if (!isOpen) return null;
@@ -81,89 +138,84 @@ export function CallOverlay({
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/80 backdrop-blur-md">
       <div className="relative w-full max-w-lg mx-4">
         {/* Main call container */}
-        <div className="bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+        <div className="bg-surface border border-border-medium rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-border-subtle">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-surface-hover/30">
+            <div className="flex items-center gap-2.5">
               {callType === "video" ? (
-                <Video className="h-4 w-4 text-cyan-400" />
+                <div className="h-7 w-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Video className="h-4 w-4" />
+                </div>
               ) : (
-                <Phone className="h-4 w-4 text-cyan-400" />
+                <div className="h-7 w-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <Phone className="h-4 w-4" />
+                </div>
               )}
-              <span className="text-sm font-medium text-text-primary">
-                {callType === "video" ? "Video Call" : "Voice Call"}
-              </span>
-              {channelName && (
-                <span className="text-xs text-text-muted">in {channelName}</span>
-              )}
+              <div>
+                <span className="text-sm font-bold text-text-primary">
+                  {callType === "video" ? "HD Video Call" : "Internal Voice Call"}
+                </span>
+                {channelName && (
+                  <span className="text-xs text-text-muted ml-2">in #{channelName}</span>
+                )}
+              </div>
             </div>
             <button
-              onClick={onClose}
-              className="p-1 rounded-lg hover:bg-surface-hover text-text-muted"
+              onClick={handleEnd}
+              className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
           {/* Participants area */}
-          <div className="p-8 min-h-[280px] flex flex-col items-center justify-center">
+          <div className="p-8 min-h-[300px] flex flex-col items-center justify-center">
             {status === "ringing" && (
-              <div className="text-center">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping" />
-                  <Avatar
-                    src={participants[0]?.image}
-                    name={participants[0]?.name}
-                    size="lg"
-                  />
+              <div className="text-center space-y-4">
+                <div className="relative inline-block">
+                  <div className="absolute -inset-2 rounded-full bg-cyan-500/20 animate-ping" />
+                  <div className="relative ring-4 ring-cyan-500/30 rounded-full">
+                    <Avatar
+                      src={participants[0]?.image}
+                      name={participants[0]?.name}
+                      size="lg"
+                    />
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-text-primary">
-                  {participants[0]?.name || "Unknown"}
-                </h3>
-                {participants.length > 1 && (
-                  <p className="text-sm text-text-muted mt-1">
-                    +{participants.length - 1} others
+                <div>
+                  <h3 className="text-lg font-black text-text-primary">
+                    {participants[0]?.name || "Team Member"}
+                  </h3>
+                  {participants.length > 1 && (
+                    <p className="text-xs text-text-muted mt-0.5">
+                      +{participants.length - 1} team participants
+                    </p>
+                  )}
+                  <p className="text-xs font-bold text-cyan-400 mt-2 animate-pulse flex items-center justify-center gap-1.5">
+                    <Volume2 className="h-3.5 w-3.5" /> Calling team member...
                   </p>
-                )}
-                <p className="text-sm text-cyan-400 mt-3 animate-pulse">
-                  Ringing...
-                </p>
+                </div>
               </div>
             )}
 
             {status === "connected" && (
               <div className="w-full">
-                {/* Video grid or avatar display */}
                 {callType === "video" && !isVideoOff ? (
-                  <div
-                    className={cn(
-                      "grid gap-3 mb-4",
-                      participants.length === 1
-                        ? "grid-cols-1"
-                        : participants.length === 2
-                        ? "grid-cols-2"
-                        : "grid-cols-2"
-                    )}
-                  >
-                    {participants.map((p) => (
-                      <div
-                        key={p.id}
-                        className="relative aspect-video bg-surface-hover rounded-xl border border-border-subtle flex items-center justify-center overflow-hidden"
-                      >
-                        <Avatar src={p.image} name={p.name} size="lg" />
-                        <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-                          <span className="text-xs font-medium text-white bg-black/50 px-2 py-0.5 rounded-full">
-                            {p.name}
-                          </span>
-                          {p.isMuted && (
-                            <MicOff className="h-3 w-3 text-red-400" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="relative aspect-video bg-black/40 rounded-2xl border border-border-subtle overflow-hidden flex items-center justify-center mb-4">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs text-white">
+                      <span className="font-semibold">{participants[0]?.name || "Local Video"}</span>
+                      {isMuted && <MicOff className="h-3 w-3 text-red-400" />}
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center mb-4">
+                  <div className="flex flex-col items-center mb-6">
                     <div className="flex -space-x-3 mb-4">
                       {participants.slice(0, 4).map((p) => (
                         <Avatar
@@ -171,30 +223,33 @@ export function CallOverlay({
                           src={p.image}
                           name={p.name}
                           size="lg"
-                          className="ring-2 ring-[#1a1a2e]"
+                          className="ring-4 ring-surface shadow-xl"
                         />
                       ))}
                     </div>
-                    <p className="text-sm text-text-secondary">
+                    <p className="text-sm font-bold text-text-primary">
                       {participants.map((p) => p.name).join(", ")}
                     </p>
+                    <span className="text-[11px] text-emerald-400 font-semibold mt-1">
+                      ● Connected (HD Audio)
+                    </span>
                   </div>
                 )}
 
                 {/* Call duration */}
-                <p className="text-center text-sm text-cyan-400 font-mono">
+                <p className="text-center text-sm text-cyan-400 font-mono font-bold">
                   {formatTime(elapsed)}
                 </p>
               </div>
             )}
 
             {status === "ended" && (
-              <div className="text-center">
-                <PhoneOff className="h-12 w-12 text-text-dim mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-text-primary">
-                  Call Ended
-                </h3>
-                <p className="text-sm text-text-muted mt-1">
+              <div className="text-center space-y-2">
+                <div className="h-12 w-12 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto mb-2">
+                  <PhoneOff className="h-6 w-6" />
+                </div>
+                <h3 className="text-base font-bold text-text-primary">Call Ended</h3>
+                <p className="text-xs text-text-muted font-mono">
                   Duration: {formatTime(elapsed)}
                 </p>
               </div>
@@ -203,58 +258,50 @@ export function CallOverlay({
 
           {/* Controls */}
           {status !== "ended" && (
-            <div className="flex items-center justify-center gap-3 px-5 py-4 border-t border-border-subtle bg-surface-hover">
+            <div className="flex items-center justify-center gap-3 px-6 py-5 border-t border-border-subtle bg-surface-hover/30">
               <button
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={toggleMute}
                 className={cn(
-                  "p-3 rounded-full transition-colors",
+                  "p-3.5 rounded-full transition-all shadow-md",
                   isMuted
-                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                    : "bg-surface-hover text-text-secondary hover:bg-surface-hover"
+                    ? "bg-rose-500 text-white shadow-rose-500/20"
+                    : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border-medium"
                 )}
-                title={isMuted ? "Unmute" : "Mute"}
+                title={isMuted ? "Unmute Mic" : "Mute Mic"}
               >
-                {isMuted ? (
-                  <MicOff className="h-5 w-5" />
-                ) : (
-                  <Mic className="h-5 w-5" />
-                )}
+                {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
               </button>
 
               <button
-                onClick={() => setIsVideoOff(!isVideoOff)}
+                onClick={toggleVideo}
                 className={cn(
-                  "p-3 rounded-full transition-colors",
+                  "p-3.5 rounded-full transition-all shadow-md",
                   isVideoOff
-                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                    : "bg-surface-hover text-text-secondary hover:bg-surface-hover"
+                    ? "bg-surface-hover text-text-muted border border-border-medium"
+                    : "bg-cyan-500 text-white shadow-cyan-500/20"
                 )}
-                title={isVideoOff ? "Turn on camera" : "Turn off camera"}
+                title={isVideoOff ? "Turn on Camera" : "Turn off Camera"}
               >
-                {isVideoOff ? (
-                  <VideoOff className="h-5 w-5" />
-                ) : (
-                  <Video className="h-5 w-5" />
-                )}
+                {isVideoOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
               </button>
 
               <button
                 onClick={() => setIsScreenSharing(!isScreenSharing)}
                 className={cn(
-                  "p-3 rounded-full transition-colors",
+                  "p-3.5 rounded-full transition-all shadow-md",
                   isScreenSharing
-                    ? "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
-                    : "bg-surface-hover text-text-secondary hover:bg-surface-hover"
+                    ? "bg-cyan-500 text-white shadow-cyan-500/20"
+                    : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border-medium"
                 )}
-                title="Share screen"
+                title="Share Screen"
               >
                 <Monitor className="h-5 w-5" />
               </button>
 
               <button
                 onClick={handleEnd}
-                className="p-3 rounded-full bg-red-600 text-white hover:bg-red-500 transition-colors"
-                title="End call"
+                className="p-3.5 rounded-full bg-rose-600 text-white hover:bg-rose-500 transition-all shadow-lg shadow-rose-600/30"
+                title="End Call"
               >
                 <PhoneOff className="h-5 w-5" />
               </button>

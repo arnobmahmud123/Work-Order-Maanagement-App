@@ -805,13 +805,34 @@ export function useAIContractorFinder(
 
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
-export function useUsers(role?: string) {
-  const params = role ? `?role=${role}` : "";
+export function useUsers(role?: string, status?: string, search?: string) {
   return useQuery({
-    queryKey: ["users", role],
+    queryKey: ["users", role, status, search],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/users${params}`);
+      const params = new URLSearchParams();
+      if (role && role !== "ALL") params.append("role", role);
+      if (status && status !== "ALL") params.append("status", status);
+      if (search) params.append("search", search);
+      const qs = params.toString();
+      const res = await fetch(`/api/admin/users${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error("Failed to fetch users");
+      const data = await res.json();
+      return Array.isArray(data) ? data : data?.users || [];
+    },
+  });
+}
+
+export function useUsersWithQuota(role?: string, status?: string, search?: string) {
+  return useQuery({
+    queryKey: ["users-quota", role, status, search],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("withQuota", "true");
+      if (role && role !== "ALL") params.append("role", role);
+      if (status && status !== "ALL") params.append("status", status);
+      if (search) params.append("search", search);
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch users and quota");
       return res.json();
     },
   });

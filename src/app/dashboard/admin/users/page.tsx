@@ -1,11 +1,31 @@
 "use client";
 
-import { useUsers } from "@/hooks/use-data";
-import { Button, Card, Badge, Avatar, Select, Modal, Input } from "@/components/ui";
-import { Plus, Users, Shield, UserCheck, UserX, Edit, Trash2, Mail, Phone, Building2, X } from "lucide-react";
+import { useUsersWithQuota } from "@/hooks/use-data";
+import { Button, Card, Badge, Avatar, Modal, Input } from "@/components/ui";
+import {
+  Plus,
+  Users,
+  Shield,
+  UserCheck,
+  UserX,
+  Edit,
+  Trash2,
+  Mail,
+  Phone,
+  Building2,
+  X,
+  Search,
+  KeyRound,
+  Sparkles,
+  ArrowUpRight,
+  AlertTriangle,
+  CheckCircle2,
+  Lock,
+} from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import toast from "react-hot-toast";
+import Link from "next/link";
 
 const roleColors: Record<string, string> = {
   SUPER_ADMIN: "bg-rose-500/15 text-rose-400 border border-rose-500/30",
@@ -21,24 +41,42 @@ const roleColors: Record<string, string> = {
   CLIENT: "bg-gray-500/15 text-text-secondary border border-gray-500/20",
 };
 
+const ALL_ROLES = [
+  { value: "ALL", label: "All Roles" },
+  { value: "CLIENT", label: "Client" },
+  { value: "CONTRACTOR", label: "Contractor" },
+  { value: "COORDINATOR", label: "Coordinator" },
+  { value: "INCHARGE_COORDINATOR", label: "Incharge Coordinator" },
+  { value: "PROCESSOR", label: "Processor" },
+  { value: "PROCESSOR_INCHARGE", label: "Processor Incharge" },
+  { value: "ACCOUNTANT", label: "Accountant" },
+  { value: "CLIENT_MANAGER", label: "Client Manager" },
+  { value: "INCHARGE_CLIENT_MANAGER", label: "Incharge Client Manager" },
+  { value: "ADMIN", label: "Admin" },
+  { value: "SUPER_ADMIN", label: "Super Admin" },
+];
+
 export default function AdminUsersPage() {
-  const { data: users, isLoading, refetch } = useUsers();
-  const [roleFilter, setRoleFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addingUser, setAddingUser] = useState(false);
+
+  const { data, isLoading, refetch } = useUsersWithQuota(roleFilter, statusFilter, searchQuery);
+
+  const users = data?.users || [];
+  const quota = data?.quota;
+
   const [addForm, setAddForm] = useState({
     name: "",
     email: "",
     password: "",
-    role: "CLIENT",
+    role: "CONTRACTOR",
     phone: "",
     company: "",
   });
-  const [addingUser, setAddingUser] = useState(false);
-
-  const filtered = roleFilter
-    ? users?.filter((u: any) => u.role === roleFilter)
-    : users;
 
   async function handleAddSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,9 +98,9 @@ export default function AdminUsersPage() {
           company: addForm.company.trim() || null,
         }),
       });
-      const data = await res.json();
+      const resData = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed");
+        throw new Error(resData.error || "Failed to create user");
       }
       toast.success("User created successfully");
       setIsAddModalOpen(false);
@@ -70,7 +108,7 @@ export default function AdminUsersPage() {
         name: "",
         email: "",
         password: "",
-        role: "CLIENT",
+        role: "CONTRACTOR",
         phone: "",
         company: "",
       });
@@ -89,26 +127,26 @@ export default function AdminUsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: userId, role: newRole }),
       });
-      if (!res.ok) throw new Error("Failed");
-      toast.success("User updated");
+      if (!res.ok) throw new Error("Failed to update role");
+      toast.success("User role updated");
       refetch();
     } catch {
-      toast.error("Failed to update user");
+      toast.error("Failed to update user role");
     }
   }
 
-  async function handleToggleActive(userId: string, isActive: boolean) {
+  async function handleToggleActive(userId: string, currentStatus: boolean) {
     try {
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: userId, isActive: !isActive }),
+        body: JSON.stringify({ id: userId, isActive: !currentStatus }),
       });
-      if (!res.ok) throw new Error("Failed");
-      toast.success(isActive ? "User deactivated" : "User activated");
+      if (!res.ok) throw new Error("Failed to update status");
+      toast.success(!currentStatus ? "User activated" : "User deactivated");
       refetch();
     } catch {
-      toast.error("Failed to update user");
+      toast.error("Failed to update user status");
     }
   }
 
@@ -120,141 +158,238 @@ export default function AdminUsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: userId }),
       });
-      if (!res.ok) throw new Error("Failed");
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed");
       toast.success("User deleted");
       refetch();
-    } catch {
-      toast.error("Failed to delete user");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete user");
     }
   }
 
+  const quotaPercent = quota ? Math.min(100, Math.round((quota.currentCount / quota.maxAllowed) * 100)) : 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Users</h1>
-          <p className="text-text-muted mt-1">Manage platform users and roles</p>
+          <h1 className="text-2xl font-black text-text-primary tracking-tight">User & Role Management</h1>
+          <p className="text-xs text-text-muted mt-1">
+            Create, manage, and assign roles for organization members, contractors, and processors.
+          </p>
         </div>
-        <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-1.5 h-9 bg-gradient-to-r from-cyan-500 to-blue-600">
-          <Plus className="h-4 w-4" /> Add User
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            disabled={quota?.isLimitReached}
+            className={cn(
+              "flex items-center gap-1.5 h-10 px-5 text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg",
+              quota?.isLimitReached
+                ? "opacity-50 cursor-not-allowed bg-gray-700"
+                : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-95 text-white shadow-cyan-500/20"
+            )}
+          >
+            <Plus className="h-4 w-4" /> Create User
+          </Button>
+        </div>
       </div>
 
+      {/* Plan & Quota Indicator Banner */}
+      {quota && (
+        <div className="p-5 rounded-2xl bg-surface border border-border-subtle shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-1.5 flex-1">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                Current Plan:
+              </span>
+              <Badge className="bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-xs font-black px-2.5 py-0.5">
+                <Sparkles className="h-3 w-3 mr-1" />
+                {quota.planName} PLAN
+              </Badge>
+              {quota.isLimitReached && (
+                <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" /> Plan Limit Reached
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-text-secondary pt-1">
+              <span>
+                <strong>{quota.currentCount}</strong> of <strong>{quota.maxAllowed}</strong> maximum users used
+              </span>
+              <span className="text-text-muted">
+                {quota.remaining} slots remaining ({quotaPercent}%)
+              </span>
+            </div>
+
+            {/* Quota Progress Bar */}
+            <div className="w-full h-2.5 bg-surface-hover rounded-full overflow-hidden border border-border-subtle">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  quotaPercent >= 95
+                    ? "bg-gradient-to-r from-rose-500 to-red-600"
+                    : quotaPercent >= 80
+                    ? "bg-gradient-to-r from-amber-500 to-orange-500"
+                    : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                )}
+                style={{ width: `${quotaPercent}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+            <Link href="/contact">
+              <Button size="sm" variant="outline" className="text-xs font-bold gap-1 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10">
+                Upgrade Plan <ArrowUpRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Filters & Search Controls */}
       <Card padding={false}>
-        <div className="p-4 border-b border-border-subtle">
-          <div className="flex items-center gap-3">
+        <div className="p-4 border-b border-border-subtle flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-dim" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search users by name, email, company, or phone..."
+              className="w-full pl-9 pr-4 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-primary focus:border-cyan-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Role Filter */}
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-3 py-2 border border-border-medium rounded-lg text-sm focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
+              className="px-3 py-2 border border-border-medium rounded-xl text-xs bg-surface-hover text-text-primary focus:border-cyan-500 focus:outline-none"
             >
-              <option value="">All Roles</option>
-              <option value="ADMIN">Admin</option>
-              <option value="COORDINATOR">Coordinator</option>
-              <option value="PROCESSOR">Processor</option>
-              <option value="CONTRACTOR">Contractor</option>
-              <option value="CLIENT">Client</option>
+              {ALL_ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
             </select>
-            <span className="text-sm text-text-muted">
-              {filtered?.length || 0} users
-            </span>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-border-medium rounded-xl text-xs bg-surface-hover text-text-primary focus:border-cyan-500 focus:outline-none"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active Users</option>
+              <option value="INACTIVE">Inactive Users</option>
+            </select>
           </div>
         </div>
 
+        {/* Users List */}
         {isLoading ? (
-          <div className="p-8 text-center text-text-muted">Loading...</div>
+          <div className="p-12 text-center text-xs text-text-muted">Loading users...</div>
+        ) : users.length === 0 ? (
+          <div className="p-12 text-center space-y-2">
+            <Users className="h-10 w-10 text-text-dim mx-auto" />
+            <p className="text-sm font-semibold text-text-primary">No users found</p>
+            <p className="text-xs text-text-muted">Try adjusting your filters or search query.</p>
+          </div>
         ) : (
           <div className="divide-y divide-border-subtle">
-            {filtered?.map((user: any) => (
+            {users.map((user: any) => (
               <div
                 key={user.id}
-                className="flex items-center gap-4 p-4 hover:bg-surface-hover transition-colors group"
+                className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-surface-hover/50 transition-colors"
               >
-                <Avatar name={user.name} src={user.image} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-text-primary">
-                      {user.name}
-                    </h3>
-                    <Badge className={cn("text-[10px]", roleColors[user.role])}>
-                      {user.role}
-                    </Badge>
-                    {!user.isActive && (
-                      <Badge className="bg-red-100 text-red-700 text-[10px]">
-                        Inactive
+                <div className="flex items-center gap-3.5">
+                  <Avatar name={user.name} src={user.image} size="md" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-text-primary">{user.name}</span>
+                      <Badge className={cn("text-[10px] font-bold", roleColors[user.role] || "bg-gray-500/15 text-text-secondary")}>
+                        {user.role}
                       </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-xs text-text-muted flex items-center gap-1">
-                      <Mail className="h-3 w-3" />
-                      {user.email}
-                    </span>
-                    {user.phone && (
-                      <span className="text-xs text-text-muted flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {user.phone}
+                      {user.isActive ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> Inactive
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3 w-3 text-text-dim" /> {user.email}
                       </span>
-                    )}
-                    {user.company && (
-                      <span className="text-xs text-text-muted flex items-center gap-1">
-                        <Building2 className="h-3 w-3" />
-                        {user.company}
-                      </span>
-                    )}
+                      {user.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3 text-text-dim" /> {user.phone}
+                        </span>
+                      )}
+                      {user.company && (
+                        <span className="flex items-center gap-1 font-medium text-text-secondary">
+                          <Building2 className="h-3 w-3 text-text-dim" /> {user.company}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-text-dim">
+                      {user._count?.assignedWorkOrders || 0} work orders • {user._count?.supportTickets || 0} tickets • Joined {formatDate(user.createdAt)}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-text-dim mt-0.5">
-                    {user._count?.assignedWorkOrders || 0} work orders •{" "}
-                    {user._count?.supportTickets || 0} tickets • Joined{" "}
-                    {formatDate(user.createdAt)}
-                  </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Actions */}
+                <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+                  {/* Role Selector */}
                   <select
                     value={user.role}
                     onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                    className="px-2 py-1 border border-border-medium rounded text-xs bg-surface-hover text-text-primary focus:border-cyan-500 focus:outline-none"
+                    className="px-2.5 py-1 border border-border-medium rounded-lg text-xs bg-surface text-text-primary focus:border-cyan-500 focus:outline-none font-medium"
                   >
-                    <option value="CLIENT">Client</option>
-                    <option value="CONTRACTOR">Contractor</option>
-                    <option value="COORDINATOR">Coordinator</option>
-                    <option value="INCHARGE_COORDINATOR">Incharge Coordinator</option>
-                    <option value="PROCESSOR">Processor</option>
-                    <option value="PROCESSOR_INCHARGE">Processor Incharge</option>
-                    <option value="ACCOUNTANT">Accountant</option>
-                    <option value="CLIENT_MANAGER">Client Manager</option>
-                    <option value="INCHARGE_CLIENT_MANAGER">Incharge Client Manager</option>
-                    <option value="ADMIN">Admin</option>
-                    <option value="SUPER_ADMIN">Super Admin</option>
+                    {ALL_ROLES.filter((r) => r.value !== "ALL").map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
                   </select>
-                  <button
-                    onClick={() => setEditingUser(user)}
-                    className="p-1.5 rounded-lg hover:bg-cyan-500/10 text-text-muted hover:text-cyan-400 transition-colors"
-                    title="Edit user"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                  </button>
+
+                  {/* Toggle Active/Inactive */}
                   <button
                     onClick={() => handleToggleActive(user.id, user.isActive)}
                     className={cn(
-                      "p-1.5 rounded-lg transition-colors",
+                      "p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all",
                       user.isActive
-                        ? "text-green-400 hover:bg-green-500/10"
-                        : "text-red-400 hover:bg-red-500/10"
+                        ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                        : "border-rose-500/30 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20"
                     )}
-                    title={user.isActive ? "Deactivate" : "Activate"}
+                    title={user.isActive ? "Deactivate User" : "Activate User"}
                   >
-                    {user.isActive ? (
-                      <UserCheck className="h-3.5 w-3.5" />
-                    ) : (
-                      <UserX className="h-3.5 w-3.5" />
-                    )}
+                    {user.isActive ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
                   </button>
+
+                  {/* Edit */}
+                  <button
+                    onClick={() => setEditingUser(user)}
+                    className="p-1.5 rounded-lg border border-border-medium text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                    title="Edit User & Password"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                  </button>
+
+                  {/* Delete */}
                   <button
                     onClick={() => handleDeleteUser(user.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors"
-                    title="Delete user"
+                    className="p-1.5 rounded-lg border border-border-medium text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    title="Delete User"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -265,18 +400,6 @@ export default function AdminUsersPage() {
         )}
       </Card>
 
-      {/* Edit User Modal */}
-      {editingUser && (
-        <EditUserModal
-          user={editingUser}
-          onClose={() => setEditingUser(null)}
-          onSaved={() => {
-            setEditingUser(null);
-            refetch();
-          }}
-        />
-      )}
-
       {/* Add User Modal */}
       {isAddModalOpen && (
         <AddUserModal
@@ -286,6 +409,19 @@ export default function AdminUsersPage() {
           setForm={setAddForm}
           onSubmit={handleAddSubmit}
           loading={addingUser}
+          quota={quota}
+        />
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={() => {
+            setEditingUser(null);
+            refetch();
+          }}
         />
       )}
     </div>
@@ -299,6 +435,7 @@ function AddUserModal({
   setForm,
   onSubmit,
   loading,
+  quota,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -306,15 +443,27 @@ function AddUserModal({
   setForm: (f: any) => void;
   onSubmit: (e: React.FormEvent) => void;
   loading: boolean;
+  quota?: any;
 }) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New User" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title="Create New User Account" size="md">
       <form onSubmit={onSubmit} className="space-y-4">
+        {quota?.isLimitReached ? (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400 space-y-1">
+            <p className="font-bold">Plan User Limit Reached</p>
+            <p>Your {quota.planName} plan allows up to {quota.maxAllowed} users. Please upgrade your plan to add more accounts.</p>
+          </div>
+        ) : (
+          <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs text-text-secondary">
+            Creating account under <strong>{quota?.planName || "Starter"} Plan</strong> ({quota?.currentCount || 0}/{quota?.maxAllowed || 5} used).
+          </div>
+        )}
+
         <Input
           label="Full Name *"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Jane Doe"
+          placeholder="John Smith"
           required
         />
         <Input
@@ -322,7 +471,7 @@ function AddUserModal({
           type="email"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="jane@company.com"
+          placeholder="john@company.com"
           required
         />
         <Input
@@ -333,6 +482,7 @@ function AddUserModal({
           placeholder="••••••••"
           required
         />
+
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="Phone"
@@ -344,29 +494,24 @@ function AddUserModal({
             label="Company"
             value={form.company}
             onChange={(e) => setForm({ ...form, company: e.target.value })}
-            placeholder="Acme Preservation"
+            placeholder="Apex Preservation"
           />
         </div>
+
         <div>
           <label className="block text-xs font-semibold text-text-secondary uppercase mb-1.5">
-            Role
+            Role Assignment *
           </label>
           <select
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value })}
-            className="block w-full rounded-lg border border-border-medium bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-cyan-500 focus:outline-none"
+            className="block w-full rounded-xl border border-border-medium bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-cyan-500 focus:outline-none"
           >
-                    <option value="CLIENT">Client</option>
-                    <option value="CONTRACTOR">Contractor</option>
-                    <option value="COORDINATOR">Coordinator</option>
-                    <option value="INCHARGE_COORDINATOR">Incharge Coordinator</option>
-                    <option value="PROCESSOR">Processor</option>
-                    <option value="PROCESSOR_INCHARGE">Processor Incharge</option>
-                    <option value="ACCOUNTANT">Accountant</option>
-                    <option value="CLIENT_MANAGER">Client Manager</option>
-                    <option value="INCHARGE_CLIENT_MANAGER">Incharge Client Manager</option>
-                    <option value="ADMIN">Admin</option>
-                    <option value="SUPER_ADMIN">Super Admin</option>
+            {ALL_ROLES.filter((r) => r.value !== "ALL").map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -377,9 +522,10 @@ function AddUserModal({
           <Button
             type="submit"
             loading={loading}
-            className="bg-gradient-to-r from-cyan-500 to-blue-600"
+            disabled={quota?.isLimitReached}
+            className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold"
           >
-            Add User
+            Create User Account
           </Button>
         </div>
       </form>
@@ -401,8 +547,9 @@ function EditUserModal({
     email: user.email || "",
     phone: user.phone || "",
     company: user.company || "",
-    role: user.role || "CLIENT",
+    role: user.role || "CONTRACTOR",
     isActive: user.isActive ?? true,
+    newPassword: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -414,24 +561,29 @@ function EditUserModal({
     }
     setSaving(true);
     try {
+      const payload: any = {
+        id: user.id,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        company: form.company.trim() || null,
+        role: form.role,
+        isActive: form.isActive,
+      };
+      if (form.newPassword.trim()) {
+        payload.password = form.newPassword.trim();
+      }
+
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: user.id,
-          name: form.name.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim() || null,
-          company: form.company.trim() || null,
-          role: form.role,
-          isActive: form.isActive,
-        }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed");
-      toast.success("User updated");
+      if (!res.ok) throw new Error("Failed to update user");
+      toast.success("User updated successfully");
       onSaved();
-    } catch {
-      toast.error("Failed to update user");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update user");
     } finally {
       setSaving(false);
     }
@@ -439,109 +591,80 @@ function EditUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-md"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
       <div className="relative w-full max-w-lg mx-4 bg-surface border border-border-medium rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-          <h2 className="text-lg font-bold text-text-primary">Edit User</h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
-          >
+          <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+            <Edit className="h-4 w-4 text-cyan-400" /> Edit User Account
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
-          {/* Avatar preview */}
-          <div className="flex items-center gap-3 mb-2">
-            <Avatar name={form.name} src={user.image} size="lg" />
+          <div className="flex items-center gap-3 mb-2 p-3 rounded-xl bg-surface-hover border border-border-subtle">
+            <Avatar name={form.name} src={user.image} size="md" />
             <div>
-              <p className="text-sm font-semibold text-text-primary">{form.name || "User"}</p>
+              <p className="text-sm font-bold text-text-primary">{form.name || "User"}</p>
               <p className="text-xs text-text-muted">{form.email}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[11px] text-text-muted mb-1 block">
-                Full Name *
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-lg text-sm text-text-primary focus:border-cyan-500/50 focus:outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-text-muted mb-1 block">
-                Email *
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-lg text-sm text-text-primary focus:border-cyan-500/50 focus:outline-none"
-                required
-              />
-            </div>
+            <Input
+              label="Full Name *"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+            <Input
+              label="Email *"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Phone"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="(555) 123-4567"
+            />
+            <Input
+              label="Company"
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+              placeholder="Company name"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[11px] text-text-muted mb-1 block">
-                Phone
-              </label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="(555) 123-4567"
-                className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-lg text-sm text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-text-muted mb-1 block">
-                Company
-              </label>
-              <input
-                type="text"
-                value={form.company}
-                onChange={(e) => setForm({ ...form, company: e.target.value })}
-                placeholder="Company name"
-                className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-lg text-sm text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[11px] text-text-muted mb-1 block">
-                Role
+              <label className="text-xs font-semibold text-text-secondary block mb-1.5">
+                Role Assignment
               </label>
               <select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-lg text-sm text-text-primary focus:border-cyan-500/50 focus:outline-none"
+                className="w-full px-3 py-2 bg-surface-hover border border-border-medium rounded-xl text-xs text-text-primary focus:border-cyan-500 focus:outline-none"
               >
-                <option value="CLIENT">Client</option>
-                <option value="CONTRACTOR">Contractor</option>
-                <option value="COORDINATOR">Coordinator</option>
-                <option value="PROCESSOR">Processor</option>
-                <option value="ADMIN">Admin</option>
+                {ALL_ROLES.filter((r) => r.value !== "ALL").map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
               </select>
             </div>
+
             <div>
-              <label className="text-[11px] text-text-muted mb-1 block">
-                Status
+              <label className="text-xs font-semibold text-text-secondary block mb-1.5">
+                Account Status
               </label>
-              <div className="flex items-center gap-3 h-[42px]">
+              <div className="flex items-center gap-3 h-[38px]">
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, isActive: !form.isActive })}
@@ -557,47 +680,26 @@ function EditUserModal({
                     )}
                   />
                 </button>
-                <span className="text-sm text-text-secondary">
+                <span className="text-xs font-bold text-text-secondary">
                   {form.isActive ? "Active" : "Inactive"}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="pt-3 border-t border-border-subtle">
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="p-2 rounded-lg bg-surface-hover">
-                <p className="text-sm font-bold text-text-primary">
-                  {user._count?.assignedWorkOrders || 0}
-                </p>
-                <p className="text-[10px] text-text-muted">Work Orders</p>
-              </div>
-              <div className="p-2 rounded-lg bg-surface-hover">
-                <p className="text-sm font-bold text-text-primary">
-                  {user._count?.supportTickets || 0}
-                </p>
-                <p className="text-[10px] text-text-muted">Tickets</p>
-              </div>
-              <div className="p-2 rounded-lg bg-surface-hover">
-                <p className="text-sm font-bold text-text-primary">
-                  {user._count?.messages || 0}
-                </p>
-                <p className="text-[10px] text-text-muted">Messages</p>
-              </div>
-            </div>
-          </div>
+          <Input
+            label="Reset Password (Optional)"
+            type="password"
+            value={form.newPassword}
+            onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+            placeholder="Enter new password to change"
+          />
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle mt-4">
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              loading={saving}
-              className="bg-gradient-to-r from-cyan-500 to-blue-600"
-            >
+            <Button type="submit" loading={saving} className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold">
               Save Changes
             </Button>
           </div>
