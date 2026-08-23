@@ -40,7 +40,7 @@ export default function AboutPage() {
             </div>
             <div className="flex items-center gap-3">
               <Link href="/auth/signin"><Button variant="ghost" size="sm">Sign in</Button></Link>
-              <Link href="/auth/signup"><Button size="sm">Get Started</Button></Link>
+              <Link href="/contact"><Button size="sm">Get Started</Button></Link>
             </div>
           </div>
         </div>
@@ -102,7 +102,7 @@ export default function AboutPage() {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Join us</h2>
           <p className="text-text-dim mb-8">Ready to modernize your property preservation workflow?</p>
-          <Link href="/auth/signup">
+          <Link href="/contact">
             <Button size="lg">
               Get started
               <ArrowRight className="h-4 w-4" />

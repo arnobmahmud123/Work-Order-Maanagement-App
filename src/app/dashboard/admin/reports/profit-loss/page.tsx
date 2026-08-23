@@ -47,13 +47,13 @@ export default function ProfitLossPage() {
       const res = await fetch(`/api/finance/transactions?year=${year}`);
       if (res.ok) {
         const data = await res.json();
-        setTransactions(data);
+        setTransactions(Array.isArray(data) ? data : []);
       } else {
-        toast.error("Failed to load financial data");
+        setTransactions([]);
       }
     } catch (err) {
       console.error(err);
-      toast.error("An error occurred loading financials");
+      setTransactions([]);
     } finally {
       setLoading(false);
     }

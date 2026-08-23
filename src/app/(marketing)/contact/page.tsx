@@ -43,7 +43,7 @@ export default function ContactPage() {
             </div>
             <div className="flex items-center gap-3">
               <Link href="/auth/signin"><Button variant="ghost" size="sm">Sign in</Button></Link>
-              <Link href="/auth/signup"><Button size="sm">Get Started</Button></Link>
+              <Link href="/contact"><Button size="sm">Get Started</Button></Link>
             </div>
           </div>
         </div>

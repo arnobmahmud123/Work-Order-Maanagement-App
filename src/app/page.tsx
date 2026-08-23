@@ -207,7 +207,7 @@ export default function HomePage() {
               <Link href="/auth/signin">
                 <Button variant="ghost" size="sm">Sign in</Button>
               </Link>
-              <Link href="/auth/signup">
+              <Link href="/contact">
                 <Button size="sm">
                   Get Started
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -633,7 +633,7 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/auth/signup">
+                <Link href="/contact">
                   <Button
                     variant={plan.popular ? "primary" : "outline"}
                     className="w-full"
@@ -662,7 +662,7 @@ export default function HomePage() {
             Join hundreds of property preservation companies already using PropPreserve.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/auth/signup">
+            <Link href="/contact">
               <Button size="lg" className="bg-white text-cyan-600 hover:bg-white/90 shadow-xl shadow-black/20 text-base px-8 py-4 font-bold">
                 Get started today
                 <ArrowRight className="h-5 w-5" />
@@ -706,15 +706,30 @@ export default function HomePage() {
             {[
               {
                 title: "Product",
-                links: ["Features", "Services", "Pricing", "Integrations"],
+                items: [
+                  { label: "Features", href: "#features" },
+                  { label: "Services", href: "/services" },
+                  { label: "Pricing", href: "#pricing" },
+                  { label: "Integrations", href: "/services" },
+                ],
               },
               {
                 title: "Company",
-                links: ["About", "Blog", "Careers", "Contact"],
+                items: [
+                  { label: "About", href: "/about" },
+                  { label: "Blog", href: "/about" },
+                  { label: "Careers", href: "/contact" },
+                  { label: "Contact", href: "/contact" },
+                ],
               },
               {
                 title: "Legal",
-                links: ["Privacy", "Terms", "Security", "Compliance"],
+                items: [
+                  { label: "Privacy", href: "/privacy" },
+                  { label: "Terms", href: "/terms" },
+                  { label: "Security", href: "/privacy" },
+                  { label: "Compliance", href: "/terms" },
+                ],
               },
             ].map((col) => (
               <div key={col.title}>
@@ -722,10 +737,10 @@ export default function HomePage() {
                   {col.title}
                 </h4>
                 <ul className="space-y-2.5">
-                  {col.links.map((link) => (
-                    <li key={link}>
-                      <Link href="#" className="text-sm text-text-muted hover:text-text-primary transition-colors">
-                        {link}
+                  {col.items.map((item) => (
+                    <li key={item.label}>
+                      <Link href={item.href} className="text-sm text-text-muted hover:text-text-primary transition-colors">
+                        {item.label}
                       </Link>
                     </li>
                   ))}

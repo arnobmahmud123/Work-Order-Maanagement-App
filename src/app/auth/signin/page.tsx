@@ -89,10 +89,10 @@ export default function SignIn() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-text-muted">
-            Don&apos;t have an account?{" "}
-            <Link href="/auth/signup" className="text-cyan-400 font-medium hover:text-cyan-300 transition-colors">
-              Sign up
+          <div className="mt-6 text-center text-xs text-text-muted">
+            Need access or an account?{" "}
+            <Link href="/contact" className="text-cyan-400 font-medium hover:text-cyan-300 transition-colors">
+              Contact Administrator
             </Link>
           </div>
         </div>
