@@ -252,26 +252,37 @@ export default function ConnectorsAdminPage() {
         // Extract key preservation fields using regex heuristics
         const extracted: Record<string, any> = {
           "Work Order #": file.name.replace(/\.[^/.]+$/, ""),
+          "Service": "Property Preservation",
           "Property Address": "",
           "City": "",
           "State": "",
           "Zip": "",
-          "Service": "Property Preservation",
           "Due Date": new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
           "Lock Code": "",
           "Gate Code": "",
-          "Instructions": fullTextLines.slice(0, 15).join("\n"),
+          "Customer": "",
+          "Loan Number": "",
+          "Loan Type": "",
+          "Ordered Date": "",
+          "Investor Type": "",
+          "Instructions": "", // Will hold parsed tasks
         };
 
         const joinedText = fullTextLines.join(" ");
 
-        // WO Number match
-        const woMatch = joinedText.match(/(?:WO|Work\s*Order|Order|Task|Ref|Case)[\s#:-]+([A-Z0-9-]{4,20})/i);
+        // MCS WO#: M15532300 or similar
+        const woMatch = joinedText.match(/(?:MCS\s*WO#|WO\s*#|Work\s*Order|Order|Task|Ref|Case)[\s#:-]+([A-Z0-9-]{4,20})/i);
         if (woMatch) extracted["Work Order #"] = woMatch[1].trim();
 
-        // Address match
-        const addrMatch = joinedText.match(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy))/i);
-        if (addrMatch) extracted["Property Address"] = addrMatch[1].trim();
+        // Address Match - Avoid vendor address by checking near "Mortgager Information" or just grabbing standard pattern
+        // Usually the first address after vendor is the property
+        const addresses = [...joinedText.matchAll(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))/gi)];
+        if (addresses.length > 0) {
+          // If we find multiple, usually the property is either the 1st or 2nd. 
+          // We will just take the first one for now, or second if we know the first is the vendor.
+          // Let's use the first one that appears, unless it's explicitly labeled Vendor.
+          extracted["Property Address"] = addresses[0][1].trim();
+        }
 
         // City, State, Zip match
         const cszMatch = joinedText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
@@ -281,13 +292,50 @@ export default function ConnectorsAdminPage() {
           extracted["Zip"] = cszMatch[3].trim();
         }
 
+        // Specific MCS Fields
+        const custMatch = joinedText.match(/Customer:\s*([A-Z0-9]+)/i);
+        if (custMatch) extracted["Customer"] = custMatch[1].trim();
+
+        const loanMatch = joinedText.match(/Loan\s*Number:\s*([^\n]+)/i);
+        if (loanMatch) extracted["Loan Number"] = loanMatch[1].trim();
+
+        const loanTypeMatch = joinedText.match(/Loan\s*Type:\s*([^\n]+)/i);
+        if (loanTypeMatch) extracted["Loan Type"] = loanTypeMatch[1].trim();
+
+        const orderedMatch = joinedText.match(/Ordered\s*Date:\s*([^\n]+)/i);
+        if (orderedMatch) extracted["Ordered Date"] = orderedMatch[1].trim();
+
+        const invMatch = joinedText.match(/Investor\s*Type:\s*([^\n]+)/i);
+        if (invMatch) extracted["Investor Type"] = invMatch[1].trim();
+
+        const svcMatch = joinedText.match(/WO\s*Type:\s*([^\n]+)/i);
+        if (svcMatch) extracted["Service"] = svcMatch[1].trim();
+
         // Lock code match
-        const lockMatch = joinedText.match(/(?:Lock|Lockbox|Combo|Key\s*Code)[\s#:-]+([A-Za-z0-9-]{3,10})/i);
+        const lockMatch = joinedText.match(/(?:Lock|Lockbox|Combo|Key\s*Code|keycode(?:\(s\))?)[^\d]*(\d{3,10})/i);
         if (lockMatch) extracted["Lock Code"] = lockMatch[1].trim();
 
         // Due date match
-        const dueMatch = joinedText.match(/(?:Due|Complete\s*By|Deadline)[\s#:-]+(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i);
+        const dueMatch = joinedText.match(/(?:Due(?:\s*Date)?|Complete\s*By|Deadline)[\s#:-]*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i);
         if (dueMatch) extracted["Due Date"] = dueMatch[1].trim();
+
+        // Tasks parsing from Description / Additional Instructions block
+        // Find everything between "Description Additional Instructions" and "Current Damages" or end
+        let tasksRaw = "";
+        const descIndex = joinedText.indexOf("Description Additional Instructions");
+        const damagesIndex = joinedText.indexOf("Current Damages");
+        
+        if (descIndex !== -1 && damagesIndex !== -1 && damagesIndex > descIndex) {
+            tasksRaw = joinedText.substring(descIndex + "Description Additional Instructions".length, damagesIndex);
+        } else if (descIndex !== -1) {
+            tasksRaw = joinedText.substring(descIndex + "Description Additional Instructions".length);
+        }
+        
+        if (tasksRaw) {
+            extracted["Instructions"] = "Tasks:\n" + tasksRaw.trim();
+        } else {
+            extracted["Instructions"] = fullTextLines.slice(0, 20).join("\n");
+        }
 
         const headers = Object.keys(extracted);
         setFileHeaders(headers);

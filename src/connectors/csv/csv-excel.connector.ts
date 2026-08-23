@@ -209,6 +209,7 @@ export class CsvExcelConnector implements WorkOrderConnector {
           keyCode: mapping.keyCode ? String(row[mapping.keyCode] || "") : undefined,
           instructions: mapping.instructions ? String(row[mapping.instructions] || "") : undefined,
           rawPayload: row,
+          metadata: { ...row },
         });
         validCount++;
         if (warnings.length > 0) warningCount++;
