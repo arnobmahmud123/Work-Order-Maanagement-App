@@ -1974,6 +1974,10 @@ function ChatArea({
           isOpen={showCall}
           onClose={() => setShowCall(false)}
           callType={callType}
+          channelId={channel?.id}
+          channelName={channel?.name}
+          targetUserId={isDM && otherUser ? otherUser.id : undefined}
+          targetUserName={isDM && otherUser ? otherUser.name : undefined}
           participants={
             isDM && otherUser
               ? [
@@ -1989,7 +1993,6 @@ function ChatArea({
                   image: m.user?.image,
                 }))
           }
-          channelName={channel?.name}
         />
       )}
 

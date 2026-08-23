@@ -1932,7 +1932,7 @@ export default function WorkOrderDetailPage({
     CANCELLED: "bg-surface-hover text-text-secondary",
   };
 
-  const canEdit = ["ADMIN", "COORDINATOR", "PROCESSOR"].includes(role);
+  const canEdit = ["ADMIN", "SUPER_ADMIN", "COORDINATOR", "INCHARGE_COORDINATOR", "PROCESSOR", "PROCESSOR_INCHARGE", "CLIENT_MANAGER", "INCHARGE_CLIENT_MANAGER"].includes(role);
   const canAssign = ["ADMIN", "COORDINATOR"].includes(role);
 
   async function handleStatusChange() {
@@ -2230,6 +2230,33 @@ export default function WorkOrderDetailPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start w-full md:w-auto mt-4 md:mt-0">
+            {/* Quick Status Changer for Admin / Coordinator / Processor */}
+            {canEdit && (
+              <div className="flex items-center gap-1.5 bg-surface-hover/80 border border-cyan-500/30 rounded-xl px-2.5 py-1.5 shadow-md">
+                <Activity className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider hidden sm:inline">Status:</span>
+                <select
+                  value={workOrder.status}
+                  onChange={async (e) => {
+                    const nextSt = e.target.value;
+                    try {
+                      await updateMutation.mutateAsync({ status: nextSt });
+                      toast.success(`Status changed to ${STATUS_LABELS[nextSt] || nextSt}`);
+                    } catch {
+                      toast.error("Failed to update status");
+                    }
+                  }}
+                  disabled={updateMutation.isPending}
+                  className="bg-transparent text-xs font-bold text-cyan-300 focus:outline-none cursor-pointer"
+                >
+                  {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                    <option key={val} value={val} className="bg-slate-900 text-white">
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {/* Submit Work Order Button with Automated Quality & Photo Checks */}
             <button
               onClick={() => setShowSubmissionModal(true)}

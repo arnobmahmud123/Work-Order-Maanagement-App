@@ -15,10 +15,11 @@ import {
   MoreHorizontal,
   X,
   Volume2,
+  Activity,
 } from "lucide-react";
 import { playRingtoneSound, playCallConnectSound, playCallEndSound } from "@/lib/sounds";
 
-type CallStatus = "ringing" | "connected" | "ended";
+type CallStatus = "ringing" | "connected" | "ended" | "declined";
 
 interface CallParticipant {
   id: string;
@@ -34,6 +35,11 @@ interface CallOverlayProps {
   callType: "audio" | "video";
   participants: CallParticipant[];
   channelName?: string;
+  channelId?: string;
+  targetUserId?: string;
+  targetUserName?: string;
+  callSessionId?: string;
+  isIncomingAcceptor?: boolean;
 }
 
 export function CallOverlay({
@@ -42,65 +48,170 @@ export function CallOverlay({
   callType,
   participants,
   channelName,
+  channelId,
+  targetUserId,
+  targetUserName,
+  callSessionId: initialCallSessionId,
+  isIncomingAcceptor = false,
 }: CallOverlayProps) {
-  const [status, setStatus] = useState<CallStatus>("ringing");
+  const [status, setStatus] = useState<CallStatus>(isIncomingAcceptor ? "connected" : "ringing");
+  const [sessionId, setSessionId] = useState<string | null>(initialCallSessionId || null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(callType === "audio");
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const ringIntervalRef = useRef<any>(null);
+
+  // 1. Initialize call session & microphone audio stream
   useEffect(() => {
     if (!isOpen) {
       setStatus("ringing");
       setElapsed(0);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
+      cleanupStreams();
       return;
     }
 
-    // Play ringtone on dial
-    playRingtoneSound();
-    const ringInterval = setInterval(() => {
-      playRingtoneSound();
-    }, 2500);
+    let isMounted = true;
 
-    // Auto-connect after 2.5s
-    const connectTimer = setTimeout(() => {
-      clearInterval(ringInterval);
-      setStatus("connected");
-      playCallConnectSound();
-
-      // Attempt to access local mic / camera
-      if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
-        navigator.mediaDevices
-          .getUserMedia({ audio: true, video: callType === "video" })
-          .then((stream) => {
-            streamRef.current = stream;
-            if (localVideoRef.current && callType === "video") {
-              localVideoRef.current.srcObject = stream;
-            }
-          })
-          .catch(() => {
-            // Safe fallback if browser permissions denied
+    async function initCall() {
+      // Capture local mic / video
+      try {
+        if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+            video: callType === "video",
           });
+          streamRef.current = stream;
+          if (localVideoRef.current && callType === "video") {
+            localVideoRef.current.srcObject = stream;
+          }
+        }
+      } catch (e) {
+        console.warn("Microphone/Camera access not available or denied:", e);
       }
-    }, 2500);
+
+      // If caller, create call session on backend to alert recipient
+      if (!isIncomingAcceptor && !sessionId) {
+        try {
+          const res = await fetch("/api/chat/calls", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channelId: channelId || "general",
+              channelName: channelName || "Direct Call",
+              targetUserId: targetUserId || participants[0]?.id,
+              targetUserName: targetUserName || participants[0]?.name,
+              callType,
+            }),
+          });
+          const data = await res.json();
+          if (data.call?.id && isMounted) {
+            setSessionId(data.call.id);
+          }
+        } catch {}
+
+        // Play ringing sound for caller
+        playRingtoneSound();
+        ringIntervalRef.current = setInterval(() => {
+          playRingtoneSound();
+        }, 2500);
+      } else {
+        // Connected directly for acceptor
+        setStatus("connected");
+        playCallConnectSound();
+      }
+    }
+
+    initCall();
 
     return () => {
-      clearInterval(ringInterval);
-      clearTimeout(connectTimer);
+      isMounted = false;
+      if (ringIntervalRef.current) {
+        clearInterval(ringIntervalRef.current);
+        ringIntervalRef.current = null;
+      }
     };
-  }, [isOpen, callType]);
+  }, [isOpen, callType, isIncomingAcceptor]);
 
+  // 2. Poll call status for changes (Accept, Decline, End) & WebRTC Signaling
+  useEffect(() => {
+    if (!isOpen || !sessionId) return;
+    let isMounted = true;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/chat/calls/${sessionId}/status`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data.status === "connected" && status === "ringing") {
+            if (ringIntervalRef.current) {
+              clearInterval(ringIntervalRef.current);
+              ringIntervalRef.current = null;
+            }
+            setStatus("connected");
+            playCallConnectSound();
+          } else if (data.status === "declined" || data.status === "ended") {
+            handleEnd(false);
+          }
+        }
+      } catch {}
+    }, 1200);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isOpen, sessionId, status]);
+
+  // 3. Timer counter when connected
   useEffect(() => {
     if (status !== "connected") return;
     const interval = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(interval);
   }, [status]);
+
+  function cleanupStreams() {
+    if (ringIntervalRef.current) {
+      clearInterval(ringIntervalRef.current);
+      ringIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+  }
+
+  async function handleEnd(notifyBackend = true) {
+    if (ringIntervalRef.current) {
+      clearInterval(ringIntervalRef.current);
+      ringIntervalRef.current = null;
+    }
+    playCallEndSound();
+    setStatus("ended");
+    cleanupStreams();
+
+    if (notifyBackend && sessionId) {
+      try {
+        await fetch(`/api/chat/calls/${sessionId}/end`, { method: "POST" });
+      } catch {}
+    }
+
+    setTimeout(onClose, 1000);
+  }
 
   function formatTime(seconds: number) {
     const m = Math.floor(seconds / 60);
@@ -108,27 +219,19 @@ export function CallOverlay({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   }
 
-  function handleEnd() {
-    playCallEndSound();
-    setStatus("ended");
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    setTimeout(onClose, 1000);
-  }
-
   function toggleMute() {
-    setIsMuted(!isMuted);
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
     if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((t) => (t.enabled = isMuted));
+      streamRef.current.getAudioTracks().forEach((t) => (t.enabled = !nextMuted));
     }
   }
 
   function toggleVideo() {
-    setIsVideoOff(!isVideoOff);
+    const nextVideoOff = !isVideoOff;
+    setIsVideoOff(nextVideoOff);
     if (streamRef.current) {
-      streamRef.current.getVideoTracks().forEach((t) => (t.enabled = isVideoOff));
+      streamRef.current.getVideoTracks().forEach((t) => (t.enabled = !nextVideoOff));
     }
   }
 
@@ -136,8 +239,10 @@ export function CallOverlay({
 
   return (
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/80 backdrop-blur-md">
+      {/* Hidden audio for remote voice */}
+      <audio ref={remoteAudioRef} autoPlay />
+
       <div className="relative w-full max-w-lg mx-4">
-        {/* Main call container */}
         <div className="bg-surface border border-border-medium rounded-3xl shadow-2xl shadow-black/50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-surface-hover/30">
@@ -153,7 +258,7 @@ export function CallOverlay({
               )}
               <div>
                 <span className="text-sm font-bold text-text-primary">
-                  {callType === "video" ? "HD Video Call" : "Internal Voice Call"}
+                  {callType === "video" ? "HD Video Call" : "HD Audio Call"}
                 </span>
                 {channelName && (
                   <span className="text-xs text-text-muted ml-2">in #{channelName}</span>
@@ -161,7 +266,7 @@ export function CallOverlay({
               </div>
             </div>
             <button
-              onClick={handleEnd}
+              onClick={() => handleEnd(true)}
               className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
             >
               <X className="h-4 w-4" />
@@ -186,13 +291,8 @@ export function CallOverlay({
                   <h3 className="text-lg font-black text-text-primary">
                     {participants[0]?.name || "Team Member"}
                   </h3>
-                  {participants.length > 1 && (
-                    <p className="text-xs text-text-muted mt-0.5">
-                      +{participants.length - 1} team participants
-                    </p>
-                  )}
                   <p className="text-xs font-bold text-cyan-400 mt-2 animate-pulse flex items-center justify-center gap-1.5">
-                    <Volume2 className="h-3.5 w-3.5" /> Calling team member...
+                    <Volume2 className="h-3.5 w-3.5" /> Calling & waiting for answer...
                   </p>
                 </div>
               </div>
@@ -210,7 +310,7 @@ export function CallOverlay({
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs text-white">
-                      <span className="font-semibold">{participants[0]?.name || "Local Video"}</span>
+                      <span className="font-semibold">{participants[0]?.name || "Voice Connected"}</span>
                       {isMuted && <MicOff className="h-3 w-3 text-red-400" />}
                     </div>
                   </div>
@@ -230,9 +330,10 @@ export function CallOverlay({
                     <p className="text-sm font-bold text-text-primary">
                       {participants.map((p) => p.name).join(", ")}
                     </p>
-                    <span className="text-[11px] text-emerald-400 font-semibold mt-1">
-                      ● Connected (HD Audio)
-                    </span>
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold mt-1.5 bg-emerald-500/10 px-3 py-0.5 rounded-full border border-emerald-500/20">
+                      <Activity className="h-3 w-3 animate-pulse" />
+                      Connected (Live HD Audio)
+                    </div>
                   </div>
                 )}
 
@@ -299,7 +400,7 @@ export function CallOverlay({
               </button>
 
               <button
-                onClick={handleEnd}
+                onClick={() => handleEnd(true)}
                 className="p-3.5 rounded-full bg-rose-600 text-white hover:bg-rose-500 transition-all shadow-lg shadow-rose-600/30"
                 title="End Call"
               >

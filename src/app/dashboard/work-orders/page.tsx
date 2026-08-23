@@ -1014,12 +1014,44 @@ function WorkOrdersContent() {
             {!wo.city && !wo.state && !wo.zipCode && !wo.property?.city && !wo.property?.state && !wo.property?.zipCode && <span className="text-text-dim">—</span>}
           </div>
         );
-      case "status":
-        return (
+      case "status": {
+        const canEditStatus = ["ADMIN", "SUPER_ADMIN", "COORDINATOR", "INCHARGE_COORDINATOR", "PROCESSOR", "PROCESSOR_INCHARGE"].includes(role);
+        return canEditStatus ? (
+          <select
+            value={wo.status}
+            onClick={(e) => e.stopPropagation()}
+            onChange={async (e) => {
+              const nextStatus = e.target.value;
+              try {
+                const res = await fetch(`/api/work-orders/${wo.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ status: nextStatus }),
+                });
+                if (res.ok) {
+                  toast.success(`Status updated to ${STATUS_LABELS[nextStatus] || nextStatus}`);
+                  refetch();
+                } else {
+                  toast.error("Failed to update status");
+                }
+              } catch {
+                toast.error("Failed to update status");
+              }
+            }}
+            className={cn("px-2 py-0.5 text-[10px] font-semibold rounded-md border cursor-pointer focus:outline-none", STATUS_PILL_COLORS[wo.status] || "bg-gray-500/10 text-text-secondary border-gray-500/20")}
+          >
+            {Object.entries(STATUS_LABELS).map(([val, label]) => (
+              <option key={val} value={val} className="bg-slate-900 text-white text-xs">
+                {label}
+              </option>
+            ))}
+          </select>
+        ) : (
           <span className={cn("inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-md border", STATUS_PILL_COLORS[wo.status] || "bg-gray-500/10 text-text-secondary border-gray-500/20")}>
             {STATUS_LABELS[wo.status] || wo.status}
           </span>
         );
+      }
       case "contractor": {
         // Count messages/threads for this work order
         const messageCount = wo._count?.threads || 0;
