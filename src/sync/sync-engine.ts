@@ -246,7 +246,7 @@ export class SyncEngine {
                 order.services[0]?.serviceCode || "OTHER",
                 order.status || "NEW",
                 typeof order.assignment.priority === "number" ? order.assignment.priority : 0,
-                order.assignment.dueAt || null,
+                (order.assignment?.dueAt ? (isNaN(Date.parse(order.assignment.dueAt)) ? order.assignment.dueAt : new Date(order.assignment.dueAt).toISOString()) : null),
                 order.property.lockCode || null,
                 order.property.lockboxLocation || null,
                 order.property.gateCode || null,
