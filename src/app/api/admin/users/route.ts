@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { hashSync } from "bcrypt-edge";
+import { getPlanConfig, getMaxUsersForPlan } from "@/lib/plans";
 
 export async function GET(req: NextRequest) {
   try {
@@ -62,16 +63,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const planDefaults: Record<string, number> = {
-      TRIAL: 5,
-      STARTER: 5,
-      PROFESSIONAL: 25,
-      PREMIUM: 500,
-      ENTERPRISE: 10000,
-    };
-
-    const planName = (activeCompany?.plan || "STARTER").toUpperCase();
-    const maxAllowed = userRole === "SUPER_ADMIN" ? 10000 : (activeCompany?.maxUsers || planDefaults[planName] || 5);
+    const planConfig = getPlanConfig(activeCompany?.plan);
+    const planName = planConfig.name.toUpperCase();
+    const maxAllowed = userRole === "SUPER_ADMIN" ? 10000 : getMaxUsersForPlan(activeCompany?.plan, activeCompany?.maxUsers);
     const currentCount = await prisma.user.count({
       where: companyId && userRole !== "SUPER_ADMIN" ? { companyId } : {},
     });
@@ -218,16 +212,9 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const planDefaults: Record<string, number> = {
-        TRIAL: 5,
-        STARTER: 5,
-        PROFESSIONAL: 25,
-        PREMIUM: 500,
-        ENTERPRISE: 10000,
-      };
-
-      const planName = (activeCompany?.plan || "STARTER").toUpperCase();
-      const maxAllowed = activeCompany?.maxUsers || planDefaults[planName] || 5;
+      const planConfig = getPlanConfig(activeCompany?.plan);
+      const planName = planConfig.name.toUpperCase();
+      const maxAllowed = getMaxUsersForPlan(activeCompany?.plan, activeCompany?.maxUsers);
 
       const activeUserCount = await prisma.user.count({
         where: companyId ? { companyId } : {},

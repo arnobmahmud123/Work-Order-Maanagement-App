@@ -367,10 +367,12 @@ export default function SuperAdminPortal() {
                 onChange={(e) => setFormPlan(e.target.value)}
                 className="block w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-text-primary focus:border-cyan-500 focus:outline-none h-9"
               >
-                <option value="TRIAL">TRIAL</option>
-                <option value="BASIC">BASIC</option>
-                <option value="PROFESSIONAL">PROFESSIONAL</option>
-                <option value="ENTERPRISE">ENTERPRISE</option>
+                <option value="TRIAL">TRIAL (5 Users)</option>
+                <option value="STARTER">STARTER (5 Users)</option>
+                <option value="BASIC">BASIC (5 Users)</option>
+                <option value="PROFESSIONAL">PROFESSIONAL (25 Users)</option>
+                <option value="PREMIUM">PREMIUM (500 Users)</option>
+                <option value="ENTERPRISE">ENTERPRISE (10,000 Users)</option>
                 <option value="CUSTOM">CUSTOM</option>
               </select>
             </div>
