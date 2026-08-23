@@ -44,7 +44,7 @@ export class DuplicateService {
       if (order.property.address1 && order.property.city && order.property.state) {
         const addressMatch = await db
           .prepare(
-            `SELECT id, metadata FROM work_orders 
+            `SELECT id, metadata FROM WorkOrder 
              WHERE LOWER(address) LIKE ? AND LOWER(city) = ? AND UPPER(state) = ? 
              AND status NOT IN ('CANCELLED', 'CLOSED') LIMIT 1`
           )

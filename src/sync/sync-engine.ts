@@ -103,7 +103,7 @@ export class SyncEngine {
           if (dupeResult.isDuplicate && dupeResult.existingWorkOrderId) {
             // Check for changes
             const existingWo = await db
-              .prepare(`SELECT * FROM work_orders WHERE id = ? LIMIT 1`)
+              .prepare(`SELECT * FROM WorkOrder WHERE id = ? LIMIT 1`)
               .bind(dupeResult.existingWorkOrderId)
               .first() as any;
 
@@ -114,7 +114,7 @@ export class SyncEngine {
                 // Update existing work order
                 await db
                   .prepare(
-                    `UPDATE work_orders SET 
+                    `UPDATE WorkOrder SET 
                       status = COALESCE(?, status),
                       dueDate = COALESCE(?, dueDate),
                       serviceType = COALESCE(?, serviceType),
@@ -185,7 +185,7 @@ export class SyncEngine {
 
             await db
               .prepare(
-                `INSERT INTO work_orders (
+                `INSERT INTO WorkOrder (
                   id, title, description, address, city, state, zipCode, 
                   serviceType, status, priority, dueDate, 
                   lockCode, lockboxLocation, gateCode, keyCode, keycodeLocation, 

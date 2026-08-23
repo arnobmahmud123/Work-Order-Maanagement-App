@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       .prepare(
         `SELECT s.*, w.title as workOrderTitle, w.address as workOrderAddress, c.name as connectorName, c.connectorKey
          FROM work_order_submissions s
-         LEFT JOIN work_orders w ON s.workOrderId = w.id
+         LEFT JOIN WorkOrder w ON s.workOrderId = w.id
          LEFT JOIN connectors c ON s.connectorId = c.id
          ORDER BY s.attemptedAt DESC LIMIT 50`
       )
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // 1. Validate work order for client submission
     if (action === "validate") {
       const wo = await db
-        .prepare(`SELECT * FROM work_orders WHERE id = ? LIMIT 1`)
+        .prepare(`SELECT * FROM WorkOrder WHERE id = ? LIMIT 1`)
         .bind(workOrderId)
         .first<any>();
 
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // 2. Submit to external client connector
     if (action === "submit") {
       const wo = await db
-        .prepare(`SELECT * FROM work_orders WHERE id = ? LIMIT 1`)
+        .prepare(`SELECT * FROM WorkOrder WHERE id = ? LIMIT 1`)
         .bind(workOrderId)
         .first<any>();
 

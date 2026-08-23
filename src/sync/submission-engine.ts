@@ -121,7 +121,7 @@ export class SubmissionEngine {
 
         if (result.success) {
           await db
-            .prepare(`UPDATE work_orders SET status = 'PENDING_REVIEW', updatedAt = CURRENT_TIMESTAMP WHERE id = ?`)
+            .prepare(`UPDATE WorkOrder SET status = 'PENDING_REVIEW', updatedAt = CURRENT_TIMESTAMP WHERE id = ?`)
             .bind(workOrderId)
             .run();
         }
