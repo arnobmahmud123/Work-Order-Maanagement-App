@@ -2390,11 +2390,11 @@ export default function WorkOrderDetailPage({
             </div>
           )}
 
-          {workOrder.createdBy && (
+          {workOrder.createdBy && workOrder.createdBy.role === "CLIENT" && !workOrder.createdBy.name?.toLowerCase().includes("admin") && (
             <div className="flex items-center gap-2.5 bg-surface-hover/90 px-3.5 py-1.5 rounded-2xl border border-border-subtle">
               <Avatar name={workOrder.createdBy.name} src={workOrder.createdBy.image} size="xs" />
               <div className="text-xs">
-                <p className="text-text-muted font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Client / Created By</p>
+                <p className="text-text-muted font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Client</p>
                 <p className="text-text-primary font-bold">{workOrder.createdBy.name}</p>
               </div>
             </div>
@@ -4497,7 +4497,7 @@ function WorkOrderQuickViewModal({
                 </div>
               </div>
             )}
-            {workOrder.createdBy && (
+            {workOrder.createdBy && workOrder.createdBy.role === "CLIENT" && !workOrder.createdBy.name?.toLowerCase().includes("admin") && (
               <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-hover border border-border-subtle">
                 <Avatar name={workOrder.createdBy.name} src={workOrder.createdBy.image} size="sm" />
                 <div>
