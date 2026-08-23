@@ -8,6 +8,8 @@ export interface SyncExecutionOptions {
   connectorId: string;
   connectorKey: string;
   clientId?: string;
+  companyId?: string;
+  createdById?: string;
   syncType?: "NEW_WORK_ORDERS" | "UPDATED_WORK_ORDERS" | "MANUAL_BATCH";
   db: any;
   customOrders?: NormalizedWorkOrder[];
@@ -32,6 +34,7 @@ export class SyncEngine {
     const startTime = Date.now();
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const { connectorId, connectorKey, db } = options;
+    const effectiveCompanyId = options.companyId || "cmrwl4vwd0001oocwyt5b5v0a";
 
     let recordsProcessed = 0;
     let recordsCreated = 0;
@@ -122,6 +125,7 @@ export class SyncEngine {
                       gateCode = COALESCE(?, gateCode),
                       keyCode = COALESCE(?, keyCode),
                       specialInstructions = COALESCE(?, specialInstructions),
+                      company_id = COALESCE(company_id, ?),
                       updatedAt = CURRENT_TIMESTAMP
                      WHERE id = ?`
                   )
@@ -133,6 +137,7 @@ export class SyncEngine {
                     order.property.gateCode || existingWo.gateCode,
                     order.property.keyCode || existingWo.keyCode,
                     order.instructions || existingWo.specialInstructions,
+                    effectiveCompanyId,
                     dupeResult.existingWorkOrderId
                   )
                   .run();
@@ -167,7 +172,40 @@ export class SyncEngine {
               recordsUpdated++;
             }
           } else {
-            // 4. Create New Canonical Work Order
+            // 4. Find or Create Property Record in D1
+            let propertyId: string | null = null;
+            if (db && order.property.address1) {
+              try {
+                const existingProp = await db
+                  .prepare(`SELECT id FROM Property WHERE address = ? AND (company_id = ? OR company_id IS NULL) LIMIT 1`)
+                  .bind(order.property.address1.trim(), effectiveCompanyId)
+                  .first() as any;
+
+                if (existingProp?.id) {
+                  propertyId = existingProp.id;
+                } else {
+                  propertyId = `prop_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                  await db
+                    .prepare(
+                      `INSERT INTO Property (id, address, city, state, zipCode, company_id, createdAt, updatedAt)
+                       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+                    )
+                    .bind(
+                      propertyId,
+                      order.property.address1.trim(),
+                      order.property.city || null,
+                      order.property.state || null,
+                      order.property.zip || null,
+                      effectiveCompanyId
+                    )
+                    .run();
+                }
+              } catch (propErr) {
+                console.warn("[SyncEngine] Property lookup/creation failed:", propErr);
+              }
+            }
+
+            // 5. Create New Canonical Work Order
             const newWoId = `wo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
             const tasksJson = JSON.stringify(
               order.services.map((s, idx) => ({
@@ -189,12 +227,12 @@ export class SyncEngine {
                   id, title, description, address, city, state, zipCode, 
                   serviceType, status, priority, dueDate, 
                   lockCode, lockboxLocation, gateCode, keyCode, keycodeLocation, 
-                  lotSize, lawnSize, specialInstructions, tasks, metadata, createdAt, updatedAt
+                  lotSize, lawnSize, specialInstructions, tasks, metadata, propertyId, createdById, company_id, createdAt, updatedAt
                 ) VALUES (
                   ?, ?, ?, ?, ?, ?, ?, 
                   ?, ?, ?, ?, 
                   ?, ?, ?, ?, ?, 
-                  ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                  ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )`
               )
               .bind(
@@ -224,7 +262,10 @@ export class SyncEngine {
                   externalWorkOrderId: order.externalWorkOrderId,
                   financials: order.financials,
                   metadata: order.metadata,
-                })
+                }),
+                propertyId,
+                options.createdById || null,
+                effectiveCompanyId
               )
               .run();
 
@@ -256,7 +297,7 @@ export class SyncEngine {
       const durationMs = Date.now() - startTime;
       const finalStatus = recordsFailed === 0 ? "COMPLETED" : recordsCreated > 0 ? "PARTIAL" : "FAILED";
 
-      // 5. Update sync state & connector health
+      // 6. Update sync state & connector health
       if (db) {
         try {
           await db

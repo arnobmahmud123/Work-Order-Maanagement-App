@@ -58,11 +58,17 @@ export async function POST(request: NextRequest) {
 
       const allOrders = [...validOrders, ...remainingOrders];
 
+      const user = session?.user as any;
+      const companyId = user?.companyId || "cmrwl4vwd0001oocwyt5b5v0a";
+      const createdById = user?.id || null;
+
       const syncEngine = new SyncEngine();
       const result = await syncEngine.runSync({
         connectorId: "conn_file_universal",
         connectorKey: "csv_excel",
         clientId: clientId || "cli_custom_file",
+        companyId,
+        createdById,
         syncType: "MANUAL_BATCH",
         customOrders: allOrders,
         db,

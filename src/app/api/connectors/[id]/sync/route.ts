@@ -28,10 +28,16 @@ export async function POST(
     initializeConnectors();
     const syncEngine = new SyncEngine();
 
+    const user = session?.user as any;
+    const companyId = user?.companyId || "cmrwl4vwd0001oocwyt5b5v0a";
+    const createdById = user?.id || null;
+
     const result = await syncEngine.runSync({
       connectorId: connector.id,
       connectorKey: connector.connectorKey,
       clientId: connector.clientId,
+      companyId,
+      createdById,
       syncType: "NEW_WORK_ORDERS",
       db,
     });

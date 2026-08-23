@@ -803,6 +803,32 @@ export default function ConnectorsAdminPage() {
               </label>
             )}
 
+            {importSuccessResult && (
+              <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-scale-in">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-2.5 rounded-xl bg-emerald-500 text-slate-950 font-black">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-emerald-400">
+                      Work Orders Imported Successfully!
+                    </h4>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      Created: <span className="text-emerald-300 font-bold">+{importSuccessResult.recordsCreated}</span> • Updated: <span className="text-cyan-300 font-bold">{importSuccessResult.recordsUpdated}</span> in {importSuccessResult.durationMs}ms
+                    </p>
+                  </div>
+                </div>
+
+                <a
+                  href="/dashboard/work-orders"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 transition-all whitespace-nowrap"
+                >
+                  View in Work Orders Dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </div>
+            )}
+
             {importFile && (
               <div className="p-4 rounded-xl bg-surface-hover/80 border border-border-medium flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
