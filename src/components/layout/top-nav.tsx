@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useNotifications } from "@/hooks/use-data";
 import { Avatar } from "@/components/ui/avatar";
-import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles } from "lucide-react";
+import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles, Users, CreditCard, Shield, Zap } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { formatRelativeTime, cn } from "@/lib/utils";
@@ -250,37 +250,56 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
                   <p className="text-xs text-text-muted truncate mt-0.5">{session?.user?.email}</p>
                 </div>
                 
-                <div className="p-1.5">
-                  
-                  <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-chat'))}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    Toggle AI Widget
-                  </button>
-                  <Link href="/dashboard/settings"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/5 rounded-xl transition-all"
+                <div className="p-1.5 space-y-0.5">
+                  {((session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN") && (
+                    <>
+                      <Link
+                        href="/dashboard/admin/users"
+                        className="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        <Users className="h-4 w-4" />
+                        User Management
+                      </Link>
+                      <Link
+                        href="/dashboard/admin/company-settings"
+                        className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-xl transition-all"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        <Settings className="h-4 w-4" />
+                        Company Settings
+                      </Link>
+                      <Link
+                        href="/dashboard/admin/billing"
+                        className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-xl transition-all"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        Billing & Plans
+                      </Link>
+                      <div className="h-px bg-border-subtle my-1 mx-2" />
+                    </>
+                  )}
+
+                  <Link
+                    href="/dashboard/settings"
+                    className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-xl transition-all"
                     onClick={() => setDropdownOpen(false)}
                   >
                     <User className="h-4 w-4" />
-                    My Profile
+                    Profile & Settings
                   </Link>
-                  
+
                   <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-chat'))}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('toggle-ai-chat'));
+                      setDropdownOpen(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-xs font-medium text-text-secondary hover:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all"
                   >
-                    <Sparkles className="h-4 w-4" />
-                    Toggle AI Widget
+                    <Sparkles className="h-4 w-4 text-cyan-400" />
+                    Toggle AI Assistant
                   </button>
-                  <Link href="/dashboard/settings"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-purple-400 hover:bg-purple-500/5 rounded-xl transition-all"
-                    onClick={() => setDropdownOpen(false)}
-                  >
-                    <Settings className="h-4 w-4" />
-                    Preferences
-                  </Link>
                 </div>
 
                 <div className="p-1.5 border-t border-border-subtle">

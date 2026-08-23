@@ -76,6 +76,16 @@ const networkItems = [
   { label: "Reputation", href: "/dashboard/network/reputation", icon: Star },
 ];
 
+const adminItems = [
+  { label: "User Management", href: "/dashboard/admin/users", icon: Users },
+  { label: "Company Settings", href: "/dashboard/admin/company-settings", icon: Settings },
+  { label: "Automation Rules", href: "/dashboard/admin/automation-rules", icon: Zap },
+  { label: "Billing & Plans", href: "/dashboard/admin/billing", icon: CreditCard },
+  { label: "Contractor Directory", href: "/dashboard/admin/contractors", icon: Wrench },
+  { label: "Property Directory", href: "/dashboard/admin/properties", icon: Building2 },
+  { label: "Profit & Loss", href: "/dashboard/admin/reports/profit-loss", icon: BarChart3 },
+];
+
 const aiItems = [
   { label: "AI Assistant", href: "/dashboard/ai/chat", icon: Sparkles },
   { label: "AI Calling", href: "/dashboard/ai/calling", icon: Phone },
@@ -139,24 +149,11 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
     });
   }
 
-  if (isAdmin || role === "SUPER_ADMIN" || isAccountant) {
+  if (isAccountant && !isAdmin && role !== "SUPER_ADMIN") {
     visibleNavItems.push({
       label: "Profit & Loss",
       href: "/dashboard/admin/reports/profit-loss",
       icon: BarChart3,
-    });
-  }
-
-  if (isAdmin || role === "SUPER_ADMIN") {
-    visibleNavItems.push({
-      label: "Automation Rules",
-      href: "/dashboard/admin/automation-rules",
-      icon: Zap,
-    });
-    visibleNavItems.push({
-      label: "Company Settings",
-      href: "/dashboard/admin/company-settings",
-      icon: Settings,
     });
   }
 
@@ -251,6 +248,47 @@ export function Sidebar({ onItemClick }: { onItemClick?: () => void }) {
                 )}>
                   {badgeCount > 99 ? "99+" : badgeCount}
                 </div>
+              )}
+            </Link>
+          );
+        })}
+
+                {/* Admin Section */}
+        {(isAdmin || role === "SUPER_ADMIN") && (
+          <div className="pt-6 pb-2">
+            {!collapsed && (
+              <div className="flex items-center gap-2 px-4 mb-1">
+                <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/20 to-transparent" />
+                <p className="text-[10px] font-bold text-cyan-500/80 uppercase tracking-[0.2em]">Administration</p>
+                <div className="h-px flex-1 bg-gradient-to-l from-cyan-500/20 to-transparent" />
+              </div>
+            )}
+            {collapsed && <div className="h-px bg-cyan-500/15 mx-4" />}
+          </div>
+        )}
+
+        {(isAdmin || role === "SUPER_ADMIN") && adminItems.map((item) => {
+          const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onItemClick}
+              className={cn(
+                "flex items-center rounded-xl transition-all duration-200 group relative",
+                collapsed ? "justify-center h-11 w-11 mx-auto" : "gap-3 px-3 py-2.5",
+                isActive
+                  ? "bg-gradient-to-r from-cyan-500/10 to-blue-500/5 text-cyan-400 border border-cyan-500/20 shadow-sm"
+                  : "text-text-secondary hover:bg-surface-hover hover:text-text-primary border border-transparent"
+              )}
+            >
+              <item.icon className={cn(
+                "h-[18px] w-[18px]",
+                isActive ? "text-cyan-400" : "text-text-muted group-hover:text-cyan-400"
+              )} />
+              {!collapsed && <span className="text-[13px] font-medium">{item.label}</span>}
+              {isActive && !collapsed && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 bg-gradient-to-b from-cyan-400 to-blue-500 rounded-r-full shadow-[0_0_12px_rgba(34,211,238,0.5)]" />
               )}
             </Link>
           );

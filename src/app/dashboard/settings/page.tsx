@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, Button, Input, Badge, Avatar } from "@/components/ui";
-import { User, Shield, Bell, Key, ChevronRight, Save, X, Camera, CheckCircle2, AlertCircle } from "lucide-react";
+import { User, Shield, Bell, Key, ChevronRight, Save, X, Camera, CheckCircle2, AlertCircle, Users, Zap, Building2, CreditCard, Sparkles, Settings as SettingsIcon } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function SettingsPage() {
@@ -75,6 +75,91 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
         <p className="text-text-secondary mt-1">Manage your account preferences</p>
       </div>
+
+      {/* Admin Quick Management Card */}
+      {(role === "ADMIN" || role === "SUPER_ADMIN") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-cyan-400">
+              <Shield className="h-5 w-5 text-cyan-400" />
+              Organization & Admin Controls
+            </CardTitle>
+          </CardHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              href="/dashboard/admin/users"
+              className="p-4 rounded-xl bg-surface-hover border border-border-subtle hover:border-cyan-500/30 transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-text-primary group-hover:text-cyan-400 transition-colors">
+                    User Management
+                  </p>
+                  <p className="text-[11px] text-text-muted">Create users, assign roles & manage limits</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-text-dim group-hover:text-cyan-400 transition-colors" />
+            </Link>
+
+            <Link
+              href="/dashboard/admin/company-settings"
+              className="p-4 rounded-xl bg-surface-hover border border-border-subtle hover:border-cyan-500/30 transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <SettingsIcon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-text-primary group-hover:text-purple-400 transition-colors">
+                    Company Settings
+                  </p>
+                  <p className="text-[11px] text-text-muted">Twilio SMS, Voice agent & SMTP</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-text-dim group-hover:text-purple-400 transition-colors" />
+            </Link>
+
+            <Link
+              href="/dashboard/admin/automation-rules"
+              className="p-4 rounded-xl bg-surface-hover border border-border-subtle hover:border-cyan-500/30 transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Zap className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-text-primary group-hover:text-amber-400 transition-colors">
+                    Automation Rules
+                  </p>
+                  <p className="text-[11px] text-text-muted">Triggers, alerts & urgent escalations</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-text-dim group-hover:text-amber-400 transition-colors" />
+            </Link>
+
+            <Link
+              href="/dashboard/admin/billing"
+              className="p-4 rounded-xl bg-surface-hover border border-border-subtle hover:border-cyan-500/30 transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <CreditCard className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-text-primary group-hover:text-emerald-400 transition-colors">
+                    Billing & Subscription
+                  </p>
+                  <p className="text-[11px] text-text-muted">View plan limits & invoices</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-text-dim group-hover:text-emerald-400 transition-colors" />
+            </Link>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
