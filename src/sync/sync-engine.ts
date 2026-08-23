@@ -131,7 +131,7 @@ export class SyncEngine {
                   )
                   .bind(
                     order.status || existingWo.status,
-                    order.assignment.dueAt || existingWo.dueDate,
+                    (order.assignment?.dueAt ? (isNaN(Date.parse(order.assignment.dueAt)) ? order.assignment.dueAt : new Date(order.assignment.dueAt).toISOString()) : existingWo.dueDate),
                     order.services[0]?.serviceCode || existingWo.serviceType,
                     order.property.lockCode || existingWo.lockCode,
                     order.property.gateCode || existingWo.gateCode,
