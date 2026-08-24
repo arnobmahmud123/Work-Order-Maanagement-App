@@ -756,6 +756,7 @@ function ChatArea({
   onBack?: () => void;
 }) {
   const { data: session } = useSession();
+  const qc = useQueryClient();
   const { data: channel } = useChatChannel(channelId);
   const { data: messagesData, isLoading } = useChatMessages(
     channelId,
@@ -1155,7 +1156,7 @@ function ChatArea({
       }
       toast.success("Channel deleted successfully");
       qc.invalidateQueries({ queryKey: ["chat-channels"] });
-      setActiveChannelId(null);
+      if (onBack) onBack();
     } catch (err: any) {
       toast.error(err.message);
     }
