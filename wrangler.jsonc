@@ -24,7 +24,8 @@
     "NEXTAUTH_SECRET": "d3f7495b219e4a8b98163f92a0e5c1d847a9e6b3c2d1e0f4a8b7c6d5e4f3a2b1",
     "NEXTAUTH_URL": "https://work-order-maanagement-app.arnobmahmud123.workers.dev",
     "NEXT_PUBLIC_ELEVENLABS_AGENT_ID": "agent_4801kwka6r2pfw7r47hskgx5wqz0",
-    "TWILIO_PHONE_NUMBER": "+16592137866"
+    "TWILIO_PHONE_NUMBER": "+16592137866",
+    "CLOUDFLARE_ACCOUNT_ID": "1746a71cfcb8a9d804564d3e0cd811a1"
   },
   "d1_databases": [
     {

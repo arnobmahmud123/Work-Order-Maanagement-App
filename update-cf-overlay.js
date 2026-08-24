@@ -1,4 +1,7 @@
-"use client";
+const fs = require('fs');
+const file = 'src/components/chat/call-overlay.tsx';
+
+const newContent = `"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -114,7 +117,7 @@ function CallOverlayInternal({
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/chat/calls/${sessionId}/status`);
+        const res = await fetch(\`/api/chat/calls/\${sessionId}/status\`);
         if (res.ok && isMounted) {
           const data = await res.json();
           if (data.status === "connected" && status === "ringing") {
@@ -141,7 +144,7 @@ function CallOverlayInternal({
   useEffect(() => {
     if (status === "connected" && sessionId && !cfToken) {
       let isMounted = true;
-      fetch(`/api/chat/calls/${sessionId}/token`)
+      fetch(\`/api/chat/calls/\${sessionId}/token\`)
         .then(res => res.json())
         .then(data => {
           if (isMounted && data.token) {
@@ -199,7 +202,7 @@ function CallOverlayInternal({
 
     if (notifyBackend && sessionId) {
       try {
-        await fetch(`/api/chat/calls/${sessionId}/end`, { method: "POST" });
+        await fetch(\`/api/chat/calls/\${sessionId}/end\`, { method: "POST" });
       } catch {}
     }
 
@@ -209,7 +212,7 @@ function CallOverlayInternal({
   function formatTime(seconds: number) {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    return \`\${m.toString().padStart(2, "0")}:\${s.toString().padStart(2, "0")}\`;
   }
 
   return (
@@ -231,7 +234,7 @@ function CallUI({
 }: any) {
   
   // RealtimeKit selector for checking if audio is enabled
-  const audioEnabled = useRealtimeKitSelector((m) => m?.self?.audioEnabled ?? false);
+  const audioEnabled = useRealtimeKitSelector((m) => m?.localUser?.audioEnabled ?? false);
   const [micEnabled, setMicEnabled] = useState(true);
 
   useEffect(() => {
@@ -241,11 +244,11 @@ function CallUI({
   }, [audioEnabled, meeting]);
 
   const toggleMic = () => {
-    if (meeting?.self) {
+    if (meeting?.localUser) {
       if (micEnabled) {
-        meeting.self.disableAudio();
+        meeting.localUser.disableAudio();
       } else {
-        meeting.self.enableAudio();
+        meeting.localUser.enableAudio();
       }
       setMicEnabled(!micEnabled);
     }
@@ -326,8 +329,8 @@ function CallUI({
                     key={i}
                     className="w-1.5 bg-emerald-500/50 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                     style={{
-                      height: `${Math.random() * 100 + 20}%`,
-                      animationDuration: `${Math.random() * 0.5 + 0.5}s`
+                      height: \`\${Math.random() * 100 + 20}%\`,
+                      animationDuration: \`\${Math.random() * 0.5 + 0.5}s\`
                     }}
                   />
                 ))}
@@ -380,3 +383,6 @@ function CallUI({
     </div>
   );
 }
+`;
+
+fs.writeFileSync(file, newContent, 'utf8');

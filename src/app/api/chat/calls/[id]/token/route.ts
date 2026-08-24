@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { AccessToken } from "livekit-server-sdk";
 import { getCallSession } from "@/lib/chat-calls";
 
 export async function GET(
@@ -28,34 +27,89 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized for this call" }, { status: 403 });
     }
 
-    const apiKey = process.env.LIVEKIT_API_KEY;
-    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    const appId = process.env.CLOUDFLARE_REALTIME_APP_ID;
 
-    if (!apiKey || !apiSecret) {
-      console.warn("LiveKit API Key or Secret is missing in environment variables.");
+    if (!accountId || !apiToken || !appId) {
+      console.warn("Cloudflare RealtimeKit credentials are missing in environment variables.");
       return NextResponse.json(
-        { error: "LiveKit is not configured" },
+        { error: "Cloudflare RealtimeKit is not configured" },
         { status: 500 }
       );
     }
 
-    const at = new AccessToken(apiKey, apiSecret, {
-      identity: userId,
-      name: session.user.name || "User",
-    });
+    // Step 1: Add participant to meeting
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/realtime/kit/${appId}/meetings/${callId}/participants`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiToken}`
+        },
+        body: JSON.stringify({
+          name: session.user.name || "User",
+          custom_participant_id: userId
+        })
+      }
+    );
 
-    at.addGrant({
-      roomJoin: true,
-      room: `call-${callId}`,
-      canPublish: true,
-      canSubscribe: true,
-    });
+    const result = await response.json();
 
-    const token = await at.toJwt();
-    
-    return NextResponse.json({ token, serverUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL });
+    if (!response.ok || !result.success) {
+      // If the meeting doesn't exist, we might need to create it first.
+      // But Cloudflare RealtimeKit automatically creates meetings implicitly for some setups, 
+      // or we must create it. Assuming the API might return 404 if meeting doesn't exist.
+      if (response.status === 404) {
+        // Attempt to create meeting first
+        const createRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${accountId}/realtime/kit/${appId}/meetings`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${apiToken}`
+            },
+            body: JSON.stringify({
+              name: `call-${callId}`,
+            })
+          }
+        );
+        
+        // If creation is successful, retry participant creation
+        if (createRes.ok) {
+           const retryResponse = await fetch(
+             `https://api.cloudflare.com/client/v4/accounts/${accountId}/realtime/kit/${appId}/meetings/${callId}/participants`,
+             {
+               method: "POST",
+               headers: {
+                 "Content-Type": "application/json",
+                 "Authorization": `Bearer ${apiToken}`
+               },
+               body: JSON.stringify({
+                 name: session.user.name || "User",
+                 custom_participant_id: userId
+               })
+             }
+           );
+           const retryResult = await retryResponse.json();
+           if (retryResponse.ok && retryResult.success) {
+             return NextResponse.json({ token: retryResult.result.authToken });
+           }
+        }
+      }
+
+      console.error("[API Cloudflare Realtime] Error adding participant:", result);
+      return NextResponse.json(
+        { error: "Failed to connect to real-time service" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ token: result.result.authToken });
   } catch (error: any) {
-    console.error("[API LiveKit Token] Error:", error);
+    console.error("[API CF Realtime Token] Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
