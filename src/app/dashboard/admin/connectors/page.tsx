@@ -359,11 +359,10 @@ document.head.appendChild(script);
         }
 
         // ── PROPERTY (MORTGAGOR) ADDRESS ─────────────────────────────────────────
-        // Strategy: find the "Mortgager Information" label item in allItems,
+        // Strategy: find the "Mortgager Information" or "Mortgagor Information" label item in allItems,
         // then collect items near its X position (right column) below that Y.
-        // The Mortgager info is in the RIGHT portion of the page (higher X values).
         {
-          const mortgagerItem = allItems.find(i => /Mortgager\s*Information/i.test(i.str));
+          const mortgagerItem = allItems.find(i => /Mortgager|Mortgagor/i.test(i.str));
           if (mortgagerItem) {
             const mortgagerX = mortgagerItem.x;
             const mortgagerY = mortgagerItem.y;
@@ -377,9 +376,9 @@ document.head.appendChild(script);
               .filter(i => Math.abs(i.x - mortgagerX) < 200 && i.y < mortgagerY && i.y > stopY)
               .sort((a, b) => b.y - a.y); // top to bottom (PDF Y descends)
 
-            // Find street address (starts with a number)
+            // Find street address (starts with a number, optional letter for directional like 750W)
             for (const item of colItems) {
-              if (/^\d{1,6}\s+\w+/.test(item.str.trim())) {
+              if (/^\d{1,6}[A-Za-z]?\s+\w+/.test(item.str.trim())) {
                 extracted["Property Address"] = item.str.trim();
                 break;
               }
@@ -390,7 +389,8 @@ document.head.appendChild(script);
               const addrIdx = colItems.findIndex(i => i.str.trim() === extracted["Property Address"]);
               if (addrIdx !== -1 && addrIdx + 1 < colItems.length) {
                 const cszLine = colItems[addrIdx + 1].str;
-                const cszMatch = cszLine.match(/^([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+                const cszMatch = cszLine.match(/^([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/)
+                  || cszLine.match(/([A-Za-z\s]+)\s+([A-Z]{2})\s+(\d{5})/);
                 if (cszMatch) {
                   extracted["City"] = cszMatch[1].trim();
                   extracted["State"] = cszMatch[2].trim();
@@ -400,19 +400,47 @@ document.head.appendChild(script);
             }
           }
 
-          // Fallback: try regex approach on joinedText (line by line after Mortgager header)
+          // Fallback 1: Match all addresses in flatText, skip the first one if it's the vendor (Will Enterprises / Panther)
+          if (!extracted["Property Address"]) {
+            const addrRegex = /\b(\d{1,6}[A-Za-z]?\s+[A-Za-z0-9\s.]{2,30}\s+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))\b/gi;
+            const matches = [...flatText.matchAll(addrRegex)].map(m => m[1].trim());
+            // Filter out any address that contains PANTHER or WILL or ENTERPRISES (the vendor)
+            const filtered = matches.filter(a => !/panther|will|enterprises/i.test(a));
+            if (filtered.length > 0) {
+              extracted["Property Address"] = filtered[0];
+            } else if (matches.length > 1) {
+              extracted["Property Address"] = matches[1];
+            } else if (matches.length > 0) {
+              extracted["Property Address"] = matches[0];
+            }
+          }
+
+          // Fill City, State, Zip for property address using flatText context
+          if (extracted["Property Address"] && !extracted["City"]) {
+            const addrEscaped = extracted["Property Address"].replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const cszReg = new RegExp(addrEscaped + '[\\s,]*([A-Za-z\\s]{2,30})[\\s,]+([A-Z]{2})[\\s,]+(\\d{5})', 'i');
+            const match = flatText.match(cszReg);
+            if (match) {
+              extracted["City"] = match[1].trim();
+              extracted["State"] = match[2].trim();
+              extracted["Zip"] = match[3].trim();
+            }
+          }
+
+          // Fallback 2: try regex approach on joinedText (line by line after Mortgager header)
           if (!extracted["Property Address"]) {
             const lines = joinedText.split("\n");
             let inMortgager = false;
             for (const line of lines) {
-              if (/Mortgager\s*Information/i.test(line)) { inMortgager = true; continue; }
+              if (/Mortgager|Mortgagor/i.test(line)) { inMortgager = true; continue; }
               if (inMortgager && /Property\s*Access/i.test(line)) break;
-              if (inMortgager && /^\d{1,6}\s+\w/.test(line.trim()) && !extracted["Property Address"]) {
+              if (inMortgager && /^\d{1,6}[A-Za-z]?\s+\w/.test(line.trim()) && !extracted["Property Address"]) {
                 extracted["Property Address"] = line.trim();
                 continue;
               }
               if (inMortgager && extracted["Property Address"] && !extracted["City"]) {
-                const cszMatch = line.match(/([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5})/);
+                const cszMatch = line.match(/([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5})/)
+                  || line.match(/([A-Za-z\s]+)\s+([A-Z]{2})\s+(\d{5})/);
                 if (cszMatch) {
                   extracted["City"] = cszMatch[1].trim();
                   extracted["State"] = cszMatch[2].trim();
