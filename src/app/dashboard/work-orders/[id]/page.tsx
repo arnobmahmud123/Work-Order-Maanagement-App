@@ -2297,6 +2297,26 @@ export default function WorkOrderDetailPage({
                 >
                   <Copy className="h-4 w-4" />
                 </button>
+                {role === "ADMIN" && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`⚠️ Permanently delete work order "${workOrder.title}"?\n\nThis cannot be undone.`)) return;
+                      try {
+                        const res = await fetch(`/api/work-orders/${workOrder.id}`, { method: "DELETE" });
+                        if (!res.ok) throw new Error("Failed to delete");
+                        toast.success("Work order deleted");
+                        router.push("/dashboard/work-orders");
+                      } catch {
+                        toast.error("Failed to delete work order");
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 transition-all text-xs font-bold uppercase tracking-wider"
+                    title="Delete Work Order (Admin Only)"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                )}
               </>
             )}
           </div>

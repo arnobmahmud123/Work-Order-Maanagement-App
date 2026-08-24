@@ -261,8 +261,13 @@ document.head.appendChild(script);
         const joinedText = fullTextLines.join("\n");
 
         // ── FIELD EXTRACTION ─────────────────────────────────────────────────────
+        // Build two versions of text:
+        // 1. flatText: all items joined by space (single line, good for regex spanning)
+        // 2. joinedText: Y-sorted lines (good for line-by-line structured search)
+        const flatText = allItems.map(i => i.str).join(" ");
+
         const extracted: Record<string, any> = {
-          "Work Order #": file.name.replace(/\.[^/.]+$/, ""),
+          "Work Order #": file.name.replace(/\.[^/.]+$/, "").replace(/^PrintableWO_/, "").split("_")[0],
           "Service": "Property Preservation",
           "Property Address": "",
           "City": "",
@@ -273,40 +278,141 @@ document.head.appendChild(script);
           "Instructions": "",
         };
 
-        const woMatch = joinedText.match(/MCS\s*WO#[:\s]+([A-Z0-9-]{4,20})/i)
-          || joinedText.match(/WO\s*[#:]+\s*([A-Z0-9-]{4,20})/i);
-        if (woMatch) extracted["Work Order #"] = woMatch[1].trim();
+        // WO Number: search allItems directly for "MCS WO#:" then grab the next item
+        {
+          const mcsIdx = allItems.findIndex(i => /MCS\s*WO#/i.test(i.str) || i.str === "MCS WO#:" || i.str === "MCS WO#");
+          if (mcsIdx !== -1) {
+            // Next non-empty item is the WO number
+            for (let j = mcsIdx + 1; j < Math.min(mcsIdx + 5, allItems.length); j++) {
+              if (allItems[j].str.trim() && /^[A-Z0-9-]{4,20}$/.test(allItems[j].str.trim())) {
+                extracted["Work Order #"] = allItems[j].str.trim();
+                break;
+              }
+            }
+          }
+          // Fallback: regex on flatText
+          if (extracted["Work Order #"] === file.name.replace(/\.[^/.]+$/, "").replace(/^PrintableWO_/, "").split("_")[0]) {
+            const woMatch = flatText.match(/MCS\s*WO#[:\s]+([A-Z0-9-]{4,20})/i)
+              || flatText.match(/WO\s*#[:\s]+([A-Z0-9-]{4,20})/i);
+            if (woMatch) extracted["Work Order #"] = woMatch[1].trim();
+          }
+          // Last fallback: extract from filename (PrintableWO_M15532300_20260821 → M15532300)
+          const fnMatch = file.name.match(/[_-]([A-Z]\d{6,12})[_.-]/i);
+          if (fnMatch && extracted["Work Order #"] === file.name.replace(/\.[^/.]+$/, "").replace(/^PrintableWO_/, "").split("_")[0]) {
+            extracted["Work Order #"] = fnMatch[1].trim();
+          }
+        }
 
-        const woTypeMatch = joinedText.match(/WO\s*Type[:\s]+([A-Za-z\s]+?)(?:\n|$)/i);
-        if (woTypeMatch) extracted["Service"] = woTypeMatch[1].trim();
+        // WO Type: find "WO Type:" in allItems and grab the next item
+        {
+          const typeIdx = allItems.findIndex(i => /WO\s*Type[:\s]*/i.test(i.str) && i.str.length < 15);
+          if (typeIdx !== -1) {
+            for (let j = typeIdx + 1; j < Math.min(typeIdx + 4, allItems.length); j++) {
+              const val = allItems[j].str.trim();
+              if (val && val.length > 1 && val.length < 30 && !/^[\d:\/]+$/.test(val)) {
+                extracted["Service"] = val;
+                break;
+              }
+            }
+          }
+          // Fallback regex
+          if (extracted["Service"] === "Property Preservation") {
+            const svcMatch = flatText.match(/WO\s*Type[:\s]+([A-Za-z][A-Za-z\s]{0,20}?)(?:\s{2,}|$)/i);
+            if (svcMatch) extracted["Service"] = svcMatch[1].trim();
+          }
+        }
 
-        const dueMatch = joinedText.match(/Due\s*Date[:\s]+(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i);
-        if (dueMatch) extracted["Due Date"] = dueMatch[1].trim();
+        // Due Date: find "Due Date:" in allItems
+        {
+          const dueIdx = allItems.findIndex(i => /Due\s*Date/i.test(i.str));
+          if (dueIdx !== -1) {
+            for (let j = dueIdx + 1; j < Math.min(dueIdx + 5, allItems.length); j++) {
+              const val = allItems[j].str.trim();
+              if (/\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(val)) {
+                extracted["Due Date"] = val.match(/(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/)![1];
+                break;
+              }
+            }
+          }
+          if (extracted["Due Date"] === new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]) {
+            const dueMatch = flatText.match(/Due\s*Date[:\s]+(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i);
+            if (dueMatch) extracted["Due Date"] = dueMatch[1].trim();
+          }
+        }
 
-        const lockMatch = joinedText.match(/Lockbox\s*Code[:\s]+([A-Za-z0-9*]+)/i)
-          || joinedText.match(/keycode[^:]*?:\s*([A-Za-z0-9]+)\s*\//i);
-        if (lockMatch) extracted["Lock Code"] = lockMatch[1].trim();
+        // Lockbox Code
+        {
+          const lockIdx = allItems.findIndex(i => /Lockbox\s*Code/i.test(i.str));
+          if (lockIdx !== -1) {
+            for (let j = lockIdx + 1; j < Math.min(lockIdx + 4, allItems.length); j++) {
+              const val = allItems[j].str.trim();
+              if (val && /^[\d*A-Za-z]{2,12}$/.test(val)) {
+                extracted["Lock Code"] = val;
+                break;
+              }
+            }
+          }
+          if (!extracted["Lock Code"]) {
+            const lockMatch = flatText.match(/Lockbox\s*Code[:\s]+([A-Za-z0-9*]{2,12})/i);
+            if (lockMatch) extracted["Lock Code"] = lockMatch[1].trim();
+          }
+        }
 
         // ── PROPERTY (MORTGAGOR) ADDRESS ─────────────────────────────────────────
+        // Strategy: find the "Mortgager Information" label item in allItems,
+        // then collect items near its X position (right column) below that Y.
+        // The Mortgager info is in the RIGHT portion of the page (higher X values).
         {
-          const mortgagerIdx = joinedText.indexOf("Mortgager Information");
-          const propAccessIdx = joinedText.indexOf("Property Access Info");
-          const blockEnd = propAccessIdx > mortgagerIdx ? propAccessIdx : mortgagerIdx + 400;
+          const mortgagerItem = allItems.find(i => /Mortgager\s*Information/i.test(i.str));
+          if (mortgagerItem) {
+            const mortgagerX = mortgagerItem.x;
+            const mortgagerY = mortgagerItem.y;
 
-          if (mortgagerIdx !== -1) {
-            const block = joinedText.substring(mortgagerIdx, blockEnd);
-            const addrLines = block.split("\n");
-            let foundAddr = false;
-            for (const line of addrLines) {
-              if (/^\d{1,6}\s+\w/.test(line.trim())) {
-                if (!foundAddr) {
-                  extracted["Property Address"] = line.trim();
-                  foundAddr = true;
-                  continue;
+            // Collect items in the Mortgager column: same X region, below the header, above "Property Access Info"
+            const propAccessItem = allItems.find(i => /Property\s*Access\s*Info/i.test(i.str));
+            const stopY = propAccessItem ? propAccessItem.y : mortgagerY - 200;
+
+            // Get all items in the right column, sorted top to bottom
+            const colItems = allItems
+              .filter(i => Math.abs(i.x - mortgagerX) < 200 && i.y < mortgagerY && i.y > stopY)
+              .sort((a, b) => b.y - a.y); // top to bottom (PDF Y descends)
+
+            // Find street address (starts with a number)
+            for (const item of colItems) {
+              if (/^\d{1,6}\s+\w+/.test(item.str.trim())) {
+                extracted["Property Address"] = item.str.trim();
+                break;
+              }
+            }
+
+            // Find City, State Zip on the next line after address
+            if (extracted["Property Address"]) {
+              const addrIdx = colItems.findIndex(i => i.str.trim() === extracted["Property Address"]);
+              if (addrIdx !== -1 && addrIdx + 1 < colItems.length) {
+                const cszLine = colItems[addrIdx + 1].str;
+                const cszMatch = cszLine.match(/^([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+                if (cszMatch) {
+                  extracted["City"] = cszMatch[1].trim();
+                  extracted["State"] = cszMatch[2].trim();
+                  extracted["Zip"] = cszMatch[3].trim();
                 }
               }
-              if (foundAddr && !extracted["City"]) {
-                const cszMatch = line.match(/^([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+            }
+          }
+
+          // Fallback: try regex approach on joinedText (line by line after Mortgager header)
+          if (!extracted["Property Address"]) {
+            const lines = joinedText.split("\n");
+            let inMortgager = false;
+            for (const line of lines) {
+              if (/Mortgager\s*Information/i.test(line)) { inMortgager = true; continue; }
+              if (inMortgager && /Property\s*Access/i.test(line)) break;
+              if (inMortgager && /^\d{1,6}\s+\w/.test(line.trim()) && !extracted["Property Address"]) {
+                extracted["Property Address"] = line.trim();
+                continue;
+              }
+              if (inMortgager && extracted["Property Address"] && !extracted["City"]) {
+                const cszMatch = line.match(/([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5})/);
                 if (cszMatch) {
                   extracted["City"] = cszMatch[1].trim();
                   extracted["State"] = cszMatch[2].trim();
@@ -320,21 +426,20 @@ document.head.appendChild(script);
 
         // ── TASK TABLE PARSING ──────────────────────────────────────────────────
         const parsedServices: { name: string; description: string; instructions: string; quantity: number }[] = [];
-        let descColX = 30;
         let instrColX = 280;
 
-        const headerItem = allItems.find(i => i.str === "Additional Instructions" || i.str === "Additional");
-        if (headerItem) instrColX = headerItem.x;
+        const aiHeaderItem = allItems.find(i => i.str === "Additional Instructions" || i.str === "Additional");
+        if (aiHeaderItem) instrColX = aiHeaderItem.x;
 
         const descHeaderItem = allItems.find(i => i.str === "Description" && i.x < instrColX - 50);
-        const damagesHeaderItem = allItems.find(i => i.str === "Current Damages" || i.str === "Current");
+        const damagesHeaderItem = allItems.find(i => /Current\s*Damages/i.test(i.str) || i.str === "Current");
 
         if (descHeaderItem && damagesHeaderItem) {
           const tableTopY = descHeaderItem.y;
           const tableBottomY = damagesHeaderItem.y;
           const tableItems = allItems.filter(i => i.y < tableTopY && i.y > tableBottomY);
 
-          const rowMap = new Map<number, PdfItem[]>();
+          const rowMap = new Map<number, typeof allItems>();
           for (const item of tableItems) {
             const snappedY = Math.round(item.y / 5) * 5;
             if (!rowMap.has(snappedY)) rowMap.set(snappedY, []);
@@ -372,11 +477,32 @@ document.head.appendChild(script);
           }
         }
 
+        // Fallback: line-split on known task keywords
+        if (parsedServices.length === 0) {
+          const descMarker = allItems.findIndex(i => i.str === "Description");
+          const dmgMarker = allItems.findIndex(i => /Current\s*Damages/i.test(i.str));
+          if (descMarker !== -1) {
+            const block = flatText.substring(
+              flatText.indexOf(allItems[descMarker].str),
+              dmgMarker !== -1 ? flatText.indexOf(allItems[dmgMarker].str) : undefined
+            );
+            const segments = block.split(/(?=\b(?:Remove|Trim|TRIM|Cut|Mow|Board|Winteriz|Inspect|Clean|Haul|Debris|Lock)\b)/i);
+            for (const seg of segments) {
+              const trimmed = seg.trim();
+              if (trimmed.length > 3) {
+                const spaceIdx = trimmed.indexOf(" ");
+                const taskName = spaceIdx > -1 ? trimmed.substring(0, Math.min(trimmed.indexOf("  "), 40) > 0 ? trimmed.indexOf("  ") : 40) : trimmed;
+                parsedServices.push({ name: taskName.trim(), description: taskName.trim(), instructions: trimmed, quantity: 1 });
+              }
+            }
+          }
+        }
+
         if (parsedServices.length === 0) {
           parsedServices.push({
             name: extracted["Service"] || "Property Preservation",
             description: "Property Preservation",
-            instructions: "See attached work order",
+            instructions: "",
             quantity: 1,
           });
         }
@@ -405,11 +531,12 @@ document.head.appendChild(script);
         };
         setColumnMapping(mapping);
         runPreviewValidation([extracted], mapping);
-        toast.success(`PDF parsed: ${parsedServices.length} task(s) extracted!`);
+        toast.success(`PDF parsed: WO# ${extracted["Work Order #"]} · ${parsedServices.length} task(s) extracted!`);
         return;
       }
 
       // ── 2. Excel File Parsing (.xlsx, .xls) ─────────────────────────────────
+
       if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
         toast("Parsing Excel spreadsheet...");
 
