@@ -13,7 +13,7 @@ import {
   MicOff,
 } from "lucide-react";
 import { playRingtoneSound, playCallConnectSound, playCallEndSound } from "@/lib/sounds";
-import { useRealtimeKitClient, useRealtimeKitSelector, RealtimeKitProvider } from "@cloudflare/realtimekit-react";
+import { useRealtimeKitClient } from "@cloudflare/realtimekit-react";
 
 type CallStatus = "ringing" | "connected" | "ended" | "declined";
 
@@ -213,8 +213,7 @@ function CallOverlayInternal({
   }
 
   return (
-    <RealtimeKitProvider value={meeting}>
-      <CallUI 
+    <CallUI 
       status={status}
       elapsed={elapsed}
       formatTime={formatTime}
@@ -224,7 +223,7 @@ function CallOverlayInternal({
       handleEnd={() => handleEnd(true)}
       meeting={meeting}
     />
-    </RealtimeKitProvider>
+    
   );
 }
 
@@ -233,14 +232,12 @@ function CallUI({
 }: any) {
   
   // RealtimeKit selector for checking if audio is enabled
-  const audioEnabled = useRealtimeKitSelector((m) => m?.self?.audioEnabled ?? false);
   const [micEnabled, setMicEnabled] = useState(true);
-
   useEffect(() => {
-    if (meeting) {
-      setMicEnabled(audioEnabled);
+    if (meeting?.self) {
+      setMicEnabled(meeting.self.audioEnabled !== false);
     }
-  }, [audioEnabled, meeting]);
+  }, [meeting]);
 
   const toggleMic = () => {
     if (meeting?.self) {
