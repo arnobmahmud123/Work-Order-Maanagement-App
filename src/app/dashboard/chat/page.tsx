@@ -239,10 +239,10 @@ export default function ChatPage() {
 
   return (
     <div className={cn(
-      "flex -m-3 md:-mb-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl",
+      "flex -m-3 md:-mb-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl overscroll-none",
       topNavHidden 
         ? "h-[100dvh] md:h-[100vh] rounded-none border-0" 
-        : "h-[calc(100dvh-7.5rem)] md:h-[calc(100vh-4rem)]"
+        : "h-[calc(100dvh-5rem)] pb-4 md:pb-0 md:h-[calc(100vh-4rem)]"
     )}>
       {/* Sidebar Toggle (when hidden) */}
       {!showSidebar && (
@@ -783,6 +783,7 @@ function ChatArea({
   const [pinnedMessages, setPinnedMessages] = useState<string[]>([]);
   const [bookmarkedMessages, setBookmarkedMessages] = useState<string[]>([]);
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
+  const [activeMobileMessageId, setActiveMobileMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [showCall, setShowCall] = useState(false);
@@ -1322,14 +1323,14 @@ function ChatArea({
               {channel.members.length}
             </Badge>
           )}
-          {/* Open Work Order button for work order channels */}
           {channel?.type === "WORK_ORDERS" && getWorkOrderLink(channel) !== "/dashboard/work-orders" && (
             <Link
               href={getWorkOrderLink(channel)}
-              className="inline-flex items-center gap-1.5 ml-2 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all text-[11px] font-bold border border-amber-500/20 hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/5"
+              className="inline-flex flex-shrink-0 items-center gap-1.5 ml-1 md:ml-2 px-2 md:px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all text-[11px] font-bold border border-amber-500/20 hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/5"
             >
               <FileText className="h-3.5 w-3.5" />
-              Open Work Order
+              <span className="hidden sm:inline">Open Work Order</span>
+              <span className="sm:hidden">Open</span>
             </Link>
           )}
         </div>
@@ -1575,8 +1576,9 @@ function ChatArea({
                         {/* Message content with stylish bubble */}
                         <div className="relative group/bubble flex flex-col items-start max-w-[85%]">
                           <div
+                            onClick={() => setActiveMobileMessageId(activeMobileMessageId === msg.id ? null : msg.id)}
                             className={cn(
-                              "px-4 py-3 text-sm transition-all duration-300 shadow-xl relative group",
+                              "px-4 py-3 text-sm transition-all duration-300 shadow-xl relative group cursor-pointer md:cursor-default",
                               isOwn
                                 ? "bg-gradient-to-br from-cyan-500 to-blue-600 text-white border border-border-medium shadow-cyan-500/10"
                                 : "bg-surface-hover text-text-primary border border-border-subtle backdrop-blur-xl hover:bg-surface-hover shadow-black/5 dark:shadow-black/20",
@@ -1607,6 +1609,7 @@ function ChatArea({
                                 target="_blank"
                                 rel="noreferrer"
                                 className="flex items-center gap-2 p-2 mb-2 rounded-lg bg-surface-hover hover:bg-surface-hover transition-colors cursor-pointer w-max"
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 <FileText className="h-4 w-4" />
                                 <span className="text-sm font-medium underline-offset-2 hover:underline">
@@ -1619,7 +1622,10 @@ function ChatArea({
                               <div className="mb-2">
                                 <button
                                   type="button"
-                                  onClick={() => setViewerPhoto({ url: msg.fileUrl as string, name: msg.fileName || "Image" })}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewerPhoto({ url: msg.fileUrl as string, name: msg.fileName || "Image" });
+                                  }}
                                   className="block text-left transition-transform hover:scale-[1.02] active:scale-[0.98]"
                                 >
                                   <img
@@ -1640,8 +1646,10 @@ function ChatArea({
 
                             {/* Floating actions menu */}
                             <div
+                                onClick={(e) => e.stopPropagation()}
                                 className={cn(
-                                  "md:absolute mt-1 md:mt-0 md:top-1/2 md:-translate-y-1/2 flex md:hidden md:group-hover/bubble:flex items-center gap-0.5 p-1 bg-surface-hover/95 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-10 transition-all opacity-100 md:opacity-0 md:group-hover/bubble:opacity-100",
+                                  "md:absolute mt-1 md:mt-0 md:top-1/2 md:-translate-y-1/2 md:group-hover/bubble:flex items-center gap-0.5 p-1 bg-surface-hover/95 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-10 transition-all md:opacity-0 md:group-hover/bubble:opacity-100",
+                                  activeMobileMessageId === msg.id ? "flex opacity-100" : "hidden md:flex",
                                   isOwn 
                                     ? "justify-end md:justify-start md:right-full md:mr-3 before:hidden md:before:absolute md:before:-right-3 md:before:inset-y-0 md:before:w-3" 
                                     : "justify-start md:left-full md:ml-3 before:hidden md:before:absolute md:before:-left-3 md:before:inset-y-0 md:before:w-3"
@@ -2115,16 +2123,22 @@ function ThreadPanel({
   }
 
   return (
-    <div className="w-80 border-l border-border-subtle flex flex-col bg-surface flex-shrink-0">
+    <div className="absolute inset-0 z-50 md:relative md:inset-auto md:z-auto w-full md:w-80 border-l border-border-subtle flex flex-col bg-surface flex-shrink-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <h3 className="font-semibold text-text-primary flex items-center gap-2 text-sm">
-          <Reply className="h-4 w-4 text-cyan-400" />
+      <div className="flex items-center px-2 py-2 md:py-3 border-b border-border-subtle">
+        <button
+          onClick={onClose}
+          className="md:hidden p-2 rounded-xl hover:bg-surface-hover text-text-muted transition-colors mr-2"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <h3 className="font-semibold text-text-primary flex items-center gap-2 text-sm flex-1">
+          <Reply className="h-4 w-4 text-cyan-400 hidden md:block" />
           Thread
         </h3>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
+          className="hidden md:block p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
