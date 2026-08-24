@@ -137,39 +137,77 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const userId = (session.user as any).id;
-  const body = await req.json();
-  const { name, description, type, memberIds } = body;
+    const userId = (session.user as any).id;
+    const body = await req.json();
+    const { name, description, type, memberIds } = body;
 
-  if (!name) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
-  }
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
 
-  const channel = await prisma.channel.create({
-    data: {
-      name,
-      description,
-      type: type || "CUSTOM",
-      createdById: userId,
-      members: {
-        create: [
-          { userId, role: "ADMIN" },
-          ...(memberIds || []).map((id: string) => ({ userId: id, role: "MEMBER" })),
-        ],
+    // 1. Verify creator user exists in DB to prevent foreign key violation on ChannelMember
+    const userExists = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userExists) {
+      console.warn(`[POST /api/chat/channels] Creator user ID ${userId} does not exist in users table`);
+      return NextResponse.json({ error: "Authenticated user record not found in database" }, { status: 400 });
+    }
+
+    // 2. Validate and fallback companyId if it doesn't exist in Company table
+    let companyId = (session.user as any).companyId || null;
+    if (companyId) {
+      const companyExists = await prisma.company.findUnique({ where: { id: companyId } });
+      if (!companyExists) {
+        console.warn(`[POST /api/chat/channels] Company ID ${companyId} does not exist, resetting to null`);
+        companyId = null;
+      }
+    }
+
+    // 3. Build validated members list
+    const membersToCreate = [{ userId, role: "ADMIN" }];
+    if (memberIds && Array.isArray(memberIds)) {
+      for (const mId of memberIds) {
+        if (mId && mId !== userId) {
+          const mExists = await prisma.user.findUnique({ where: { id: mId } });
+          if (mExists) {
+            membersToCreate.push({ userId: mId, role: "MEMBER" });
+          } else {
+            console.warn(`[POST /api/chat/channels] Member user ID ${mId} does not exist, skipping`);
+          }
+        }
+      }
+    }
+
+    const channel = await prisma.channel.create({
+      data: {
+        name,
+        description,
+        type: type || "CUSTOM",
+        createdById: userId,
+        companyId,
+        members: {
+          create: membersToCreate,
+        },
       },
-    },
-    include: {
-      members: {
-        include: { user: { select: { id: true, name: true, email: true, image: true } } },
+      include: {
+        members: {
+          include: { user: { select: { id: true, name: true, email: true, image: true } } },
+        },
+        _count: { select: { messages: true, members: true } },
       },
-      _count: { select: { messages: true, members: true } },
-    },
-  });
+    });
 
-  return NextResponse.json(channel, { status: 201 });
+    return NextResponse.json(channel, { status: 201 });
+  } catch (error: any) {
+    console.error("[POST /api/chat/channels] Error creating channel:", error);
+    return NextResponse.json(
+      { error: error?.message || "Failed to create channel" },
+      { status: 500 }
+    );
+  }
 }

@@ -100,6 +100,24 @@ export class SyncEngine {
             }
           }
 
+          // Build tasks list JSON & project scope description
+          const tasksJson = JSON.stringify(
+            order.services.map((s, idx) => ({
+              id: `task_${idx + 1}`,
+              title: s.name,
+              description: s.description || s.instructions || "",
+              completed: false,
+              serviceCode: s.serviceCode,
+              quantity: s.quantity || 1,
+              unitPrice: s.unitPrice,
+              instructions: s.instructions,
+            }))
+          );
+
+          const cleanDescription = order.services.length > 0
+            ? order.services.map((s, i) => `${i + 1}. ${s.name}${s.instructions ? "\n   " + s.instructions : ""}`).join("\n\n")
+            : order.instructions || "";
+
           // 3. Deduplication & Idempotency Check
           const dupeResult = await this.duplicateService.checkForDuplicate(order, db);
 
@@ -125,6 +143,8 @@ export class SyncEngine {
                       gateCode = COALESCE(?, gateCode),
                       keyCode = COALESCE(?, keyCode),
                       specialInstructions = COALESCE(?, specialInstructions),
+                      tasks = ?,
+                      description = ?,
                       company_id = COALESCE(company_id, ?),
                       updatedAt = CURRENT_TIMESTAMP
                      WHERE id = ?`
@@ -137,6 +157,8 @@ export class SyncEngine {
                     order.property.gateCode || existingWo.gateCode,
                     order.property.keyCode || existingWo.keyCode,
                     order.instructions || existingWo.specialInstructions,
+                    tasksJson,
+                    cleanDescription,
                     effectiveCompanyId,
                     dupeResult.existingWorkOrderId
                   )
@@ -207,24 +229,6 @@ export class SyncEngine {
 
             // 5. Create New Canonical Work Order
             const newWoId = `wo_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-            const tasksJson = JSON.stringify(
-              order.services.map((s, idx) => ({
-                id: `task_${idx + 1}`,
-                title: s.name,
-                description: s.description || s.instructions || "",
-                completed: false,
-                serviceCode: s.serviceCode,
-                quantity: s.quantity || 1,
-                unitPrice: s.unitPrice,
-                instructions: s.instructions,
-              }))
-            );
-
-            // Build a clean description/project scope from the task list
-            const cleanDescription = order.services.length > 0
-              ? order.services.map((s, i) => `${i + 1}. ${s.name}${s.instructions ? "\n   " + s.instructions : ""}`).join("\n\n")
-              : order.instructions || "";
-
             const title = `${order.services[0]?.name || "Property Preservation"} - ${order.property.address1}`;
 
             await db
