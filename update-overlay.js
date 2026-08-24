@@ -1,4 +1,9 @@
-"use client";
+const fs = require('fs');
+const file = 'src/components/chat/call-overlay.tsx';
+let content = fs.readFileSync(file, 'utf8');
+
+// We will write a complete replacement since it's a major refactor.
+const newContent = `"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -123,7 +128,7 @@ function CallOverlayInternal({
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/chat/calls/${sessionId}/status`);
+        const res = await fetch(\`/api/chat/calls/\${sessionId}/status\`);
         if (res.ok && isMounted) {
           const data = await res.json();
           if (data.status === "connected" && status === "ringing") {
@@ -150,7 +155,7 @@ function CallOverlayInternal({
   useEffect(() => {
     if (status === "connected" && sessionId && !lkToken) {
       let isMounted = true;
-      fetch(`/api/chat/calls/${sessionId}/token`)
+      fetch(\`/api/chat/calls/\${sessionId}/token\`)
         .then(res => res.json())
         .then(data => {
           if (isMounted && data.token && data.serverUrl) {
@@ -181,7 +186,7 @@ function CallOverlayInternal({
 
     if (notifyBackend && sessionId) {
       try {
-        await fetch(`/api/chat/calls/${sessionId}/end`, { method: "POST" });
+        await fetch(\`/api/chat/calls/\${sessionId}/end\`, { method: "POST" });
       } catch {}
     }
 
@@ -191,7 +196,7 @@ function CallOverlayInternal({
   function formatTime(seconds: number) {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    return \`\${m.toString().padStart(2, "0")}:\${s.toString().padStart(2, "0")}\`;
   }
 
   // If connected and token available, render LiveKitRoom wrapper
@@ -323,8 +328,8 @@ function CallUI({
                     key={i}
                     className="w-1.5 bg-emerald-500/50 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                     style={{
-                      height: `${Math.random() * 100 + 20}%`,
-                      animationDuration: `${Math.random() * 0.5 + 0.5}s`
+                      height: \`\${Math.random() * 100 + 20}%\`,
+                      animationDuration: \`\${Math.random() * 0.5 + 0.5}s\`
                     }}
                   />
                 ))}
@@ -342,7 +347,7 @@ function CallUI({
                   {/* Dummy disabled controls while ringing */}
                   <Button
                     variant="ghost"
-                    size="lg"
+                    size="icon"
                     disabled
                     className="h-14 w-14 rounded-2xl bg-surface hover:bg-surface-hover border border-border-subtle text-text-muted"
                   >
@@ -351,7 +356,7 @@ function CallUI({
                   {callType === "video" && (
                     <Button
                       variant="ghost"
-                      size="lg"
+                      size="icon"
                       disabled
                       className="h-14 w-14 rounded-2xl bg-surface hover:bg-surface-hover border border-border-subtle text-text-muted"
                     >
@@ -362,8 +367,8 @@ function CallUI({
               )}
 
               <Button
-                variant="danger"
-                size="lg"
+                variant="destructive"
+                size="icon"
                 onClick={handleEnd}
                 className="h-14 w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 shadow-lg shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all border border-rose-400/20"
               >
@@ -395,7 +400,7 @@ function LiveKitControls({ callType }: { callType: string }) {
     <div className="flex items-center gap-6">
       <Button
         variant="ghost"
-        size="lg"
+        size="icon"
         onClick={toggleMic}
         className={cn(
           "h-14 w-14 rounded-2xl transition-all shadow-lg hover:scale-105 active:scale-95 border",
@@ -410,7 +415,7 @@ function LiveKitControls({ callType }: { callType: string }) {
       {callType === "video" && (
         <Button
           variant="ghost"
-          size="lg"
+          size="icon"
           className="h-14 w-14 rounded-2xl transition-all shadow-lg hover:scale-105 active:scale-95 border bg-surface text-text-secondary hover:bg-surface-hover hover:text-cyan-400 border-border-subtle"
         >
           <Video className="h-6 w-6" />
@@ -419,3 +424,6 @@ function LiveKitControls({ callType }: { callType: string }) {
     </div>
   );
 }
+`;
+
+fs.writeFileSync(file, newContent, 'utf8');
