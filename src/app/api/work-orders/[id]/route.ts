@@ -464,6 +464,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Missing work order ID" }, { status: 400 });
     }
 
+    // Delete custom unmapped external reference mapping
+    await prisma.$executeRaw`DELETE FROM work_order_external_refs WHERE workOrderId = ${id}`;
+
     await prisma.workOrder.delete({ where: { id } });
 
     return NextResponse.json({ success: true });

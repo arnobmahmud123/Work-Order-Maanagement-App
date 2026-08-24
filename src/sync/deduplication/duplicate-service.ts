@@ -30,14 +30,28 @@ export class DuplicateService {
         .first() as any;
 
       if (ref && ref.workOrderId) {
-        const hasChanged = ref.checksum !== order.payloadChecksum;
-        return {
-          isDuplicate: true,
-          existingWorkOrderId: ref.workOrderId,
-          matchType: "EXACT_EXTERNAL_ID",
-          existingChecksum: ref.checksum,
-          hasChanged,
-        };
+        // Double-check if the work order actually exists in the database
+        const woExists = await db
+          .prepare(`SELECT id FROM WorkOrder WHERE id = ? LIMIT 1`)
+          .bind(ref.workOrderId)
+          .first() as any;
+
+        if (woExists) {
+          const hasChanged = ref.checksum !== order.payloadChecksum;
+          return {
+            isDuplicate: true,
+            existingWorkOrderId: ref.workOrderId,
+            matchType: "EXACT_EXTERNAL_ID",
+            existingChecksum: ref.checksum,
+            hasChanged,
+          };
+        } else {
+          // Clean up orphaned external reference
+          await db
+            .prepare(`DELETE FROM work_order_external_refs WHERE workOrderId = ?`)
+            .bind(ref.workOrderId)
+            .run();
+        }
       }
 
       // 2. Secondary fuzzy check: address + client + due date (prevent duplicate creates)
