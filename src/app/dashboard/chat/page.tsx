@@ -315,7 +315,7 @@ export default function ChatPage() {
         </div>
 
         {/* Channel List */}
-        <div className="flex-1 min-h-0 overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-white/[0.06]">
+        <div className="flex-1 min-h-0 overflow-y-auto pt-2 pb-32 md:pb-2 scrollbar-thin scrollbar-thumb-white/[0.06]">
           {/* Channels Section */}
           <div className="px-2">
             <button
@@ -867,7 +867,10 @@ function ChatArea({
         
         for (let i = remaining.length - 1; i >= 0; i--) {
           const sm = remaining[i];
-          const scheduleTime = new Date(`${sm.date}T${sm.time}:00`);
+          const [year, month, day] = sm.date.split("-").map(Number);
+          const [hour, minute] = sm.time.split(":").map(Number);
+          const scheduleTime = new Date(year, month - 1, day, hour, minute);
+          
           if (now >= scheduleTime) {
             sendMessage.mutate({ content: sm.content });
             remaining.splice(i, 1);
@@ -1076,7 +1079,21 @@ function ChatArea({
   async function handleStartRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      
+      let options = {};
+      let ext = "webm";
+      let mime = "audio/webm";
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported) {
+        if (MediaRecorder.isTypeSupported("audio/webm")) {
+          options = { mimeType: "audio/webm" };
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          options = { mimeType: "audio/mp4" };
+          ext = "m4a";
+          mime = "audio/mp4";
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -1085,16 +1102,18 @@ function ChatArea({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: "audio/webm" });
+        const actualMime = mediaRecorder.mimeType || mime;
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
+        const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: actualMime });
         const previewUrl = URL.createObjectURL(file);
         setPendingAudio({ file, previewUrl });
       };
 
       mediaRecorder.start();
       setIsRecording(true);
-    } catch {
-      toast.error("Microphone access denied");
+    } catch (err) {
+      console.error(err);
+      toast.error("Microphone access denied or not supported");
     }
   }
 
@@ -1329,8 +1348,7 @@ function ChatArea({
               className="inline-flex flex-shrink-0 items-center gap-1.5 ml-1 md:ml-2 px-2 md:px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all text-[11px] font-bold border border-amber-500/20 hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/5"
             >
               <FileText className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Open Work Order</span>
-              <span className="sm:hidden">Open</span>
+              <span className="hidden md:inline">Open Work Order</span>
             </Link>
           )}
         </div>
