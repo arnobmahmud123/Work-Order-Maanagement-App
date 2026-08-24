@@ -2,6 +2,8 @@ import { CanonicalServiceCode } from "@/connectors/core/connector-types";
 
 // Default standard dictionary of service keyword mappings
 const DEFAULT_SERVICE_PATTERNS: Array<{ pattern: RegExp; code: CanonicalServiceCode }> = [
+  { pattern: /^repairs?$/i, code: "GENERAL_REPAIRS" },
+  { pattern: /property\s*preservation|general\s*preserv/i, code: "OTHER" },
   { pattern: /grass|lawn|mow|mowing|yard\s*maintenance|cut\s*grass/i, code: "GRASS_CUT" },
   { pattern: /debris|trash|clean\s*out|rubbish|dump|haul\s*away|junk/i, code: "DEBRIS_REMOVAL" },
   { pattern: /winteriz|wint|drain\s*plumb|anti\s*freeze/i, code: "WINTERIZATION" },

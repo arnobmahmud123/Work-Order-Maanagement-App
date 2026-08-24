@@ -211,6 +211,7 @@ export class SyncEngine {
               order.services.map((s, idx) => ({
                 id: `task_${idx + 1}`,
                 title: s.name,
+                description: s.description || s.instructions || "",
                 completed: false,
                 serviceCode: s.serviceCode,
                 quantity: s.quantity || 1,
@@ -218,6 +219,11 @@ export class SyncEngine {
                 instructions: s.instructions,
               }))
             );
+
+            // Build a clean description/project scope from the task list
+            const cleanDescription = order.services.length > 0
+              ? order.services.map((s, i) => `${i + 1}. ${s.name}${s.instructions ? "\n   " + s.instructions : ""}`).join("\n\n")
+              : order.instructions || "";
 
             const title = `${order.services[0]?.name || "Property Preservation"} - ${order.property.address1}`;
 
@@ -238,7 +244,7 @@ export class SyncEngine {
               .bind(
                 newWoId,
                 title,
-                order.instructions || "",
+                cleanDescription,
                 order.property.address1,
                 order.property.city,
                 order.property.state,

@@ -220,36 +220,47 @@ export default function ConnectorsAdminPage() {
             script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
             script.onload = () => resolve();
             script.onerror = () => reject(new Error("Failed to load PDF parser"));
-            document.head.appendChild(script);
+document.head.appendChild(script);
           });
         }
 
         const pdfjsLib = (window as any).pdfjsLib;
         pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const fullTextLines: string[] = [];
+
+        // Collect ALL text items with their x/y positions for column-aware parsing
+        interface PdfItem { x: number; y: number; str: string; }
+        const allItems: PdfItem[] = [];
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
           const textContent = await page.getTextContent();
-          let currentLine = "";
-          let lastY: number | null = null;
-
-          for (const item of textContent.items) {
-            const y = Math.round((item as any).transform[5]);
-            if (lastY !== null && Math.abs(y - lastY) > 5) {
-              if (currentLine.trim()) fullTextLines.push(currentLine.trim());
-              currentLine = "";
+          for (const item of (textContent as any).items) {
+            const t = item.transform;
+            const str = (item.str || "").trim();
+            if (str) {
+              allItems.push({ x: Math.round(t[4]), y: Math.round(t[5]), str });
             }
-            currentLine += (item as any).str + " ";
-            lastY = y;
           }
-          if (currentLine.trim()) fullTextLines.push(currentLine.trim());
         }
 
-        // Extract key preservation fields using regex heuristics
+        // Build line-ordered text (sorted by Y descending, then X ascending within same Y)
+        const byY = new Map<number, PdfItem[]>();
+        for (const item of allItems) {
+          if (!byY.has(item.y)) byY.set(item.y, []);
+          byY.get(item.y)!.push(item);
+        }
+        const sortedYs = [...byY.keys()].sort((a, b) => b - a);
+        const fullTextLines: string[] = [];
+        for (const y of sortedYs) {
+          const rowItems = byY.get(y)!.sort((a, b) => a.x - b.x);
+          const lineStr = rowItems.map(i => i.str).join(" ").trim();
+          if (lineStr) fullTextLines.push(lineStr);
+        }
+        const joinedText = fullTextLines.join("\n");
+
+        // ── FIELD EXTRACTION ─────────────────────────────────────────────────────
         const extracted: Record<string, any> = {
           "Work Order #": file.name.replace(/\.[^/.]+$/, ""),
           "Service": "Property Preservation",
@@ -259,128 +270,125 @@ export default function ConnectorsAdminPage() {
           "Zip": "",
           "Due Date": new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
           "Lock Code": "",
-          "Gate Code": "",
-          "Customer": "",
-          "Loan Number": "",
-          "Loan Type": "",
-          "Ordered Date": "",
-          "Investor Type": "",
-          "Instructions": "", // Will hold parsed tasks
+          "Instructions": "",
         };
 
-        const joinedText = fullTextLines.join(" ");
-
-        // MCS WO#: M15532300 or similar
-        const woMatch = joinedText.match(/(?:MCS\s*WO#|WO\s*#|Work\s*Order|Order|Task|Ref|Case)[\s#:-]+([A-Z0-9-]{4,20})/i);
+        const woMatch = joinedText.match(/MCS\s*WO#[:\s]+([A-Z0-9-]{4,20})/i)
+          || joinedText.match(/WO\s*[#:]+\s*([A-Z0-9-]{4,20})/i);
         if (woMatch) extracted["Work Order #"] = woMatch[1].trim();
 
-        // Address Match - Avoid vendor address by checking near "Mortgager Information" or just grabbing standard pattern
-        // Usually the first address after vendor is the property
-        const mortgagorIndex = joinedText.indexOf("Mortgager Information");
-        if (mortgagorIndex !== -1) {
-            const block = joinedText.substring(mortgagorIndex, mortgagorIndex + 300);
-            const addrMatch = block.match(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))/i);
-            if (addrMatch) extracted["Property Address"] = addrMatch[1].trim();
-            const cszMatch = block.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
-            if (cszMatch) {
-                extracted["City"] = cszMatch[1].trim();
-                extracted["State"] = cszMatch[2].trim();
-                extracted["Zip"] = cszMatch[3].trim();
-            }
-        }
-        
-        if (!extracted["Property Address"]) {
-            const addresses = [...joinedText.matchAll(/(\d{1,6}\s+[A-Za-z0-9\s.,]{5,40}(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Ct|Court|Way|Pkwy|Pl|Place))/gi)];
-            if (addresses.length > 0) {
-              extracted["Property Address"] = addresses[addresses.length > 1 ? 1 : 0][1].trim();
-            }
-            const cszMatch = joinedText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
-            if (cszMatch) {
-              extracted["City"] = cszMatch[1].trim();
-              extracted["State"] = cszMatch[2].trim();
-              extracted["Zip"] = cszMatch[3].trim();
-            }
-        }
+        const woTypeMatch = joinedText.match(/WO\s*Type[:\s]+([A-Za-z\s]+?)(?:\n|$)/i);
+        if (woTypeMatch) extracted["Service"] = woTypeMatch[1].trim();
 
-        // Specific MCS Fields
-        const custMatch = joinedText.match(/Customer:\s*([A-Z0-9]+)/i);
-        if (custMatch) extracted["Customer"] = custMatch[1].trim();
-
-        const loanMatch = joinedText.match(/Loan\s*Number:\s*([^\n]+)/i);
-        if (loanMatch) extracted["Loan Number"] = loanMatch[1].trim();
-
-        const loanTypeMatch = joinedText.match(/Loan\s*Type:\s*([^\n]+)/i);
-        if (loanTypeMatch) extracted["Loan Type"] = loanTypeMatch[1].trim();
-
-        const orderedMatch = joinedText.match(/Ordered\s*Date:\s*([^\n]+)/i);
-        if (orderedMatch) extracted["Ordered Date"] = orderedMatch[1].trim();
-
-        const invMatch = joinedText.match(/Investor\s*Type:\s*([^\n]+)/i);
-        if (invMatch) extracted["Investor Type"] = invMatch[1].trim();
-
-        const svcMatch = joinedText.match(/WO\s*Type:\s*([^\n]+)/i);
-        if (svcMatch) extracted["Service"] = svcMatch[1].trim();
-
-        // Lock code match
-        const lockMatch = joinedText.match(/(?:Lock|Lockbox|Combo|Key\s*Code|keycode(?:\(s\))?)[^\d]*(\d{3,10})/i);
-        if (lockMatch) extracted["Lock Code"] = lockMatch[1].trim();
-
-        // Due date match
-        const dueMatch = joinedText.match(/(?:Due(?:\s*Date)?|Complete\s*By|Deadline)[\s#:-]*(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/i);
+        const dueMatch = joinedText.match(/Due\s*Date[:\s]+(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i);
         if (dueMatch) extracted["Due Date"] = dueMatch[1].trim();
 
-        // Tasks parsing from Description / Additional Instructions block
-        // Find everything between "Description Additional Instructions" and "Current Damages" or end
-        let tasksRaw = "";
-        const descIndex = joinedText.indexOf("Description Additional Instructions");
-        const damagesIndex = joinedText.indexOf("Current Damages");
-        
-        const parsedServices: any[] = [];
-        
-        if (descIndex !== -1 && damagesIndex !== -1 && damagesIndex > descIndex) {
-            tasksRaw = joinedText.substring(descIndex + "Description Additional Instructions".length, damagesIndex);
-        } else if (descIndex !== -1) {
-            tasksRaw = joinedText.substring(descIndex + "Description Additional Instructions".length);
-        }
-        
-        if (tasksRaw) {
-            extracted["Instructions"] = "Tasks:\n" + tasksRaw.trim();
-            
-            // Try to split tasks intelligently based on common task names or just use a generic list.
-            // A simple heuristic: pdfjs often interleaves or appends.
-            // We will just create 1 main task with the full text, OR split it if we see "approved"
-            const taskSegments = tasksRaw.split(/(?=Remove Saplings|TRIM TREE\(S\)|Remove Vines|Trim Shrubs|Grass Cut|Winterization|Debris Removal|Boarding)/gi);
-            
-            if (taskSegments.length > 1) {
-                for (const seg of taskSegments) {
-                    if (seg.trim().length > 3) {
-                        // The first few words are likely the task name
-                        const words = seg.trim().split(" ");
-                        const name = words.slice(0, 2).join(" ");
-                        parsedServices.push({
-                            name: name,
-                            description: seg.trim(),
-                            instructions: seg.trim(),
-                            quantity: 1,
-                        });
-                    }
-                }
-            } else {
-                 parsedServices.push({
-                    name: "Property Preservation",
-                    description: tasksRaw.trim(),
-                    instructions: tasksRaw.trim(),
-                    quantity: 1,
-                 });
-            }
-        } else {
-            extracted["Instructions"] = fullTextLines.slice(0, 20).join("\n");
-        }
-        
-        // Expose parsed services
-        extracted["_parsedServices"] = parsedServices.length > 0 ? parsedServices : undefined;
+        const lockMatch = joinedText.match(/Lockbox\s*Code[:\s]+([A-Za-z0-9*]+)/i)
+          || joinedText.match(/keycode[^:]*?:\s*([A-Za-z0-9]+)\s*\//i);
+        if (lockMatch) extracted["Lock Code"] = lockMatch[1].trim();
 
-        const headers = Object.keys(extracted);
+        // ── PROPERTY (MORTGAGOR) ADDRESS ─────────────────────────────────────────
+        {
+          const mortgagerIdx = joinedText.indexOf("Mortgager Information");
+          const propAccessIdx = joinedText.indexOf("Property Access Info");
+          const blockEnd = propAccessIdx > mortgagerIdx ? propAccessIdx : mortgagerIdx + 400;
+
+          if (mortgagerIdx !== -1) {
+            const block = joinedText.substring(mortgagerIdx, blockEnd);
+            const addrLines = block.split("\n");
+            let foundAddr = false;
+            for (const line of addrLines) {
+              if (/^\d{1,6}\s+\w/.test(line.trim())) {
+                if (!foundAddr) {
+                  extracted["Property Address"] = line.trim();
+                  foundAddr = true;
+                  continue;
+                }
+              }
+              if (foundAddr && !extracted["City"]) {
+                const cszMatch = line.match(/^([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+                if (cszMatch) {
+                  extracted["City"] = cszMatch[1].trim();
+                  extracted["State"] = cszMatch[2].trim();
+                  extracted["Zip"] = cszMatch[3].trim();
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // ── TASK TABLE PARSING ──────────────────────────────────────────────────
+        const parsedServices: { name: string; description: string; instructions: string; quantity: number }[] = [];
+        let descColX = 30;
+        let instrColX = 280;
+
+        const headerItem = allItems.find(i => i.str === "Additional Instructions" || i.str === "Additional");
+        if (headerItem) instrColX = headerItem.x;
+
+        const descHeaderItem = allItems.find(i => i.str === "Description" && i.x < instrColX - 50);
+        const damagesHeaderItem = allItems.find(i => i.str === "Current Damages" || i.str === "Current");
+
+        if (descHeaderItem && damagesHeaderItem) {
+          const tableTopY = descHeaderItem.y;
+          const tableBottomY = damagesHeaderItem.y;
+          const tableItems = allItems.filter(i => i.y < tableTopY && i.y > tableBottomY);
+
+          const rowMap = new Map<number, PdfItem[]>();
+          for (const item of tableItems) {
+            const snappedY = Math.round(item.y / 5) * 5;
+            if (!rowMap.has(snappedY)) rowMap.set(snappedY, []);
+            rowMap.get(snappedY)!.push(item);
+          }
+
+          const sortedRows = [...rowMap.entries()].sort((a, b) => b[0] - a[0]);
+          const rawTaskRows: { desc: string; instr: string }[] = [];
+          for (const [, rowItems] of sortedRows) {
+            const leftItems = rowItems.filter(i => i.x < instrColX - 10).sort((a, b) => a.x - b.x);
+            const rightItems = rowItems.filter(i => i.x >= instrColX - 10).sort((a, b) => a.x - b.x);
+            const desc = leftItems.map(i => i.str).join(" ").trim();
+            const instr = rightItems.map(i => i.str).join(" ").trim();
+            if (desc || instr) rawTaskRows.push({ desc, instr });
+          }
+
+          const mergedTasks: { desc: string; instr: string }[] = [];
+          for (const row of rawTaskRows) {
+            if (row.desc) {
+              mergedTasks.push({ desc: row.desc, instr: row.instr });
+            } else if (mergedTasks.length > 0 && row.instr) {
+              mergedTasks[mergedTasks.length - 1].instr += " " + row.instr;
+            }
+          }
+
+          for (const task of mergedTasks) {
+            if (task.desc) {
+              parsedServices.push({
+                name: task.desc,
+                description: task.desc,
+                instructions: task.instr,
+                quantity: 1,
+              });
+            }
+          }
+        }
+
+        if (parsedServices.length === 0) {
+          parsedServices.push({
+            name: extracted["Service"] || "Property Preservation",
+            description: "Property Preservation",
+            instructions: "See attached work order",
+            quantity: 1,
+          });
+        }
+
+        const taskSummaryText = parsedServices
+          .map((s, i) => `${i + 1}. ${s.name}${s.instructions ? `\n   ${s.instructions}` : ""}`)
+          .join("\n\n");
+
+        extracted["Instructions"] = taskSummaryText;
+        extracted["_parsedServices"] = parsedServices;
+
+        const headers = Object.keys(extracted).filter(k => !k.startsWith("_"));
         setFileHeaders(headers);
         setRawRows([extracted]);
 
@@ -397,7 +405,7 @@ export default function ConnectorsAdminPage() {
         };
         setColumnMapping(mapping);
         runPreviewValidation([extracted], mapping);
-        toast.success("PDF Work Order parsed successfully!");
+        toast.success(`PDF parsed: ${parsedServices.length} task(s) extracted!`);
         return;
       }
 
