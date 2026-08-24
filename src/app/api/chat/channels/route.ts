@@ -109,29 +109,36 @@ export async function GET(req: NextRequest) {
 
   const woPhotoMap = new Map(workOrders.map(wo => [wo.id, wo.property?.imageUrl]));
 
-  const result = channels.map((channel) => {
-    let image = null;
-    if (channel.type === "WORK_ORDERS") {
-      const cuidMatch = (channel.name || "").match(/[a-z0-9]{24,}/i) || (channel.description || "").match(/[a-z0-9]{24,}/i);
-      if (cuidMatch) image = woPhotoMap.get(cuidMatch[0]);
-    }
+  const result = channels
+    .filter(channel => !(channel.type === "WORK_ORDERS" && channel._count.messages === 0))
+    .map((channel) => {
+      let image = null;
+      if (channel.type === "WORK_ORDERS") {
+        const cuidMatch = (channel.name || "").match(/[a-z0-9]{24,}/i) || (channel.description || "").match(/[a-z0-9]{24,}/i);
+        if (cuidMatch) image = woPhotoMap.get(cuidMatch[0]);
+      }
 
-    return {
-      id: channel.id,
-      name: channel.name,
-      description: channel.description,
-      type: channel.type,
-      isArchived: channel.isArchived,
-      createdAt: channel.createdAt,
-      updatedAt: channel.updatedAt,
-      members: channel.members,
-      lastMessage: channel.messages[0] || null,
-      messageCount: channel._count.messages,
-      unreadCount: unreadMap.get(channel.id) || 0,
-      image,
-      imageUrl: channel.imageUrl,
-    };
-  });
+      return {
+        id: channel.id,
+        name: channel.name,
+        description: channel.description,
+        type: channel.type,
+        isArchived: channel.isArchived,
+        createdAt: channel.createdAt,
+        updatedAt: channel.updatedAt,
+        members: channel.members,
+        lastMessage: channel.messages[0] || null,
+        messageCount: channel._count.messages,
+        unreadCount: unreadMap.get(channel.id) || 0,
+        image,
+        imageUrl: channel.imageUrl,
+      };
+    })
+    .sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : new Date(a.updatedAt).getTime();
+      const bTime = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : new Date(b.updatedAt).getTime();
+      return bTime - aTime;
+    });
 
   return NextResponse.json({ channels: result });
 }

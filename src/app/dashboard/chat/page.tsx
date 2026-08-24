@@ -854,6 +854,34 @@ function ChatArea({
     }
   }, [channelId, messages.length]);
 
+  // Send scheduled messages
+  useEffect(() => {
+    if (scheduledMessages.length === 0) return;
+    
+    const interval = setInterval(() => {
+      const now = new Date();
+      setScheduledMessages(prev => {
+        const remaining = [...prev];
+        let changed = false;
+        
+        for (let i = remaining.length - 1; i >= 0; i--) {
+          const sm = remaining[i];
+          const scheduleTime = new Date(`${sm.date}T${sm.time}:00`);
+          if (now >= scheduleTime) {
+            sendMessage.mutate({ content: sm.content });
+            remaining.splice(i, 1);
+            changed = true;
+            toast.success(`Sent scheduled message`);
+          }
+        }
+        
+        return changed ? remaining : prev;
+      });
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [scheduledMessages, sendMessage]);
+
   // Simulate typing indicator
   useEffect(() => {
     if (messages.length > 0) {
@@ -1612,11 +1640,11 @@ function ChatArea({
 
                             {/* Floating actions menu */}
                             <div
-                              className={cn(
-                                "absolute top-1/2 -translate-y-1/2 hidden group-hover/bubble:flex items-center gap-0.5 p-1 bg-surface-hover/95 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-10",
-                                isOwn 
-                                  ? "right-full mr-3 before:absolute before:-right-3 before:inset-y-0 before:w-3" 
-                                  : "left-full ml-3 before:absolute before:-left-3 before:inset-y-0 before:w-3"
+                                className={cn(
+                                  "md:absolute mt-1 md:mt-0 md:top-1/2 md:-translate-y-1/2 flex md:hidden md:group-hover/bubble:flex items-center gap-0.5 p-1 bg-surface-hover/95 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-10 transition-all opacity-100 md:opacity-0 md:group-hover/bubble:opacity-100",
+                                  isOwn 
+                                    ? "justify-end md:justify-start md:right-full md:mr-3 before:hidden md:before:absolute md:before:-right-3 md:before:inset-y-0 md:before:w-3" 
+                                    : "justify-start md:left-full md:ml-3 before:hidden md:before:absolute md:before:-left-3 md:before:inset-y-0 md:before:w-3"
                               )}
                             >
                               <button

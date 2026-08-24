@@ -52,9 +52,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json();
 
   if (body.markRead) {
+    const lastMsg = await prisma.chatMessage.findFirst({
+      where: { channelId: id },
+      orderBy: { createdAt: "desc" }
+    });
+    
     await prisma.channelMember.updateMany({
       where: { channelId: id, userId },
-      data: { lastReadAt: new Date() },
+      data: { lastReadAt: lastMsg ? lastMsg.createdAt : new Date() },
     });
     return NextResponse.json({ success: true });
   }
