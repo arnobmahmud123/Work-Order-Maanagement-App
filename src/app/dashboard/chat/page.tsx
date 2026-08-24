@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useChatChannels,
   useChatChannel,
@@ -154,6 +155,7 @@ function getGradientForUser(userId: string) {
 export default function ChatPage() {
   const { topNavHidden } = useAppStore();
   const { data: session } = useSession();
+  const qc = useQueryClient();
   const userId = (session?.user as any)?.id;
   const { data: channelsData, isLoading: channelsLoading } = useChatChannels();
   const { data: usersData } = useUsers();
@@ -1153,7 +1155,7 @@ function ChatArea({
       }
       toast.success("Channel deleted successfully");
       qc.invalidateQueries({ queryKey: ["chat-channels"] });
-      setSelectedChannelId(null);
+      setActiveChannelId(null);
     } catch (err: any) {
       toast.error(err.message);
     }
