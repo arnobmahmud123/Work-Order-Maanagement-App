@@ -84,8 +84,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const role = (session.user as any).role;
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Forbidden - Admins only" }, { status: 403 });
+  }
+
   const { id } = await params;
-  await prisma.channel.update({ where: { id }, data: { isArchived: true } });
+  await prisma.channel.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
 }

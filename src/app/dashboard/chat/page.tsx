@@ -63,6 +63,7 @@ import {
   Mic,
   StopCircle,
   Clock,
+  Trash2,
 } from "lucide-react";
 import { cn, formatRelativeTime, truncate } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -1138,6 +1139,26 @@ function ChatArea({
     );
   }
 
+  async function handleDeleteChannel() {
+    if (!channel?.id) return;
+    if (!confirm("Are you sure you want to delete this channel? This action cannot be undone.")) return;
+
+    try {
+      const res = await fetch(`/api/chat/channels/${channel.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete channel");
+      }
+      toast.success("Channel deleted successfully");
+      qc.invalidateQueries({ queryKey: ["chat-channels"] });
+      setSelectedChannelId(null);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
   function handleBookmark(messageId: string) {
     setBookmarkedMessages((prev) =>
       prev.includes(messageId)
@@ -1336,6 +1357,16 @@ function ChatArea({
           >
             {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </button>
+          
+          {((session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN") && (
+            <button
+              onClick={handleDeleteChannel}
+              className="p-2 rounded-lg text-text-muted hover:bg-red-500/10 hover:text-red-500 transition-colors ml-1"
+              title="Delete channel"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1764,43 +1795,7 @@ function ChatArea({
           </div>
         )}
 
-        {/* Formatting toolbar */}
-        <div className="flex items-center gap-0.5 mb-2.5">
-          {[
-            { icon: Bold, format: "bold" as const, label: "Bold" },
-            { icon: Italic, format: "italic" as const, label: "Italic" },
-            { icon: Code, format: "code" as const, label: "Code" },
-            { icon: Link2, format: "link" as const, label: "Link" },
-          ].map(({ icon: Icon, format, label }) => (
-            <button
-              key={format}
-              onClick={() => handleFormatText(format)}
-              className="p-1.5 rounded-md hover:bg-surface-hover text-text-dim hover:text-text-secondary transition-colors"
-              title={label}
-            >
-              <Icon className="h-3.5 w-3.5" />
-            </button>
-          ))}
-          <div className="w-px h-4 bg-surface-hover mx-1" />
-          <button
-            onClick={() => {
-              setMessage((prev) => prev + "@");
-              setMentionQuery("");
-              if (textareaRef.current) {
-                const rect = textareaRef.current.getBoundingClientRect();
-                setMentionPosition({
-                  top: 0,
-                  left: 0,
-                });
-                textareaRef.current.focus();
-              }
-            }}
-            className="p-1.5 rounded-md hover:bg-surface-hover text-text-dim hover:text-text-secondary transition-colors"
-            title="Mention someone"
-          >
-            <AtSign className="h-3.5 w-3.5" />
-          </button>
-        </div>
+
 
         <form onSubmit={handleSend} className="flex items-end gap-2.5 relative">
           <input

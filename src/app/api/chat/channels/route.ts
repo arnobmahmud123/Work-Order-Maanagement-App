@@ -183,6 +183,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Check if channel already exists with this name for this company
+    const existingChannel = await prisma.channel.findFirst({
+      where: { name, companyId },
+      include: {
+        members: {
+          include: { user: { select: { id: true, name: true, email: true, image: true } } },
+        },
+        _count: { select: { messages: true, members: true } },
+      },
+    });
+
+    if (existingChannel) {
+      // If the current user is not a member, add them as a member
+      const isMember = existingChannel.members.some((m: any) => m.userId === userId);
+      if (!isMember) {
+        await prisma.channelMember.create({
+          data: {
+            channelId: existingChannel.id,
+            userId,
+            role: "MEMBER",
+          },
+        });
+        existingChannel.members.push({
+          userId,
+          role: "MEMBER",
+          user: userExists,
+        } as any);
+        existingChannel._count.members += 1;
+      }
+      return NextResponse.json(existingChannel, { status: 200 });
+    }
+
     const channel = await prisma.channel.create({
       data: {
         name,
