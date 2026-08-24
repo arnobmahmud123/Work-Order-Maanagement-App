@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCallSession } from "@/lib/chat-calls";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest, context: any) {
   try {
     const resolvedParams = context?.params ? await context.params : null;
