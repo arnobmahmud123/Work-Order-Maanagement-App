@@ -207,6 +207,16 @@ export default function ConnectorsAdminPage() {
     setImportSuccessResult(null);
     setValidating(true);
 
+    const cleanPrices = (text: string): string => {
+      if (!text) return "";
+      return text
+        .replace(/approved\s*\$?\d+(?:\.\d+)?/gi, "")
+        .replace(/approved/gi, "")
+        .replace(/\b\$?\d+\.\d{2}\b/g, "")
+        .replace(/[ \t]+/g, " ")
+        .trim();
+    };
+
     try {
       const fileName = file.name.toLowerCase();
 
@@ -495,10 +505,12 @@ document.head.appendChild(script);
 
           for (const task of mergedTasks) {
             if (task.desc) {
+              const cleanedName = cleanPrices(task.desc);
+              const cleanedInstr = cleanPrices(task.instr);
               parsedServices.push({
-                name: task.desc,
-                description: task.desc,
-                instructions: task.instr,
+                name: cleanedName,
+                description: cleanedInstr || cleanedName,
+                instructions: cleanedInstr || cleanedName,
                 quantity: 1,
               });
             }
@@ -520,7 +532,14 @@ document.head.appendChild(script);
               if (trimmed.length > 3) {
                 const spaceIdx = trimmed.indexOf(" ");
                 const taskName = spaceIdx > -1 ? trimmed.substring(0, Math.min(trimmed.indexOf("  "), 40) > 0 ? trimmed.indexOf("  ") : 40) : trimmed;
-                parsedServices.push({ name: taskName.trim(), description: taskName.trim(), instructions: trimmed, quantity: 1 });
+                const cleanedName = cleanPrices(taskName);
+                const cleanedInstr = cleanPrices(trimmed);
+                parsedServices.push({ 
+                  name: cleanedName.trim(), 
+                  description: cleanedInstr || cleanedName, 
+                  instructions: cleanedInstr || cleanedName, 
+                  quantity: 1 
+                });
               }
             }
           }

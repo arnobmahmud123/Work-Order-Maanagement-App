@@ -92,7 +92,13 @@ const STATUS_PILL_COLORS: Record<string, string> = {
 
 // ─── Work Order Number Generator ─────────────────────────────────────────────
 
-function getWorkOrderNumber(id: string): string {
+function getWorkOrderNumber(id: string, metadata?: any): string {
+  try {
+    if (metadata) {
+      const meta = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+      if (meta?.externalWorkOrderId) return String(meta.externalWorkOrderId);
+    }
+  } catch (e) {}
   const short = id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
   return `WO-${short}`;
 }
@@ -972,7 +978,7 @@ function WorkOrdersContent() {
         return (
           <Link href={`/dashboard/work-orders/${wo.id}`} className="group">
             <span className="text-xs font-mono font-bold text-cyan-600 group-hover:text-cyan-700 transition-colors">
-              {getWorkOrderNumber(wo.id)}
+              {getWorkOrderNumber(wo.id, wo.metadata)}
             </span>
           </Link>
         );
@@ -1339,7 +1345,7 @@ function WorkOrdersContent() {
                 if (selectedWOs.length === 0) { toast.error("No work orders to export"); return; }
                 const headers = ["WO #", "Title", "Address", "City", "State", "Status", "Service Type", "Contractor", "Due Date", "Priority", "Created"];
                 const rows = selectedWOs.map((wo: any) => {
-                  const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                  const woNum = getWorkOrderNumber(wo.id, wo.metadata);
                   return [
                     woNum,
                     `"${(wo.title || "").replace(/"/g, '""')}"`,
@@ -1387,7 +1393,7 @@ function WorkOrdersContent() {
                   <p class="subtitle">${selectedWOs.length} work order(s) • Printed ${new Date().toLocaleString()}</p>
                   <table><thead><tr><th>WO #</th><th>Title</th><th>Address</th><th>Status</th><th>Type</th><th>Contractor</th><th>Due Date</th><th>Priority</th></tr></thead><tbody>
                   ${selectedWOs.map((wo: any) => {
-                    const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                    const woNum = getWorkOrderNumber(wo.id, wo.metadata);
                     return `<tr><td>${woNum}</td><td>${wo.title || ""}</td><td>${wo.address || ""}</td><td>${STATUS_LABELS[wo.status] || wo.status}</td><td>${SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType || "—"}</td><td>${wo.contractor?.name || "Unassigned"}</td><td>${wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "—"}</td><td class="priority-${wo.priority ?? 0}">${["Low","Medium","High","Urgent"][wo.priority ?? 0]}</td></tr>`;
                   }).join("")}
                   </tbody></table>
@@ -1494,7 +1500,7 @@ function WorkOrdersContent() {
             {/* Mobile Card List View */}
             <div className="block md:hidden space-y-3">
               {workOrders.map((wo: any) => {
-                const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                const woNum = getWorkOrderNumber(wo.id, wo.metadata);
                 const statusClass = STATUS_PILL_COLORS[wo.status] || "bg-gray-500/10 text-text-secondary border-gray-500/20";
                 const priorityLabel = ["Low", "Medium", "High", "Urgent"][wo.priority ?? 0];
                 const priorityColor = [
@@ -1705,7 +1711,7 @@ function PropertyHistoryPopup({
     const list: any[] = [];
     historyWorkOrders.forEach((wo: any) => {
       const woBids = (wo.metadata?.bids as any[]) || [];
-      const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+      const woNum = getWorkOrderNumber(wo.id, wo.metadata);
       const contractorName = wo.contractor?.name || wo.metadata?.contractorName || "Unassigned";
       const workType = SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType?.replace(/_/g, " ") || "—";
       const woDate = wo.createdAt ? new Date(wo.createdAt).toLocaleDateString() : (wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "—");
@@ -1750,7 +1756,7 @@ function PropertyHistoryPopup({
   // Filter Past WOs
   const filteredPastWOs = useMemo(() => {
     return historyWorkOrders.filter((wo: any) => {
-      const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+      const woNum = getWorkOrderNumber(wo.id, wo.metadata);
       const statusLabel = STATUS_LABELS[wo.status] || wo.status || "";
       const workType = SERVICE_TYPE_LABELS[wo.serviceType] || wo.serviceType || "";
       const contractorName = wo.contractor?.name || wo.metadata?.contractorName || "Unassigned";
@@ -2006,7 +2012,7 @@ function PropertyHistoryPopup({
                       </thead>
                       <tbody className="divide-y divide-border-subtle text-xs">
                         {filteredPastWOs.map((wo: any) => {
-                          const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                          const woNum = getWorkOrderNumber(wo.id, wo.metadata);
                           const fullAddress = [wo.address || "", wo.city || "", wo.state || "", wo.zipCode || ""].filter(Boolean).join(" ");
                           const files = wo.files || [];
                           const contractorName = wo.contractor?.name || wo.metadata?.contractorName || "Unassigned";
@@ -2435,7 +2441,7 @@ function PropertyHistoryPopup({
                     <div className="space-y-4">
                       {historyWorkOrders.map((wo: any) => {
                         const tasks = (wo.tasks as any[]) || [];
-                        const woNum = "WO-" + wo.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+                        const woNum = getWorkOrderNumber(wo.id, wo.metadata);
                         return (
                           <div key={wo.id} className="p-4 rounded-xl bg-surface border border-border-subtle">
                             <div className="flex items-center justify-between mb-2">

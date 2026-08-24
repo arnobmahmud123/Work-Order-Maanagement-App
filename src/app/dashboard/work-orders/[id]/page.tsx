@@ -495,6 +495,16 @@ export default function WorkOrderDetailPage({
   );
   const logActivity = useLogActivity(id);
   const role = (session?.user as any)?.role;
+  const clientWoNumber = (() => {
+    if (!workOrder) return "";
+    try {
+      if (workOrder.metadata) {
+        const meta = typeof workOrder.metadata === "string" ? JSON.parse(workOrder.metadata) : workOrder.metadata;
+        if (meta?.externalWorkOrderId) return String(meta.externalWorkOrderId);
+      }
+    } catch (e) {}
+    return "WO-" + workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+  })();
 
   const [editingStatus, setEditingStatus] = useState(false);
   const [newStatus, setNewStatus] = useState("");
@@ -2164,7 +2174,7 @@ export default function WorkOrderDetailPage({
           {/* Left Badges */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-xl border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
-              WO-{workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
+              {clientWoNumber}
             </span>
 
             {/* Status Dropdown / Badge */}
@@ -2383,16 +2393,16 @@ export default function WorkOrderDetailPage({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2.5 bg-amber-500/10 px-3.5 py-1.5 rounded-2xl border border-amber-500/20">
-              <UserX className="h-3.5 w-3.5 text-amber-400" />
+            <div className="flex items-center gap-2.5 bg-amber-500/10 px-3.5 py-1.5 rounded-2xl border border-amber-500/30 animate-pulse-slow">
+              <UserX className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
               <div className="text-xs">
-                <p className="text-amber-400/70 font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Contractor</p>
-                <p className="text-amber-300 font-bold">Unassigned</p>
+                <p className="text-amber-800 dark:text-amber-400/80 font-bold text-[9px] uppercase tracking-wider leading-none mb-0.5">Contractor</p>
+                <p className="text-amber-900 dark:text-amber-200 font-bold">Unassigned</p>
               </div>
               {canEdit && (
                 <button
                   onClick={() => setShowEdit(true)}
-                  className="ml-2 text-[10px] font-bold text-amber-400 underline hover:text-amber-300"
+                  className="ml-2 text-[10px] font-black text-amber-700 dark:text-amber-300 underline hover:text-amber-900 dark:hover:text-white transition-colors"
                 >
                   Assign
                 </button>
@@ -2723,9 +2733,10 @@ export default function WorkOrderDetailPage({
                   </button>
                 </div>
                 <div className={`p-4 rounded-xl bg-surface-hover border border-border-subtle overflow-y-auto scrollbar-none transition-all duration-300 ${expandedProjectScope ? "max-h-none" : "h-[240px]"}`}>
-                  <p className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed italic">
-                    {workOrder.description}
-                  </p>
+                  <div 
+                    className="text-sm text-text-secondary whitespace-pre-wrap leading-relaxed italic rich-text-content"
+                    dangerouslySetInnerHTML={{ __html: workOrder.description }}
+                  />
                 </div>
               </div>
             )}
@@ -4419,6 +4430,17 @@ function WorkOrderQuickViewModal({
   const duringPhotos = allPhotos.filter((p) => p.category === "DURING" && !itemPhotoIds.has(p.id!));
   const afterPhotos = allPhotos.filter((p) => p.category === "AFTER" && !itemPhotoIds.has(p.id!));
 
+  const clientWoNumber = (() => {
+    if (!workOrder) return "";
+    try {
+      if (workOrder.metadata) {
+        const meta = typeof workOrder.metadata === "string" ? JSON.parse(workOrder.metadata) : workOrder.metadata;
+        if (meta?.externalWorkOrderId) return String(meta.externalWorkOrderId);
+      }
+    } catch (e) {}
+    return "WO-" + workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+  })();
+
   return (
     <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483600 }}>
       <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
@@ -4432,7 +4454,7 @@ function WorkOrderQuickViewModal({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20 uppercase tracking-widest">
-                  WO-{workOrder.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
+                  {clientWoNumber}
                 </span>
                 <Badge className={cn("text-[9px] px-2 py-0.5", STATUS_COLORS[workOrder.status])}>
                   {STATUS_LABELS[workOrder.status]}
