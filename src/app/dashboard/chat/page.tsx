@@ -690,7 +690,7 @@ function ChannelRow({
           )}
         >
           {channel.imageUrl || channel.image || channel.metadata?.image ? (
-            <img src={channel.imageUrl || channel.image || channel.metadata?.image} alt={channel.name} className="h-full w-full object-cover" />
+            <img src={channel.imageUrl || channel.image || channel.metadata?.image} alt={channel.name} className="h-full w-full object-contain" />
           ) : channel.type === "WORK_ORDERS" ? (
             <Home className="h-4 w-4" />
           ) : (
@@ -1269,7 +1269,7 @@ function ChatArea({
                   : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"
               )}>
                 {channel?.imageUrl || channel?.image || channel?.metadata?.image ? (
-                  <img src={channel.imageUrl || channel.image || channel.metadata?.image} alt={channel?.name} className="h-full w-full object-cover" />
+                  <img src={channel.imageUrl || channel.image || channel.metadata?.image} alt={channel?.name} className="h-full w-full object-contain" />
                 ) : channel?.type === "WORK_ORDERS" ? (
                   <Home className="h-5 w-5" />
                 ) : (

@@ -240,7 +240,7 @@ export function ChannelInfoPanel({
                 <img
                   src={(channel as any).imageUrl || (channel as any).image || (channel as any).metadata?.image}
                   alt=""
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                 />
               ) : (
                 <div className="h-full w-full flex items-center justify-center">
