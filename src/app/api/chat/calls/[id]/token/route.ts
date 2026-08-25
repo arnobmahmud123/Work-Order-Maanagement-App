@@ -20,11 +20,18 @@ export async function GET(
     }
 
     const userId = (session.user as any).id;
-    const isParticipant = callSession.participants?.some(
-      (p: any) => p.userId === userId
-    ) || callSession.callerId === userId || callSession.targetUserId === userId;
+    const userEmail = session.user?.email;
 
-    if (!isParticipant) {
+    // Allow: caller, recorded recipient, or someone who has accepted (in participants list)
+    const isParticipant =
+      callSession.callerId === userId ||
+      callSession.targetUserId === userId ||
+      callSession.targetUserId === userEmail ||
+      callSession.participants?.some((p: any) => p.userId === userId);
+
+    // If not an obvious participant, still allow if call is CONNECTED (they accepted)
+    const callStatus = callSession.status;
+    if (!isParticipant && callStatus !== "connected") {
       return NextResponse.json({ error: "Unauthorized for this call" }, { status: 403 });
     }
 

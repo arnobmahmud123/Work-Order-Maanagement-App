@@ -136,11 +136,68 @@ export async function getCallSession(id: string): Promise<ActiveCallSession | nu
   }
 }
 
+/**
+ * Check if a call is targeted at this user — by:
+ * 1. Direct recipientId match
+ * 2. Email match
+ * 3. Channel membership — if caller is in a channel with this user
+ * 4. Work order contractor/coordinator match via channel description
+ */
+async function isCallForUser(log: any, userId: string, email?: string): Promise<boolean> {
+  // Direct match
+  if (log.recipientId === userId) return true;
+  if (email && log.recipientName === email) return true;
+  if (email && log.recipientId === email) return true;
+
+  // Parse purpose to get channelId
+  let parsedPurpose: any = {};
+  try { parsedPurpose = log.purpose ? JSON.parse(log.purpose) : {}; } catch {}
+  
+  const channelId = parsedPurpose.channelId;
+  if (!channelId || channelId === "general") return false;
+
+  // Check if user is a ChannelMember of the channel
+  const membership = await prisma.channelMember.findFirst({
+    where: { channelId, userId },
+  }).catch(() => null);
+  if (membership) return true;
+
+  // Check if the channel is a WORK_ORDERS channel, and this user is the contractor/coordinator
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { type: true, name: true, description: true },
+  }).catch(() => null);
+
+  if (channel?.type === "WORK_ORDERS") {
+    const cuidMatch =
+      (channel.name || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i) ||
+      (channel.description || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i);
+    const workOrderId = cuidMatch ? cuidMatch[0] : null;
+    if (workOrderId) {
+      const workOrder = await prisma.workOrder.findUnique({
+        where: { id: workOrderId },
+        select: { contractorId: true, coordinatorId: true, createdById: true },
+      }).catch(() => null);
+      if (workOrder) {
+        if (
+          workOrder.contractorId === userId ||
+          workOrder.coordinatorId === userId ||
+          workOrder.createdById === userId
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 export async function getIncomingCallForUser(userId: string, email?: string): Promise<ActiveCallSession | null> {
   try {
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
 
-    // Find any RINGING call targeted to this user or created in a channel where user is member
+    // First: find any RINGING call that directly names this user
     const log = await prisma.callLog.findFirst({
       where: {
         status: "RINGING",
@@ -149,6 +206,7 @@ export async function getIncomingCallForUser(userId: string, email?: string): Pr
         OR: [
           { recipientId: userId },
           { recipientName: email },
+          { recipientId: email },
         ],
       },
       orderBy: { createdAt: "desc" },
@@ -158,22 +216,21 @@ export async function getIncomingCallForUser(userId: string, email?: string): Pr
       return getCallSession(log.id);
     }
 
-    // Fallback: check recent channel calls where recipientId might be empty
-    const channelLogs = await prisma.callLog.findMany({
+    // Second: scan recent RINGING calls and check membership/work order ownership
+    const recentCalls = await prisma.callLog.findMany({
       where: {
         status: "RINGING",
         initiatorId: { not: userId },
-        recipientId: null,
         createdAt: { gte: oneMinuteAgo },
       },
       orderBy: { createdAt: "desc" },
-      take: 3,
+      take: 5,
     });
 
-    for (const cl of channelLogs) {
-      const session = await getCallSession(cl.id);
-      if (session && (!session.targetUserId || session.targetUserId === userId || session.targetUserId === email)) {
-        return session;
+    for (const cl of recentCalls) {
+      const forUser = await isCallForUser(cl, userId, email);
+      if (forUser) {
+        return getCallSession(cl.id);
       }
     }
 
