@@ -48,6 +48,7 @@ import {
   Mail,
   X,
   Sparkles,
+  Brain,
   DollarSign,
   Activity,
   Printer,
@@ -222,6 +223,8 @@ const PhotoEditor = lazy(() =>
 );
 
 import { CallOptionModal } from "@/components/calls/call-options-modal";
+import { SmartVendorAssignModal } from "@/components/work-orders/smart-vendor-assign-modal";
+import { PropertyAiCopilot } from "@/components/work-orders/property-ai-copilot";
 
 // ─── Default Property Preservation Task Names ────────────────────────────────
 
@@ -529,6 +532,7 @@ export default function WorkOrderDetailPage({
   const [photoPopupTitle, setPhotoPopupTitle] = useState("");
   const [photoPopupOpen, setPhotoPopupOpen] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
+  const [smartAssignOpen, setSmartAssignOpen] = useState(false);
   const [allPhotosModal, setAllPhotosModal] = useState<{ open: boolean; source: "tasks" | "bids" | "inspection" | "all" }>({ open: false, source: "tasks" });
   const tasksInitialized = useRef(false);
   const bidsInitialized = useRef(false);
@@ -2158,6 +2162,7 @@ export default function WorkOrderDetailPage({
     { id: "financials", label: "Financials", icon: Wallet },
     { id: "invoices", label: "Invoices", icon: Receipt },
     { id: "forms", label: "Forms", icon: ClipboardList },
+    { id: "ai_copilot", label: "AI Copilot", icon: Brain },
     { id: "history", label: "Property History", icon: Calendar, count: (propertyHistoryData?.workOrders?.length || 0) },
     { id: "messages", label: "Messages", icon: MessageSquare, count: workOrder._count?.threads || 0 },
   ];
@@ -2373,23 +2378,33 @@ export default function WorkOrderDetailPage({
                 <p className="text-text-primary font-bold">{workOrder.contractor.name}</p>
               </div>
               {canEdit && (
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (confirm(`Unassign ${workOrder.contractor.name} from this work order? An internal notification email will be sent automatically.`)) {
-                      try {
-                        await updateMutation.mutateAsync({ contractorId: null, status: "UNASSIGNED" });
-                        toast.success("Contractor unassigned successfully");
-                      } catch {
-                        toast.error("Failed to unassign contractor");
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setSmartAssignOpen(true)}
+                    className="ml-1 px-2 py-0.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 text-[10px] font-bold border border-cyan-500/20 flex items-center gap-1 transition-colors"
+                    title="Smart Vendor Recommendation Engine"
+                  >
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Reassign
+                  </button>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (confirm(`Unassign ${workOrder.contractor.name} from this work order? An internal notification email will be sent automatically.`)) {
+                        try {
+                          await updateMutation.mutateAsync({ contractorId: null, status: "UNASSIGNED" });
+                          toast.success("Contractor unassigned successfully");
+                        } catch {
+                          toast.error("Failed to unassign contractor");
+                        }
                       }
-                    }
-                  }}
-                  className="ml-1 p-1 rounded-lg hover:bg-red-500/20 text-text-muted hover:text-red-400 transition-colors"
-                  title="Unassign contractor"
-                >
-                  <UserMinus className="h-3.5 w-3.5" />
-                </button>
+                    }}
+                    className="p-1 rounded-lg hover:bg-red-500/20 text-text-muted hover:text-red-400 transition-colors"
+                    title="Unassign contractor"
+                  >
+                    <UserMinus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           ) : (
@@ -2400,12 +2415,21 @@ export default function WorkOrderDetailPage({
                 <p className="text-amber-900 dark:text-amber-200 font-bold">Unassigned</p>
               </div>
               {canEdit && (
-                <button
-                  onClick={() => setShowEdit(true)}
-                  className="ml-2 text-[10px] font-black text-amber-700 dark:text-amber-300 underline hover:text-amber-900 dark:hover:text-white transition-colors"
-                >
-                  Assign
-                </button>
+                <div className="flex items-center gap-1.5 ml-2">
+                  <button
+                    onClick={() => setSmartAssignOpen(true)}
+                    className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow-md hover:from-cyan-400 hover:to-blue-400 flex items-center gap-1 transition-all"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Smart Assign
+                  </button>
+                  <button
+                    onClick={() => setShowEdit(true)}
+                    className="text-[10px] font-bold text-amber-700 dark:text-amber-300 hover:underline transition-colors"
+                  >
+                    Manual
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -4227,6 +4251,28 @@ export default function WorkOrderDetailPage({
       {activeTab === "forms" && (
         <WorkOrderFormsTab
           workOrderId={id}
+        />
+      )}
+
+      {activeTab === "ai_copilot" && (
+        <PropertyAiCopilot
+          workOrderId={id}
+          propertyId={workOrder.propertyId || undefined}
+          propertyAddress={workOrder.address || undefined}
+        />
+      )}
+
+      {/* Smart Vendor Recommendation & Assignment Modal */}
+      {smartAssignOpen && (
+        <SmartVendorAssignModal
+          isOpen={smartAssignOpen}
+          onClose={() => setSmartAssignOpen(false)}
+          workOrderId={id}
+          workOrderTitle={workOrder.title}
+          currentContractorId={workOrder.contractorId}
+          onAssigned={() => {
+            queryClient.invalidateQueries({ queryKey: ["workOrder", id] });
+          }}
         />
       )}
 

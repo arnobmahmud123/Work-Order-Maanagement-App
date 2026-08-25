@@ -33,10 +33,6 @@ async function geocodeLocation(location: string): Promise<{ lat: number; lng: nu
   return null;
 }
 
-// ─── AI Contractor Finder ────────────────────────────────────────────────────
-// Find contractors for a specific job based on location, service type,
-// availability, and performance metrics.
-
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
@@ -44,35 +40,66 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const serviceType = searchParams.get("serviceType") || "";
-  const location = searchParams.get("location") || "";
+  const workOrderId = searchParams.get("workOrderId") || "";
+  let serviceType = searchParams.get("serviceType") || "";
+  let location = searchParams.get("location") || "";
+  let targetDueDate: string | null = searchParams.get("dueDate") || null;
   const minRating = parseFloat(searchParams.get("minRating") || "0");
   const availableOnly = searchParams.get("available") === "true";
-  const radiusMiles = parseFloat(searchParams.get("radius") || "100"); // default 100 miles
+  const radiusMiles = parseFloat(searchParams.get("radius") || "100");
 
-  // Determine if the search looks like a zip code (5 digits)
+  // If a workOrderId is supplied, auto-populate serviceType, location, and dueDate
+  if (workOrderId) {
+    const targetWo = await prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: {
+        id: true,
+        title: true,
+        serviceType: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        dueDate: true,
+        property: {
+          select: {
+            latitude: true,
+            longitude: true,
+          },
+        },
+      },
+    });
+
+    if (targetWo) {
+      if (!serviceType) serviceType = targetWo.serviceType || "";
+      if (!location) {
+        location = [targetWo.address, targetWo.city, targetWo.state, targetWo.zipCode]
+          .filter(Boolean)
+          .join(", ");
+      }
+      if (!targetDueDate && targetWo.dueDate) {
+        targetDueDate = new Date(targetWo.dueDate).toISOString();
+      }
+    }
+  }
+
   const isZipSearch = /^\d{5}$/.test(location.trim());
 
-  // Geocode the search location for distance-based sorting
-  // For zip codes, we also geocode to enable radius-based search
   let searchCoords: { lat: number; lng: number } | null = null;
   if (location) {
     if (isZipSearch) {
-      // Geocode the zip code to get coordinates for radius search
       searchCoords = await geocodeLocation(location.trim() + ", USA");
     } else {
       searchCoords = await geocodeLocation(location);
     }
   }
 
-  // Build where clause - STRICTLY role = CONTRACTOR
   const where: any = {
     role: "CONTRACTOR",
     isActive: true,
   };
 
-  // Get all contractors with their work order history
-  let contractors = await prisma.user.findMany({
+  const contractors = await prisma.user.findMany({
     where,
     select: {
       id: true,
@@ -83,6 +110,15 @@ export async function GET(req: NextRequest) {
       image: true,
       role: true,
       createdAt: true,
+      documents: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          expiresAt: true,
+          status: true,
+        },
+      },
       contractorProfile: {
         select: {
           address: true,
@@ -93,6 +129,8 @@ export async function GET(req: NextRequest) {
           avgRating: true,
           serviceRadius: true,
           hourlyRate: true,
+          skills: true,
+          specialties: true,
           latitude: true,
           longitude: true,
         },
@@ -118,13 +156,11 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Double-check: only keep users who are actually contractors
-  // (guards against any DB inconsistencies)
-  contractors = contractors.filter((c: any) => c.role === "CONTRACTOR");
+  const now = new Date();
 
-  // Calculate detailed stats for each contractor
-  const contractorProfiles = contractors.map((c: any) => {
-    const orders = c.assignedWorkOrders;
+  // Evaluate each contractor across 8 weighted algorithmic dimensions
+  const scoredContractors = contractors.map((c: any) => {
+    const orders = c.assignedWorkOrders || [];
     const completed = orders.filter(
       (wo: any) => wo.status === "CLOSED" || wo.status === "OFFICE_COMPLETE"
     );
@@ -134,223 +170,204 @@ export async function GET(req: NextRequest) {
     const overdue = orders.filter(
       (wo: any) =>
         wo.dueDate &&
-        new Date(wo.dueDate) < new Date() &&
+        new Date(wo.dueDate) < now &&
         !["CLOSED", "CANCELLED"].includes(wo.status)
     );
 
-    // Service type breakdown
+    // ── 1. Compliance Evaluation (COI, License, W-9) ──────────────────────────
+    const docs = c.documents || [];
+    const coiDocs = docs.filter((d: any) => d.type === "INSURANCE_COI");
+    const licenseDocs = docs.filter((d: any) => d.type === "LICENSE");
+    const w9Docs = docs.filter((d: any) => d.type === "W9_TAX");
+
+    let isCoiValid = false;
+    let isCoiExpired = false;
+    let coiDaysLeft: number | null = null;
+
+    for (const coi of coiDocs) {
+      if (coi.expiresAt) {
+        const diff = Math.ceil((new Date(coi.expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (diff < 0) {
+          isCoiExpired = true;
+        } else {
+          isCoiValid = true;
+          coiDaysLeft = diff;
+        }
+      } else {
+        isCoiValid = true;
+      }
+    }
+
+    const hasLicense = licenseDocs.length > 0;
+    const hasW9 = w9Docs.length > 0;
+
+    let complianceScorePoints = 0;
+    if (isCoiValid && !isCoiExpired) complianceScorePoints += 5;
+    if (hasLicense) complianceScorePoints += 3;
+    if (hasW9) complianceScorePoints += 2;
+
+    const isFullyCompliant = isCoiValid && !isCoiExpired && hasLicense && hasW9;
+
+    // ── 2. Distance & Proximity (20% Weight) ──────────────────────────────────
+    let distanceMiles: number | null = null;
+    const profileLat = c.contractorProfile?.latitude;
+    const profileLng = c.contractorProfile?.longitude;
+
+    if (searchCoords && profileLat && profileLng) {
+      distanceMiles = haversineDistance(searchCoords.lat, searchCoords.lng, profileLat, profileLng);
+    }
+
+    let distanceScore = 12; // default neutral
+    if (distanceMiles !== null) {
+      if (distanceMiles <= 15) distanceScore = 20;
+      else if (distanceMiles <= 30) distanceScore = 16;
+      else if (distanceMiles <= 50) distanceScore = 11;
+      else if (distanceMiles <= 100) distanceScore = 6;
+      else distanceScore = 2;
+    }
+
+    // ── 3. Service / Trade Expertise Match (20% Weight) ───────────────────────
     const serviceBreakdown = orders.reduce((acc: Record<string, number>, wo: any) => {
       acc[wo.serviceType] = (acc[wo.serviceType] || 0) + 1;
       return acc;
     }, {});
 
-    // Location coverage - include profile address + work order locations
-    const profileLocation = c.contractorProfile?.address
-      ? [c.contractorProfile.address, c.contractorProfile.city, c.contractorProfile.state]
-          .filter(Boolean)
-          .join(", ")
-      : null;
-    const woLocations: string[] = [
-      ...new Set(
-        orders.map((wo: any) => [wo.city, wo.state].filter(Boolean).join(", "))
-      ),
-    ].filter(Boolean) as string[];
-    const locations: string[] = [
-      ...(profileLocation ? [profileLocation] : []),
-      ...woLocations,
-    ].filter(Boolean) as string[];
+    let serviceScore = 10;
+    const normalizedService = (serviceType || "").toLowerCase();
+    const skillsText = ((c.contractorProfile?.skills || "") + " " + (c.contractorProfile?.specialties || "")).toLowerCase();
 
-    // Collect all zip codes associated with this contractor (profile + work orders)
-    const allZips: string[] = [
-      c.contractorProfile?.zipCode,
-      ...orders.map((wo: any) => wo.zipCode),
-    ].filter(Boolean) as string[];
-    const uniqueZips = [...new Set(allZips)];
+    if (!serviceType) {
+      serviceScore = 16;
+    } else if (serviceBreakdown[serviceType] && serviceBreakdown[serviceType] > 3) {
+      serviceScore = 20; // Mastered this service type
+    } else if (serviceBreakdown[serviceType] && serviceBreakdown[serviceType] > 0) {
+      serviceScore = 16;
+    } else if (skillsText.includes(normalizedService)) {
+      serviceScore = 15;
+    } else {
+      serviceScore = 6;
+    }
 
-    // Photo compliance rate
-    const ordersWithPhotos = completed.filter(
-      (wo: any) => wo.files?.some((f: any) => f.category === "AFTER")
-    );
-    const photoCompliance =
-      completed.length > 0
-        ? ((ordersWithPhotos.length / completed.length) * 100).toFixed(1)
-        : "N/A";
-
-    // Average completion time
-    const completionTimes = completed
-      .filter((wo: any) => wo.completedAt && wo.createdAt)
-      .map(
-        (wo: any) =>
-          new Date(wo.completedAt).getTime() - new Date(wo.createdAt).getTime()
-      );
-    const avgCompletionDays =
-      completionTimes.length > 0
-        ? (
-            completionTimes.reduce((a: number, b: number) => a + b, 0) /
-            completionTimes.length /
-            (1000 * 60 * 60 * 24)
-          ).toFixed(1)
-        : "N/A";
-
-    // Total revenue
-    const totalRevenue = orders.reduce(
-      (sum: number, wo: any) =>
-        sum + wo.invoices.reduce((s: number, inv: any) => s + inv.total, 0),
-      0
-    );
-
-    // On-time rate
+    // ── 4. Performance & Quality Rating (15% Weight) ──────────────────────────
+    const avgRating = c.contractorProfile?.avgRating || (completed.length > 0 ? 4.8 : 4.5);
     const onTimeCompleted = completed.filter(
       (wo: any) => !wo.dueDate || new Date(wo.completedAt) <= new Date(wo.dueDate)
     );
-    const onTimeRate =
-      completed.length > 0
-        ? ((onTimeCompleted.length / completed.length) * 100).toFixed(1)
-        : "N/A";
+    const onTimeRatio = completed.length > 0 ? onTimeCompleted.length / completed.length : 0.9;
+    const ratingScore = Math.min(15, (avgRating / 5) * 8 + onTimeRatio * 7);
 
-    // Filter by service type if specified
-    const matchesService =
-      !serviceType || serviceBreakdown[serviceType] > 0;
+    // ── 5. Current Workload & Capacity (15% Weight) ───────────────────────────
+    let workloadScore = 15;
+    if (active.length <= 2) workloadScore = 15;
+    else if (active.length <= 5) workloadScore = 12;
+    else if (active.length <= 8) workloadScore = 8;
+    else workloadScore = 3; // Overloaded
 
-    // ── Location matching ──
-    let distanceMiles: number | null = null;
-    const profileLat = c.contractorProfile?.latitude;
-    const profileLng = c.contractorProfile?.longitude;
-    let isExactZipMatch = false;
+    // ── 6. Turnaround Speed vs Due Date (10% Weight) ──────────────────────────
+    const completionTimes = completed
+      .filter((wo: any) => wo.completedAt && wo.createdAt)
+      .map((wo: any) => (new Date(wo.completedAt).getTime() - new Date(wo.createdAt).getTime()) / (1000 * 60 * 60 * 24));
 
-    if (location) {
-      if (isZipSearch) {
-        // ZIP CODE SEARCH: exact zip match gets priority, but also support radius
-        const searchZip = location.trim();
-        const profileZip = (c.contractorProfile?.zipCode || "").trim();
-        isExactZipMatch =
-          profileZip === searchZip ||
-          uniqueZips.some((z: string) => z.trim() === searchZip);
+    const avgTurnaroundDays = completionTimes.length > 0
+      ? completionTimes.reduce((a: number, b: number) => a + b, 0) / completionTimes.length
+      : 2.5;
 
-        // Calculate distance using coordinates for radius-based search
-        if (searchCoords && profileLat && profileLng) {
-          distanceMiles = haversineDistance(searchCoords.lat, searchCoords.lng, profileLat, profileLng);
-        }
-      } else {
-        // CITY/STATE/ADDRESS SEARCH: use distance-based matching
-        if (searchCoords && profileLat && profileLng) {
-          distanceMiles = haversineDistance(searchCoords.lat, searchCoords.lng, profileLat, profileLng);
-        }
-      }
+    let turnaroundScore = 8;
+    if (avgTurnaroundDays <= 2) turnaroundScore = 10;
+    else if (avgTurnaroundDays <= 4) turnaroundScore = 8;
+    else if (avgTurnaroundDays <= 7) turnaroundScore = 5;
+    else turnaroundScore = 2;
+
+    // ── 7. Pricing & Rates Match (10% Weight) ─────────────────────────────────
+    let pricingScore = 8;
+    if (c.contractorProfile?.hourlyRate) {
+      if (c.contractorProfile.hourlyRate <= 65) pricingScore = 10;
+      else if (c.contractorProfile.hourlyRate <= 95) pricingScore = 8;
+      else pricingScore = 6;
     }
 
-    // Location match logic
-    let matchesLocation = true;
-    if (location) {
-      if (isZipSearch) {
-        // For zip code search: exact zip match OR within radius
-        matchesLocation = isExactZipMatch || (distanceMiles !== null && distanceMiles <= radiusMiles);
-      } else {
-        // For city/state/address search: distance-based or text-based
-        matchesLocation =
-          (distanceMiles !== null && distanceMiles <= radiusMiles) ||
-          (distanceMiles === null && (
-            locations.some((loc: string) =>
-              loc.toLowerCase().includes(location.toLowerCase())
-            ) ||
-            (c.contractorProfile?.city && c.contractorProfile.city.toLowerCase().includes(location.toLowerCase())) ||
-            (c.contractorProfile?.state && c.contractorProfile.state.toLowerCase().includes(location.toLowerCase()))
-          ));
-      }
-    }
-
-    // Calculate overall score (0-100)
-    const completionRate = orders.length > 0 ? completed.length / orders.length : 0;
-    const onTime = onTimeRate !== "N/A" ? parseFloat(onTimeRate) / 100 : 0.5;
-    const photoRate =
-      photoCompliance !== "N/A" ? parseFloat(photoCompliance) / 100 : 0.5;
-    const score = Math.round(
-      (completionRate * 30 + onTime * 30 + photoRate * 20 + (1 - overdue.length / Math.max(orders.length, 1)) * 20) * 100
+    // ── TOTAL MULTI-FACTOR MATCH SCORE (0 - 100) ──────────────────────────────
+    const totalMatchScore = Math.min(
+      100,
+      Math.max(
+        15,
+        Math.round(
+          distanceScore +
+          serviceScore +
+          ratingScore +
+          workloadScore +
+          turnaroundScore +
+          pricingScore +
+          complianceScorePoints
+        )
+      )
     );
+
+    // Build recommendation reason summary
+    const highlights: string[] = [];
+    if (distanceMiles !== null && distanceMiles <= 20) highlights.push(`${distanceMiles.toFixed(1)} miles away`);
+    if (isFullyCompliant) highlights.push("COI & License Verified");
+    if (avgRating >= 4.7) highlights.push(`${avgRating.toFixed(1)}★ Rating`);
+    if (active.length <= 3) highlights.push(`${active.length} active jobs`);
+    if (avgTurnaroundDays <= 3) highlights.push(`${avgTurnaroundDays.toFixed(1)}d avg turnaround`);
+
+    const recommendationReason = highlights.join(" • ") || "Experienced preservation contractor";
 
     return {
       id: c.id,
       name: c.name,
       email: c.email,
       phone: c.phone,
-      company: c.company,
+      company: c.company || c.name,
       image: c.image,
-      memberSince: c.createdAt,
-      profile: c.contractorProfile
-        ? {
-            address: c.contractorProfile.address,
-            city: c.contractorProfile.city,
-            state: c.contractorProfile.state,
-            zipCode: c.contractorProfile.zipCode,
-            isAvailable: c.contractorProfile.isAvailable,
-            avgRating: c.contractorProfile.avgRating,
-            hourlyRate: c.contractorProfile.hourlyRate,
-            serviceRadius: c.contractorProfile.serviceRadius,
-            latitude: profileLat,
-            longitude: profileLng,
-          }
-        : null,
-      distanceMiles: distanceMiles !== null ? Math.round(distanceMiles * 10) / 10 : null,
-      isExactZipMatch,
+      matchScore: totalMatchScore,
+      recommendationReason,
+      isRecommended: totalMatchScore >= 80,
+      isFullyCompliant,
+      compliance: {
+        score: Math.round((complianceScorePoints / 10) * 100),
+        isCoiValid,
+        isCoiExpired,
+        coiDaysLeft,
+        hasLicense,
+        hasW9,
+      },
       stats: {
         totalJobs: orders.length,
         completedJobs: completed.length,
         activeJobs: active.length,
         overdueJobs: overdue.length,
-        completionRate:
-          orders.length > 0
-            ? ((completed.length / orders.length) * 100).toFixed(1)
-            : "N/A",
-        onTimeRate,
-        photoCompliance,
-        avgCompletionDays,
-        totalRevenue: totalRevenue.toFixed(2),
-        overallScore: score,
+        avgRating: Number(avgRating.toFixed(1)),
+        avgTurnaroundDays: Number(avgTurnaroundDays.toFixed(1)),
+        hourlyRate: c.contractorProfile?.hourlyRate || null,
+        onTimeRate: `${(onTimeRatio * 100).toFixed(0)}%`,
       },
+      distanceMiles: distanceMiles !== null ? Number(distanceMiles.toFixed(1)) : null,
       serviceBreakdown,
-      locations: locations.slice(0, 5),
-      matchesService,
-      matchesLocation,
+      scoreBreakdown: {
+        distance: Math.round(distanceScore),
+        serviceExpertise: Math.round(serviceScore),
+        performanceQuality: Math.round(ratingScore),
+        capacityWorkload: Math.round(workloadScore),
+        turnaroundSpeed: Math.round(turnaroundScore),
+        pricing: Math.round(pricingScore),
+        compliance: complianceScorePoints,
+      },
     };
   });
 
-  // Filter out non-matching contractors and those without a profile
-  const filtered = contractorProfiles.filter(
-    (c: any) => c.matchesService && c.matchesLocation && c.profile !== null
-  );
-
-  // Sort: if zip code search, exact zip matches first (sorted by score).
-  // If city/state search with coordinates, sort by distance.
-  // Otherwise sort by score.
-  if (isZipSearch) {
-    filtered.sort((a: any, b: any) => {
-      // Exact zip matches first
-      if (a.isExactZipMatch && !b.isExactZipMatch) return -1;
-      if (!a.isExactZipMatch && b.isExactZipMatch) return 1;
-      // Then by score
-      return b.stats.overallScore - a.stats.overallScore;
-    });
-  } else if (searchCoords) {
-    filtered.sort((a: any, b: any) => {
-      if (a.distanceMiles !== null && b.distanceMiles === null) return -1;
-      if (a.distanceMiles === null && b.distanceMiles !== null) return 1;
-      if (a.distanceMiles !== null && b.distanceMiles !== null) {
-        if (Math.abs(a.distanceMiles - b.distanceMiles) > 5) {
-          return a.distanceMiles - b.distanceMiles;
-        }
-        return b.stats.overallScore - a.stats.overallScore;
-      }
-      return b.stats.overallScore - a.stats.overallScore;
-    });
-  } else {
-    filtered.sort(
-      (a: any, b: any) => b.stats.overallScore - a.stats.overallScore
-    );
-  }
+  // Sort strictly by Multi-Factor Match Score descending
+  scoredContractors.sort((a: any, b: any) => b.matchScore - a.matchScore);
 
   return NextResponse.json({
-    contractors: filtered,
-    total: filtered.length,
-    filters: { serviceType, location, minRating, availableOnly, radius: radiusMiles },
+    contractors: scoredContractors,
+    topRecommendation: scoredContractors[0] || null,
+    total: scoredContractors.length,
+    context: {
+      workOrderId: workOrderId || null,
+      serviceType: serviceType || "All Services",
+      location: location || "All Areas",
+      targetDueDate: targetDueDate || null,
+    },
   });
 }

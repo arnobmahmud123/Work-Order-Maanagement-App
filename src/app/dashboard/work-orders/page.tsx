@@ -7,9 +7,11 @@ import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Button, Badge, Card, Avatar } from "@/components/ui";
 import { WorkOrderImportModal } from "@/components/work-orders/import-modal";
+import { RouteOptimizerModal } from "@/components/logistics/route-optimizer-modal";
 import {
   Eye,
   Search,
+  Navigation,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -862,6 +864,7 @@ function WorkOrdersContent() {
   const [saveFilterName, setSaveFilterName] = useState("");
   const [showSavedMenu, setShowSavedMenu] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showRouteOptimizer, setShowRouteOptimizer] = useState(false);
   const [columns, setColumns] = useState<ColumnDef[]>(DEFAULT_COLUMNS);
 
   // Filter columns for contractors (remove checkbox)
@@ -1164,6 +1167,15 @@ function WorkOrdersContent() {
               Property Groups
             </Button>
           </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowRouteOptimizer(true)}
+            className="hover:bg-cyan-500/10 hover:border-cyan-500/30 text-cyan-400 font-bold"
+          >
+            <Navigation className="h-4 w-4 mr-2 text-cyan-400" />
+            Route Optimizer
+          </Button>
           {canCreateWorkOrders && (
             <>
               <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
@@ -1631,6 +1643,15 @@ function WorkOrdersContent() {
           refetch();
         }}
       />
+
+      {/* Field Route Optimizer Modal */}
+      {showRouteOptimizer && (
+        <RouteOptimizerModal
+          isOpen={showRouteOptimizer}
+          onClose={() => setShowRouteOptimizer(false)}
+          workOrderIds={selected.length > 0 ? selected : undefined}
+        />
+      )}
     </div>
   );
 }

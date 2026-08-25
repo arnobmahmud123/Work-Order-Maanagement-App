@@ -36,9 +36,11 @@ import {
   StickyNote,
   Upload,
   Loader2,
+  Brain,
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { PropertyAiCopilot } from "@/components/work-orders/property-ai-copilot";
 import {
   cn,
   formatDate,
@@ -217,6 +219,7 @@ export default function PropertyDetailPage({
     { id: "inspections", label: "Inspections", icon: Shield },
     { id: "finance", label: "Finance", icon: DollarSign },
     { id: "timeline", label: "Timeline", icon: History },
+    { id: "ai-copilot", label: "AI Copilot", icon: Brain },
     { id: "access", label: "Access", icon: Lock },
     { id: "notes", label: "Notes", icon: StickyNote },
   ];
@@ -979,6 +982,13 @@ export default function PropertyDetailPage({
             )}
           </div>
         </Card>
+      )}
+
+      {activeTab === "ai-copilot" && (
+        <PropertyAiCopilot
+          propertyId={property.id}
+          propertyAddress={property.address}
+        />
       )}
 
       {activeTab === "access" && (
