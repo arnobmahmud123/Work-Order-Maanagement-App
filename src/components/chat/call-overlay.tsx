@@ -212,20 +212,79 @@ function CallOverlayInternal({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   }
 
+  if (meeting) {
+    return (
+      <RealtimeKitProvider value={meeting}>
+        <RealtimeCallUI 
+          status={status}
+          elapsed={elapsed}
+          formatTime={formatTime}
+          participants={participants}
+          channelName={channelName}
+          callType={callType}
+          handleEnd={() => handleEnd(true)}
+          meeting={meeting}
+        />
+      </RealtimeKitProvider>
+    );
+  }
+
   return (
-    <RealtimeKitProvider value={meeting}>
+    <DummyCallUI 
+      status={status}
+      elapsed={elapsed}
+      formatTime={formatTime}
+      participants={participants}
+      channelName={channelName}
+      callType={callType}
+      handleEnd={() => handleEnd(true)}
+    />
+  );
+}
+
+function RealtimeCallUI({ meeting, ...props }: any) {
+  const audioEnabled = useRealtimeKitSelector((m) => m?.self?.audioEnabled ?? false);
+  const [micEnabled, setMicEnabled] = useState(true);
+
+  useEffect(() => {
+    setMicEnabled(audioEnabled);
+  }, [audioEnabled]);
+
+  const toggleMic = () => {
+    if (meeting?.self) {
+      if (micEnabled) {
+        meeting.self.disableAudio();
+      } else {
+        meeting.self.enableAudio();
+      }
+      setMicEnabled(!micEnabled);
+    }
+  };
+
+  return (
+    <>
       <CallUI 
-        status={status}
-        elapsed={elapsed}
-        formatTime={formatTime}
-        participants={participants}
-        channelName={channelName}
-        callType={callType}
-        handleEnd={() => handleEnd(true)}
+        {...props}
+        micEnabled={micEnabled}
+        toggleMic={toggleMic}
         meeting={meeting}
       />
-      {meeting && <RemoteAudioRenderer meeting={meeting} />}
-    </RealtimeKitProvider>
+      <RemoteAudioRenderer meeting={meeting} />
+    </>
+  );
+}
+
+function DummyCallUI(props: any) {
+  const [micEnabled, setMicEnabled] = useState(true);
+  const toggleMic = () => setMicEnabled(!micEnabled);
+
+  return (
+    <CallUI 
+      {...props}
+      micEnabled={micEnabled}
+      toggleMic={toggleMic}
+      meeting={null}
+    />
   );
 }
 
@@ -261,30 +320,8 @@ function RemoteAudioRenderer({ meeting }: { meeting: any }) {
 }
 
 function CallUI({ 
-  status, elapsed, formatTime, participants, channelName, callType, handleEnd, meeting 
+  status, elapsed, formatTime, participants, channelName, callType, handleEnd, meeting, micEnabled, toggleMic 
 }: any) {
-  
-  // RealtimeKit selector for checking if audio is enabled
-  const audioEnabled = useRealtimeKitSelector((m) => m?.self?.audioEnabled ?? false);
-  const [micEnabled, setMicEnabled] = useState(true);
-
-  useEffect(() => {
-    if (meeting) {
-      setMicEnabled(audioEnabled);
-    }
-  }, [audioEnabled, meeting]);
-
-  const toggleMic = () => {
-    if (meeting?.self) {
-      if (micEnabled) {
-        meeting.self.disableAudio();
-      } else {
-        meeting.self.enableAudio();
-      }
-      setMicEnabled(!micEnabled);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/80 backdrop-blur-md">
       <div className="relative w-full max-w-lg mx-4">
