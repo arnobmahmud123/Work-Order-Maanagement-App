@@ -457,6 +457,7 @@ export default function ChatPage() {
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled(!soundEnabled)}
             onBack={() => setActiveChannelId(null)}
+            onSelectChannel={(id) => setActiveChannelId(id)}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">
@@ -741,6 +742,7 @@ function ChatArea({
   soundEnabled,
   onToggleSound,
   onBack,
+  onSelectChannel,
 }: {
   channelId: string;
   userId: string;
@@ -754,6 +756,7 @@ function ChatArea({
   soundEnabled: boolean;
   onToggleSound: () => void;
   onBack?: () => void;
+  onSelectChannel?: (id: string) => void;
 }) {
   const { data: session } = useSession();
   const qc = useQueryClient();
@@ -788,6 +791,7 @@ function ChatArea({
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [showCall, setShowCall] = useState(false);
   const [callType, setCallType] = useState<"audio" | "video">("audio");
+  const [directCallTarget, setDirectCallTarget] = useState<any>(null);
   const createChannel = useCreateChatChannel();
 
   async function handleDirectMessage(targetUser: any) {
@@ -799,7 +803,10 @@ function ChatArea({
         memberIds: [targetUser.id],
       });
       if (newChan?.id) {
-        window.location.reload();
+        qc.invalidateQueries({ queryKey: ["chat-channels"] });
+        if (onSelectChannel) {
+          onSelectChannel(newChan.id);
+        }
       }
     } catch {
       toast.error("Could not start direct conversation");
@@ -808,6 +815,7 @@ function ChatArea({
 
   function handleDirectCall(targetUser: any, type: "audio" | "video") {
     if (!targetUser?.id || targetUser.id === userId) return;
+    setDirectCallTarget(targetUser);
     setCallType(type);
     setShowCall(true);
   }
@@ -2061,14 +2069,41 @@ function ChatArea({
       {showCall && (
         <CallOverlay
           isOpen={showCall}
-          onClose={() => setShowCall(false)}
+          onClose={() => {
+            setShowCall(false);
+            setDirectCallTarget(null);
+          }}
           callType={callType}
-          channelId={channel?.id}
-          channelName={channel?.name}
-          targetUserId={channel?.members?.find((m: any) => m.userId !== userId)?.user?.id}
-          targetUserName={channel?.members?.find((m: any) => m.userId !== userId)?.user?.name}
+          channelId={directCallTarget ? undefined : channel?.id}
+          channelName={
+            directCallTarget
+              ? directCallTarget.name
+              : isDM && otherUser
+              ? otherUser.name
+              : channel?.name
+          }
+          targetUserId={
+            directCallTarget?.id ||
+            (isDM
+              ? (otherUser?.id || channel?.members?.find((m: any) => (m.userId || m.user?.id) !== userId)?.userId || channel?.members?.find((m: any) => (m.userId || m.user?.id) !== userId)?.user?.id)
+              : channel?.members?.find((m: any) => (m.userId || m.user?.id) !== userId)?.userId || channel?.members?.find((m: any) => (m.userId || m.user?.id) !== userId)?.user?.id)
+          }
+          targetUserName={
+            directCallTarget?.name ||
+            (isDM
+              ? (otherUser?.name || "Direct Call")
+              : channel?.members?.find((m: any) => (m.userId || m.user?.id) !== userId)?.user?.name || "User")
+          }
           participants={
-            isDM && otherUser
+            directCallTarget
+              ? [
+                  {
+                    id: directCallTarget.id,
+                    name: directCallTarget.name || "User",
+                    image: directCallTarget.image,
+                  },
+                ]
+              : isDM && otherUser
               ? [
                   {
                     id: otherUser.id || "",
@@ -2077,7 +2112,7 @@ function ChatArea({
                   },
                 ]
               : (channel?.members || []).map((m: any) => ({
-                  id: m.userId,
+                  id: m.userId || m.user?.id,
                   name: m.user?.name || "User",
                   image: m.user?.image,
                 }))

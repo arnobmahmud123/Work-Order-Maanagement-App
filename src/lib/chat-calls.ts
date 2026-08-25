@@ -149,12 +149,17 @@ async function isCallForUser(log: any, userId: string, email?: string): Promise<
   if (email && log.recipientName === email) return true;
   if (email && log.recipientId === email) return true;
 
-  // Parse purpose to get channelId
+  // Parse purpose to get target info and channelId
   let parsedPurpose: any = {};
   try { parsedPurpose = log.purpose ? JSON.parse(log.purpose) : {}; } catch {}
+
+  // Direct target match in purpose JSON (handles direct calls)
+  if (parsedPurpose.targetUserId === userId) return true;
+  if (email && (parsedPurpose.targetUserId === email || parsedPurpose.targetUserName === email)) return true;
+  if (parsedPurpose.participants?.some((p: any) => p.userId === userId)) return true;
   
   const channelId = parsedPurpose.channelId;
-  if (!channelId || channelId === "general") return false;
+  if (!channelId || channelId === "general" || channelId === "direct") return false;
 
   // Check if user is a ChannelMember of the channel
   const membership = await prisma.channelMember.findFirst({

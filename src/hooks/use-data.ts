@@ -1075,8 +1075,8 @@ export function useChatChannels() {
       if (!res.ok) throw new Error("Failed to fetch channels");
       return res.json();
     },
-    refetchInterval: 30000, // Poll every 30s (was 15s)
-    staleTime: 10000, // Consider data fresh for 10s
+    refetchInterval: 4000, // Poll every 4s for channel list & unread badges
+    staleTime: 1000,
   });
 }
 
@@ -1123,8 +1123,8 @@ export function useChatMessages(channelId: string, search?: string) {
       return res.json();
     },
     enabled: !!channelId,
-    refetchInterval: search ? false : 8000, // Poll every 8s (was 5s)
-    staleTime: 5000, // Consider data fresh for 5s
+    refetchInterval: search ? false : 1200, // Fast 1.2s poll for real-time responsiveness
+    staleTime: 0,
   });
 }
 
@@ -1148,7 +1148,44 @@ export function useSendChatMessage(channelId: string) {
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async (newMessage) => {
+      await qc.cancelQueries({ queryKey: ["chat-messages", channelId] });
+      const previousMessages = qc.getQueryData(["chat-messages", channelId]);
+
+      // Optimistically append new message for instant UI feedback
+      if (previousMessages) {
+        qc.setQueryData(["chat-messages", channelId], (old: any) => {
+          if (!old) return old;
+          const tempMsg = {
+            id: `temp-${Date.now()}`,
+            content: newMessage.content,
+            type: newMessage.type || "TEXT",
+            createdAt: new Date().toISOString(),
+            parentId: newMessage.parentId || null,
+            fileUrl: newMessage.fileUrl,
+            fileName: newMessage.fileName,
+            fileSize: newMessage.fileSize,
+            fileMime: newMessage.fileMime,
+            authorId: "current",
+            reactions: [],
+            replies: [],
+            _count: { replies: 0 },
+            isPending: true,
+          };
+          return {
+            ...old,
+            messages: [...(old.messages || []), tempMsg],
+          };
+        });
+      }
+      return { previousMessages };
+    },
+    onError: (_err, _newMessage, context) => {
+      if (context?.previousMessages) {
+        qc.setQueryData(["chat-messages", channelId], context.previousMessages);
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["chat-messages", channelId] });
       qc.invalidateQueries({ queryKey: ["chat-channels"] });
       qc.invalidateQueries({ queryKey: ["unread-counts"] });

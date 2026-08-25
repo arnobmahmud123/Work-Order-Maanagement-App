@@ -21,10 +21,19 @@ export async function POST(req: NextRequest) {
     let resolvedTargetUserId = targetUserId;
     let resolvedTargetUserName = targetUserName;
 
-    if (!resolvedTargetUserId && channelId) {
+    if (!resolvedTargetUserId && channelId && channelId !== "general" && channelId !== "direct") {
       const channel = await prisma.channel.findUnique({
         where: { id: channelId },
-        select: { type: true, name: true, description: true }
+        select: {
+          type: true,
+          name: true,
+          description: true,
+          members: {
+            where: { userId: { not: callerId } },
+            select: { userId: true, user: { select: { name: true } } },
+            take: 1,
+          },
+        },
       });
       if (channel?.type === "WORK_ORDERS") {
         const cuidMatch = (channel.name || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i) || (channel.description || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i);
@@ -51,6 +60,12 @@ export async function POST(req: NextRequest) {
             }
           }
         }
+      }
+
+      // If still not resolved (e.g. DIRECT_MESSAGE or general/custom channel with other members)
+      if (!resolvedTargetUserId && channel?.members && channel.members.length > 0) {
+        resolvedTargetUserId = channel.members[0].userId;
+        resolvedTargetUserName = channel.members[0].user?.name || "User";
       }
     }
 

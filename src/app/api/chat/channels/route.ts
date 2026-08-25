@@ -190,6 +190,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Check if a DIRECT_MESSAGE channel between these two users already exists
+    if (type === "DIRECT_MESSAGE" && memberIds && memberIds.length > 0) {
+      const otherUserId = memberIds.find((id: string) => id !== userId) || memberIds[0];
+      const existingDM = await prisma.channel.findFirst({
+        where: {
+          type: "DIRECT_MESSAGE",
+          AND: [
+            { members: { some: { userId } } },
+            { members: { some: { userId: otherUserId } } },
+          ],
+        },
+        include: {
+          members: {
+            include: { user: { select: { id: true, name: true, email: true, image: true } } },
+          },
+          _count: { select: { messages: true, members: true } },
+        },
+      });
+
+      if (existingDM) {
+        return NextResponse.json(existingDM, { status: 200 });
+      }
+    }
+
     // Check if channel already exists with this name for this company
     const existingChannel = await prisma.channel.findFirst({
       where: { name, companyId },
