@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   let apiKey = process.env.ELEVENLABS_API_KEY;
-  let agentId = process.env.ELEVENLABS_AGENT_ID;
+  let agentId = process.env.ELEVENLABS_AGENT_ID || process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID;
   let phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
   const enableSimulation = process.env.NEXT_PUBLIC_ENABLE_SIMULATION === "true" || false;
 
@@ -71,16 +71,11 @@ export async function POST(req: NextRequest) {
       select: { name: true, elevenlabsAgentId: true, elevenlabsPhoneId: true }
     });
     
-    if (!company?.elevenlabsAgentId || !company?.elevenlabsPhoneId) {
-      return NextResponse.json(
-        { error: "Please configure your ElevenLabs settings in Admin > Company Settings to enable AI calling." }, 
-        { status: 400 }
-      );
+    if (company) {
+      companyName = company.name || "";
+      if (company.elevenlabsAgentId) agentId = company.elevenlabsAgentId;
+      if (company.elevenlabsPhoneId) phoneNumberId = company.elevenlabsPhoneId;
     }
-    
-    companyName = company.name;
-    agentId = company.elevenlabsAgentId;
-    phoneNumberId = company.elevenlabsPhoneId;
   }
 
   if (apiKey && agentId && phoneNumberId && !enableSimulation) {
@@ -108,7 +103,15 @@ export async function POST(req: NextRequest) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("ElevenLabs Outbound Call Error Response:", errorText);
-        throw new Error(`ElevenLabs API returned ${response.status}: ${errorText}`);
+        let parsedDetail = errorText;
+        try {
+          const parsed = JSON.parse(errorText);
+          parsedDetail = parsed.detail?.message || parsed.message || errorText;
+        } catch {}
+        return NextResponse.json(
+          { error: `ElevenLabs AI Call Error: ${parsedDetail}` },
+          { status: response.status >= 400 && response.status < 500 ? response.status : 500 }
+        );
       }
 
       const resData = await response.json();
@@ -116,7 +119,7 @@ export async function POST(req: NextRequest) {
 
       const call = await prisma.callLog.create({
         data: {
-          id: conversation_id,
+          id: conversation_id || `call-${Date.now()}`,
           initiatorId: userId,
           recipientId: recipientId || null,
           recipientPhone,
@@ -136,14 +139,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(call, { status: 201 });
     } catch (e: any) {
       console.error("Failed to initiate ElevenLabs outbound call:", e);
-      return NextResponse.json({ error: "Failed to initiate AI call." }, { status: 500 });
+      return NextResponse.json({ error: e.message || "Failed to initiate AI call." }, { status: 500 });
     }
-  }
-
-  // If we reach here, it means the API key or agent ID is missing (for system default users without a company)
-  // or it's running in simulation mode.
-  if (companyId) {
-    return NextResponse.json({ error: "AI calling is not configured properly." }, { status: 500 });
   }
 
   // Mock: Create call log with simulated Twilio integration (ONLY for non-company test accounts)
