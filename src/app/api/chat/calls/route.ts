@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { createCallSession } from "@/lib/chat-calls";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,42 @@ export async function POST(req: NextRequest) {
     const callerEmail = session.user.email || undefined;
     const callerImage = session.user.image || null;
 
+    let resolvedTargetUserId = targetUserId;
+    let resolvedTargetUserName = targetUserName;
+
+    if (!resolvedTargetUserId && channelId) {
+      const channel = await prisma.channel.findUnique({
+        where: { id: channelId },
+        select: { type: true, name: true, description: true }
+      });
+      if (channel?.type === "WORK_ORDERS") {
+        const cuidMatch = (channel.name || "").match(/[a-z0-9]{24,}/i) || (channel.description || "").match(/[a-z0-9]{24,}/i);
+        const workOrderId = cuidMatch ? cuidMatch[0] : null;
+        if (workOrderId) {
+          const workOrder = await prisma.workOrder.findUnique({
+            where: { id: workOrderId },
+            select: { 
+              contractorId: true, 
+              coordinatorId: true, 
+              createdById: true,
+              contractor: { select: { name: true } }, 
+              coordinator: { select: { name: true } },
+              createdBy: { select: { name: true } }
+            }
+          });
+          if (workOrder) {
+            if (callerId === workOrder.contractorId) {
+              resolvedTargetUserId = workOrder.coordinatorId || workOrder.createdById || undefined;
+              resolvedTargetUserName = workOrder.coordinator?.name || workOrder.createdBy?.name || "Admin";
+            } else {
+              resolvedTargetUserId = workOrder.contractorId || undefined;
+              resolvedTargetUserName = workOrder.contractor?.name || "Contractor";
+            }
+          }
+        }
+      }
+    }
+
     const callSession = await createCallSession({
       channelId: channelId || "general",
       channelName: channelName || "Direct Call",
@@ -24,8 +61,8 @@ export async function POST(req: NextRequest) {
       callerName,
       callerEmail,
       callerImage,
-      targetUserId,
-      targetUserName,
+      targetUserId: resolvedTargetUserId,
+      targetUserName: resolvedTargetUserName,
       callType: callType || "audio",
     });
 
