@@ -63,8 +63,11 @@ function CallOverlayInternal({
   const signalPollRef = useRef<any>(null);
   const lastSignalTsRef = useRef<number>(0);
   const offerSentRef = useRef(false);
-  // Buffer ICE candidates that arrive before remote description is set
+  // Buffer incoming ICE candidates that arrive before remote description is set
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  // Batch outgoing ICE candidates to avoid concurrent D1 write conflicts
+  const outboundCandidateBatchRef = useRef<any[]>([]);
+  const candidateBatchTimerRef = useRef<any>(null);
 
   // ── Mount hidden remote audio element ────────────────────────────────────
   useEffect(() => {
@@ -214,10 +217,25 @@ function CallOverlayInternal({
         }
       };
 
-      // Send ICE candidates
+      // Batch outgoing ICE candidates — TURN generates 10-20 at once;
+      // sending individually causes concurrent D1 write conflicts (500 errors).
+      const flushCandidateBatch = async () => {
+        const batch = [...outboundCandidateBatchRef.current];
+        outboundCandidateBatchRef.current = [];
+        if (batch.length > 0) {
+          await sendSignal(callId, "candidate", batch);
+        }
+      };
+
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          sendSignal(callId, "candidate", event.candidate.toJSON());
+          outboundCandidateBatchRef.current.push(event.candidate.toJSON());
+          clearTimeout(candidateBatchTimerRef.current);
+          candidateBatchTimerRef.current = setTimeout(flushCandidateBatch, 300);
+        } else {
+          // null candidate = gathering complete; flush remaining immediately
+          clearTimeout(candidateBatchTimerRef.current);
+          flushCandidateBatch();
         }
       };
 
@@ -227,6 +245,18 @@ function CallOverlayInternal({
 
       pc.oniceconnectionstatechange = () => {
         console.log("[CallOverlay] ICE state:", pc.iceConnectionState);
+      };
+
+      // Helper: apply candidates — handles both single object and array
+      const applyCandidates = async (data: any) => {
+        const list: RTCIceCandidateInit[] = Array.isArray(data) ? data : [data];
+        for (const c of list) {
+          if (pc.remoteDescription) {
+            try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+          } else {
+            pendingCandidatesRef.current.push(c);
+          }
+        }
       };
 
       if (!isIncomingAcceptor) {
@@ -247,11 +277,7 @@ function CallOverlayInternal({
             await addBufferedCandidates(pc);
           }
           if (signal.type === "candidate") {
-            if (pc.remoteDescription) {
-              try { await pc.addIceCandidate(new RTCIceCandidate(signal.data)); } catch {}
-            } else {
-              pendingCandidatesRef.current.push(signal.data);
-            }
+            await applyCandidates(signal.data);
           }
         });
       } else {
@@ -261,7 +287,6 @@ function CallOverlayInternal({
             await pc.setRemoteDescription(
               new RTCSessionDescription({ type: "offer", sdp: signal.data.sdp })
             );
-            // Apply any ICE candidates that arrived before the offer
             await addBufferedCandidates(pc);
 
             const answer = await pc.createAnswer();
@@ -269,11 +294,7 @@ function CallOverlayInternal({
             await sendSignal(callId, "answer", { sdp: answer.sdp, type: answer.type });
           }
           if (signal.type === "candidate") {
-            if (pc.remoteDescription) {
-              try { await pc.addIceCandidate(new RTCIceCandidate(signal.data)); } catch {}
-            } else {
-              pendingCandidatesRef.current.push(signal.data);
-            }
+            await applyCandidates(signal.data);
           }
         });
       }
