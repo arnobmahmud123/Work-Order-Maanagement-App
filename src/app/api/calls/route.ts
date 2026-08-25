@@ -71,11 +71,16 @@ export async function POST(req: NextRequest) {
       select: { name: true, elevenlabsAgentId: true, elevenlabsPhoneId: true }
     });
     
-    if (company) {
-      companyName = company.name || "";
-      if (company.elevenlabsAgentId) agentId = company.elevenlabsAgentId;
-      if (company.elevenlabsPhoneId) phoneNumberId = company.elevenlabsPhoneId;
+    if (!company?.elevenlabsAgentId || !company?.elevenlabsPhoneId) {
+      return NextResponse.json(
+        { error: "Please configure your ElevenLabs Agent ID and Phone Number ID in Admin > Company Settings to enable AI calling." }, 
+        { status: 400 }
+      );
     }
+    
+    companyName = company.name || "";
+    agentId = company.elevenlabsAgentId;
+    phoneNumberId = company.elevenlabsPhoneId;
   }
 
   if (apiKey && agentId && phoneNumberId && !enableSimulation) {

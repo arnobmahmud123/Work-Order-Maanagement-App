@@ -15,23 +15,18 @@ async function getCompanyTwilioConfig(): Promise<{ twilioNumber: string; twilioS
       select: { twilioPhone: true, twilioSid: true, twilioToken: true }
     });
 
-    if (company?.twilioPhone) {
+    if (company?.twilioPhone && company?.twilioSid && company?.twilioToken) {
       return {
         twilioNumber: company.twilioPhone,
-        twilioSid: company.twilioSid || process.env.TWILIO_ACCOUNT_SID || "",
-        twilioToken: company.twilioToken || process.env.TWILIO_AUTH_TOKEN || ""
+        twilioSid: company.twilioSid,
+        twilioToken: company.twilioToken
       };
     }
   } catch (err) {
     console.error("[SMS API] Failed to fetch company Twilio credentials:", err);
   }
 
-  // Fallback to environment variables
-  return {
-    twilioNumber: process.env.TWILIO_PHONE_NUMBER || "",
-    twilioSid: process.env.TWILIO_ACCOUNT_SID || "",
-    twilioToken: process.env.TWILIO_AUTH_TOKEN || ""
-  };
+  return null;
 }
 
 // Helper to send outbound SMS via Twilio REST API
@@ -169,8 +164,8 @@ export async function POST(req: NextRequest) {
     const config = await getCompanyTwilioConfig();
     if (!config || !config.twilioNumber) {
       return NextResponse.json({ 
-        error: "Twilio phone number is not configured for your company. Please set your company twilio credentials." 
-      }, { status: 500 });
+        error: "Twilio is not configured for your company. Please configure your Twilio Phone Number, Account SID, and Auth Token in Admin > Company Settings to send SMS." 
+      }, { status: 400 });
     }
 
     // 1. Dispatch SMS via Twilio using company-scoped credentials
