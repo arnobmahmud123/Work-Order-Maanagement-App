@@ -13,7 +13,7 @@ import {
   MicOff,
 } from "lucide-react";
 import { playRingtoneSound, playCallConnectSound, playCallEndSound } from "@/lib/sounds";
-import { useRealtimeKitClient, useRealtimeKitSelector } from "@cloudflare/realtimekit-react";
+import { useRealtimeKitClient, useRealtimeKitSelector, RealtimeKitProvider } from "@cloudflare/realtimekit-react";
 
 type CallStatus = "ringing" | "connected" | "ended" | "declined";
 
@@ -213,7 +213,7 @@ function CallOverlayInternal({
   }
 
   return (
-    <>
+    <RealtimeKitProvider value={meeting}>
       <CallUI 
         status={status}
         elapsed={elapsed}
@@ -225,7 +225,7 @@ function CallOverlayInternal({
         meeting={meeting}
       />
       {meeting && <RemoteAudioRenderer meeting={meeting} />}
-    </>
+    </RealtimeKitProvider>
   );
 }
 
