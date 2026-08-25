@@ -102,6 +102,7 @@ model User {
   reviewedReports      PostReport[]          @relation("ReportReviewer")
   purchaseOrders       PurchaseOrder[]       @relation("PurchaseOrderCreator")
   materialTransactions MaterialTransaction[] @relation("MaterialTransactionUser")
+  documents            UserDocument[]
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id])
   @@index([role])
@@ -1212,6 +1213,7 @@ model Company {
   Inspector             Inspector[]
   financialTransactions FinancialTransaction[]
   chartOfAccounts       ChartOfAccount[]
+  userDocuments         UserDocument[]
   bills                 Bill[]
   chargebacks           Chargeback[]
   @@map("companies")
@@ -1417,4 +1419,33 @@ model UrgencyKeyword {
 
   @@index([isActive])
   @@index([companyId])
+}
+
+model UserDocument {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             String    // "CV_RESUME", "LICENSE", "INSURANCE_COI", "W9_TAX", "GOVT_ID", "BACKGROUND_CHECK", "CERTIFICATION", "OTHER"
+  title            String
+  documentNumber   String?   @map("document_number") // License #, Policy #, etc.
+  issuingAuthority String?   @map("issuing_authority") // Carrier name, state licensing board, etc.
+  expiresAt        DateTime? @map("expires_at")
+  status           String    @default("ACTIVE") // "ACTIVE", "EXPIRED", "PENDING_REVIEW", "VERIFIED", "REJECTED"
+  fileUrl          String    @map("file_url")
+  fileName         String    @map("file_name")
+  fileSize         Int?      @map("file_size")
+  mimeType         String?   @map("mime_type")
+  notes            String?
+  verifiedAt       DateTime? @map("verified_at")
+  verifiedById     String?   @map("verified_by_id")
+  companyId        String?   @map("company_id")
+  companyRef       Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([companyId])
+  @@map("user_documents")
 }

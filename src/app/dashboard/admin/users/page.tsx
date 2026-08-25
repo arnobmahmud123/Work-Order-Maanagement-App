@@ -21,11 +21,14 @@ import {
   AlertTriangle,
   CheckCircle2,
   Lock,
+  ShieldCheck,
+  FileText,
 } from "lucide-react";
 import { formatDate, cn } from "@/lib/utils";
 import { useState, useMemo } from "react";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { UserDocumentsTab } from "@/components/profile/user-documents-tab";
 
 const roleColors: Record<string, string> = {
   SUPER_ADMIN: "bg-rose-500/15 text-rose-400 border border-rose-500/30",
@@ -61,6 +64,7 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [viewingDocsUser, setViewingDocsUser] = useState<any>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addingUser, setAddingUser] = useState(false);
 
@@ -376,6 +380,16 @@ export default function AdminUsersPage() {
                     {user.isActive ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
                   </button>
 
+                  {/* Documents & Compliance */}
+                  <button
+                    onClick={() => setViewingDocsUser(user)}
+                    className="px-2 py-1.5 rounded-lg border border-border-medium text-text-secondary hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-colors flex items-center gap-1.5 text-xs font-bold"
+                    title="View Documents & Compliance (CV, License, COI, W9)"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>Docs</span>
+                  </button>
+
                   {/* Edit */}
                   <button
                     onClick={() => setEditingUser(user)}
@@ -423,6 +437,23 @@ export default function AdminUsersPage() {
             refetch();
           }}
         />
+      )}
+
+      {/* User Documents & Compliance Modal */}
+      {viewingDocsUser && (
+        <Modal
+          isOpen={!!viewingDocsUser}
+          onClose={() => setViewingDocsUser(null)}
+          title={`${viewingDocsUser.name}'s Documents & Compliance`}
+          size="xl"
+        >
+          <div className="py-2">
+            <UserDocumentsTab
+              userId={viewingDocsUser.id}
+              userName={viewingDocsUser.name}
+            />
+          </div>
+        </Modal>
       )}
     </div>
   );
