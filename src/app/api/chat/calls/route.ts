@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         select: { type: true, name: true, description: true }
       });
       if (channel?.type === "WORK_ORDERS") {
-        const cuidMatch = (channel.name || "").match(/[a-z0-9]{24,}/i) || (channel.description || "").match(/[a-z0-9]{24,}/i);
+        const cuidMatch = (channel.name || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i) || (channel.description || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i);
         const workOrderId = cuidMatch ? cuidMatch[0] : null;
         if (workOrderId) {
           const workOrder = await prisma.workOrder.findUnique({

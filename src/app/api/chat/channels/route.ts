@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
   // Batch fetch work order photos for WORK_ORDERS channels
   const woChannels = channels.filter(c => c.type === "WORK_ORDERS");
   const woIds = woChannels.map(c => {
-    const cuidMatch = (c.name || "").match(/[a-z0-9]{24,}/i) || (c.description || "").match(/[a-z0-9]{24,}/i);
+    const cuidMatch = (c.name || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i) || (c.description || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i);
     return cuidMatch ? cuidMatch[0] : null;
   }).filter(Boolean) as string[];
 
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     .map((channel) => {
       let image = null;
       if (channel.type === "WORK_ORDERS") {
-        const cuidMatch = (channel.name || "").match(/[a-z0-9]{24,}/i) || (channel.description || "").match(/[a-z0-9]{24,}/i);
+        const cuidMatch = (channel.name || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i) || (channel.description || "").match(/(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i);
         if (cuidMatch) image = woPhotoMap.get(cuidMatch[0]);
       }
 

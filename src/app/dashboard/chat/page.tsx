@@ -99,8 +99,8 @@ function getWorkOrderLink(channel: any): string {
   const name = channel.name || "";
   const desc = channel.description || "";
   
-  // Look for CUID (typically starts with 'cl' or 'cm' and is long)
-  const cuidPattern = /[a-z0-9]{24,}/i;
+  // Look for CUID (typically starts with 'cl' or 'cm' and is long) or wo_ prefix IDs
+  const cuidPattern = /(wo_[a-z0-9_]+)|([a-z0-9]{24,})/i;
   // Look for WO- prefix followed by 6+ alphanumeric chars
   const woPattern = /WO[-_]?([A-Z0-9]{6,})/i;
   

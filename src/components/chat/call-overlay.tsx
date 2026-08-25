@@ -169,7 +169,13 @@ function CallOverlayInternal({
 
   useEffect(() => {
     if (meeting) {
-      meeting.join().catch(console.error);
+      meeting.join().then(() => {
+        if (meeting.self) {
+          meeting.self.enableAudio().catch((err) => {
+            console.warn("Failed to enable audio on join:", err);
+          });
+        }
+      }).catch(console.error);
     }
     return () => {
       if (meeting) {
@@ -274,6 +280,7 @@ function RealtimeCallUI({ meeting, ...props }: any) {
   );
 }
 
+// Layout helper for dummy view when call is uninitialized
 function DummyCallUI(props: any) {
   const [micEnabled, setMicEnabled] = useState(true);
   const toggleMic = () => setMicEnabled(!micEnabled);
@@ -288,16 +295,35 @@ function DummyCallUI(props: any) {
   );
 }
 
-function RemoteParticipantAudio({ id }: { id: string }) {
-  const audioTrack = useRealtimeKitSelector((m) => m?.participants?.joined?.get(id)?.audioTrack);
+function RemoteParticipantAudio({ participant }: { participant: any }) {
+  const [track, setTrack] = useState<MediaStreamTrack | null>(participant?.audioTrack || null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    if (audioRef.current && audioTrack) {
-      const stream = new MediaStream([audioTrack]);
+    if (!participant) return;
+
+    setTrack(participant.audioTrack || null);
+
+    const handleAudioUpdate = (payload: { audioTrack: MediaStreamTrack }) => {
+      setTrack(payload.audioTrack || null);
+    };
+
+    participant.on("audioUpdate", handleAudioUpdate);
+
+    return () => {
+      participant.off("audioUpdate", handleAudioUpdate);
+    };
+  }, [participant]);
+
+  useEffect(() => {
+    if (audioRef.current && track) {
+      const stream = new MediaStream([track]);
       audioRef.current.srcObject = stream;
+      audioRef.current.play().catch((err) => {
+        console.warn("Audio playback failed or blocked:", err);
+      });
     }
-  }, [audioTrack]);
+  }, [track]);
 
   return <audio ref={audioRef} autoPlay playsInline />;
 }
@@ -312,9 +338,11 @@ function RemoteAudioRenderer({ meeting }: { meeting: any }) {
 
   return (
     <div className="hidden" style={{ display: 'none' }}>
-      {ids.map((id) => (
-        <RemoteParticipantAudio key={id} id={id} />
-      ))}
+      {ids.map((id) => {
+        const p = meeting.participants.joined.get(id);
+        if (!p) return null;
+        return <RemoteParticipantAudio key={id} participant={p} />;
+      })}
     </div>
   );
 }
