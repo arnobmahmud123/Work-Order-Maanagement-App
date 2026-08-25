@@ -4,7 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { Phone, PhoneOff, Video, Mic, MicOff } from "lucide-react";
-import { playRingtoneSound, playCallConnectSound, playCallEndSound } from "@/lib/sounds";
+import {
+  playRingtoneSound,
+  playCallConnectSound,
+  playCallEndSound,
+} from "@/lib/sounds";
 
 type CallStatus = "ringing" | "connected" | "ended" | "declined";
 
@@ -26,16 +30,6 @@ interface CallOverlayProps {
   callSessionId?: string;
   isIncomingAcceptor?: boolean;
 }
-
-// STUN servers for NAT traversal
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.cloudflare.com:3478" },
-  ],
-};
 
 export function CallOverlay(props: CallOverlayProps) {
   if (!props.isOpen) return null;
@@ -69,8 +63,10 @@ function CallOverlayInternal({
   const signalPollRef = useRef<any>(null);
   const lastSignalTsRef = useRef<number>(0);
   const offerSentRef = useRef(false);
+  // Buffer ICE candidates that arrive before remote description is set
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
-  // ── 1. Mount remote audio element ────────────────────────────────────────
+  // ── Mount hidden remote audio element ────────────────────────────────────
   useEffect(() => {
     const audio = document.createElement("audio");
     audio.autoplay = true;
@@ -78,7 +74,6 @@ function CallOverlayInternal({
     audio.setAttribute("data-call-remote", "true");
     document.body.appendChild(audio);
     remoteAudioRef.current = audio;
-
     return () => {
       audio.srcObject = null;
       audio.remove();
@@ -86,10 +81,9 @@ function CallOverlayInternal({
     };
   }, []);
 
-  // ── 2. Init call session (caller side) ───────────────────────────────────
+  // ── Init call session (caller side) ──────────────────────────────────────
   useEffect(() => {
     let isMounted = true;
-
     async function initCall() {
       if (!isIncomingAcceptor) {
         try {
@@ -105,108 +99,138 @@ function CallOverlayInternal({
             }),
           });
           const data = await res.json();
-          if (data.call?.id && isMounted) {
-            setSessionId(data.call.id);
-          }
-        } catch (e) {
-          console.error("[CallOverlay] Failed to init call session:", e);
-        }
+          if (data.call?.id && isMounted) setSessionId(data.call.id);
+        } catch {}
         playRingtoneSound();
         ringIntervalRef.current = setInterval(() => playRingtoneSound(), 2500);
       } else {
-        // Acceptor side — already connected
         playCallConnectSound();
       }
     }
-
     initCall();
-
     return () => {
       isMounted = false;
       clearInterval(ringIntervalRef.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 3. Poll call status (caller side) ───────────────────────────────────
+  // ── Poll call status (caller waits for accept) ───────────────────────────
   useEffect(() => {
     if (!sessionId || isIncomingAcceptor) return;
     let isMounted = true;
-
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/chat/calls/${sessionId}/status`);
         if (!res.ok || !isMounted) return;
         const data = await res.json();
-
         if (data.status === "connected" && status === "ringing") {
           clearInterval(ringIntervalRef.current);
           setStatus("connected");
           playCallConnectSound();
         } else if (data.status === "declined" || data.status === "ended") {
-          await doEnd(false);
+          doEnd(false);
         }
       } catch {}
     }, 1200);
-
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [sessionId, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 4. Start WebRTC when connected ───────────────────────────────────────
+  // ── Start WebRTC once call is connected ──────────────────────────────────
   useEffect(() => {
     if (status !== "connected" || !sessionId) return;
-
     startWebRTC(sessionId);
-
-    return () => {
-      stopWebRTC();
-    };
+    return () => stopWebRTC();
   }, [status, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 5. Elapsed timer ─────────────────────────────────────────────────────
+  // ── Elapsed timer ────────────────────────────────────────────────────────
   useEffect(() => {
     if (status !== "connected") return;
     const i = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(i);
   }, [status]);
 
-  // ── WebRTC Core ───────────────────────────────────────────────────────────
+  // ── WebRTC ────────────────────────────────────────────────────────────────
+  async function fetchIceServers(): Promise<RTCIceServer[]> {
+    try {
+      const res = await fetch("/api/chat/calls/ice-servers");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.iceServers?.length) {
+          console.log("[CallOverlay] ICE servers fetched:", data.iceServers.length);
+          return data.iceServers;
+        }
+      }
+    } catch (e) {
+      console.warn("[CallOverlay] Failed to fetch ICE servers:", e);
+    }
+    // Fallback to Google STUN only
+    return [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ];
+  }
+
+  async function addBufferedCandidates(pc: RTCPeerConnection) {
+    const buffered = [...pendingCandidatesRef.current];
+    pendingCandidatesRef.current = [];
+    for (const candidate of buffered) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch {}
+    }
+  }
 
   async function startWebRTC(callId: string) {
     try {
-      // Get local microphone
+      // Get TURN + STUN servers
+      const iceServers = await fetchIceServers();
+
+      // Request mic
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000,
+        },
         video: false,
       });
       localStreamRef.current = stream;
 
-      // Create peer connection
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
 
-      // Add local audio tracks
+      // Add local audio
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      // Play remote audio when received
+      // Play remote audio
       pc.ontrack = (event) => {
+        console.log("[CallOverlay] Remote track received:", event.track.kind);
         if (remoteAudioRef.current && event.streams[0]) {
           remoteAudioRef.current.srcObject = event.streams[0];
-          remoteAudioRef.current.play().catch(() => {});
+          remoteAudioRef.current.play().catch(console.warn);
         }
       };
 
-      // Send ICE candidates via our signaling API
+      // Send ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           sendSignal(callId, "candidate", event.candidate.toJSON());
         }
       };
 
+      pc.onconnectionstatechange = () => {
+        console.log("[CallOverlay] Connection state:", pc.connectionState);
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log("[CallOverlay] ICE state:", pc.iceConnectionState);
+      };
+
       if (!isIncomingAcceptor) {
-        // ── CALLER: create offer ────────────────────────────────────────
+        // ── CALLER: create and send offer ──────────────────────────────
         if (offerSentRef.current) return;
         offerSentRef.current = true;
 
@@ -214,44 +238,47 @@ function CallOverlayInternal({
         await pc.setLocalDescription(offer);
         await sendSignal(callId, "offer", { sdp: offer.sdp, type: offer.type });
 
-        // Poll for answer + candidates
+        // Poll for answer + candidates from acceptor
         startSignalPoll(callId, async (signal: any) => {
-          if (signal.type === "answer" && pc.remoteDescription === null) {
+          if (signal.type === "answer" && pc.signalingState === "have-local-offer") {
             await pc.setRemoteDescription(
               new RTCSessionDescription({ type: "answer", sdp: signal.data.sdp })
             );
+            await addBufferedCandidates(pc);
           }
           if (signal.type === "candidate") {
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(signal.data));
-            } catch {}
+            if (pc.remoteDescription) {
+              try { await pc.addIceCandidate(new RTCIceCandidate(signal.data)); } catch {}
+            } else {
+              pendingCandidatesRef.current.push(signal.data);
+            }
           }
         });
       } else {
-        // ── ACCEPTOR: wait for offer then answer ────────────────────────
+        // ── ACCEPTOR: wait for offer, then send answer ─────────────────
         startSignalPoll(callId, async (signal: any) => {
-          if (signal.type === "offer" && pc.remoteDescription === null) {
+          if (signal.type === "offer" && pc.signalingState === "stable") {
             await pc.setRemoteDescription(
               new RTCSessionDescription({ type: "offer", sdp: signal.data.sdp })
             );
+            // Apply any ICE candidates that arrived before the offer
+            await addBufferedCandidates(pc);
+
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            await sendSignal(callId, "answer", {
-              sdp: answer.sdp,
-              type: answer.type,
-            });
+            await sendSignal(callId, "answer", { sdp: answer.sdp, type: answer.type });
           }
           if (signal.type === "candidate") {
-            try {
-              if (pc.remoteDescription) {
-                await pc.addIceCandidate(new RTCIceCandidate(signal.data));
-              }
-            } catch {}
+            if (pc.remoteDescription) {
+              try { await pc.addIceCandidate(new RTCIceCandidate(signal.data)); } catch {}
+            } else {
+              pendingCandidatesRef.current.push(signal.data);
+            }
           }
         });
       }
     } catch (err) {
-      console.error("[CallOverlay] WebRTC start failed:", err);
+      console.error("[CallOverlay] WebRTC failed:", err);
     }
   }
 
@@ -261,6 +288,7 @@ function CallOverlayInternal({
     localStreamRef.current = null;
     try { pcRef.current?.close(); } catch {}
     pcRef.current = null;
+    pendingCandidatesRef.current = [];
   }
 
   async function sendSignal(
@@ -277,39 +305,32 @@ function CallOverlayInternal({
     } catch {}
   }
 
-  function startSignalPoll(
-    callId: string,
-    onSignal: (signal: any) => Promise<void>
-  ) {
+  function startSignalPoll(callId: string, onSignal: (s: any) => Promise<void>) {
     const poll = async () => {
       try {
         const res = await fetch(
           `/api/chat/calls/${callId}/signal?since=${lastSignalTsRef.current}`
         );
-        if (res.ok) {
-          const { signals } = await res.json();
-          for (const signal of signals || []) {
-            if (signal.timestamp > lastSignalTsRef.current) {
-              lastSignalTsRef.current = signal.timestamp;
-            }
-            await onSignal(signal);
+        if (!res.ok) return;
+        const { signals } = await res.json();
+        for (const signal of signals ?? []) {
+          if (signal.timestamp > lastSignalTsRef.current) {
+            lastSignalTsRef.current = signal.timestamp;
           }
+          await onSignal(signal);
         }
       } catch {}
     };
-
     poll();
     signalPollRef.current = setInterval(poll, 800);
   }
 
-  // ── End call ──────────────────────────────────────────────────────────────
   async function doEnd(notifyBackend = true) {
     clearInterval(ringIntervalRef.current);
     clearInterval(signalPollRef.current);
     stopWebRTC();
     playCallEndSound();
     setStatus("ended");
-
     if (notifyBackend && sessionId) {
       try {
         await fetch(`/api/chat/calls/${sessionId}/end`, { method: "POST" });
@@ -318,14 +339,11 @@ function CallOverlayInternal({
     setTimeout(onClose, 1200);
   }
 
-  // ── Mic toggle ────────────────────────────────────────────────────────────
   const toggleMic = useCallback(() => {
     if (!localStreamRef.current) return;
-    const enabled = !micEnabled;
-    localStreamRef.current.getAudioTracks().forEach((t) => {
-      t.enabled = enabled;
-    });
-    setMicEnabled(enabled);
+    const newEnabled = !micEnabled;
+    localStreamRef.current.getAudioTracks().forEach((t) => { t.enabled = newEnabled; });
+    setMicEnabled(newEnabled);
   }, [micEnabled]);
 
   function formatTime(s: number) {
@@ -364,7 +382,7 @@ function CallOverlayInternal({
             )}
           </div>
 
-          {/* Main area */}
+          {/* Main */}
           <div className="relative p-8 flex flex-col items-center justify-center min-h-[320px] bg-gradient-to-b from-surface to-background">
             <div className="relative mb-6">
               <div
@@ -374,11 +392,7 @@ function CallOverlayInternal({
                 )}
               >
                 {participants[0]?.image ? (
-                  <img
-                    src={participants[0].image}
-                    alt="Caller"
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={participants[0].image} alt="Caller" className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-3xl font-bold text-white uppercase">
                     {(participants[0]?.name || "U")[0]}
@@ -397,10 +411,8 @@ function CallOverlayInternal({
               <div
                 className={cn(
                   "absolute -bottom-2 -right-2 px-3 py-1 rounded-xl border border-border-subtle backdrop-blur-md shadow-lg z-20 font-medium text-[11px] uppercase tracking-wider",
-                  status === "connected"
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : status === "ended" || status === "declined"
-                    ? "bg-rose-500/20 text-rose-400"
+                  status === "connected" ? "bg-emerald-500/20 text-emerald-400"
+                    : status === "ended" || status === "declined" ? "bg-rose-500/20 text-rose-400"
                     : "bg-cyan-500/20 text-cyan-400"
                 )}
               >
@@ -446,11 +458,7 @@ function CallOverlayInternal({
                     : "bg-surface text-text-secondary hover:bg-surface-hover hover:text-cyan-400 border-border-subtle"
                 )}
               >
-                {!micEnabled ? (
-                  <MicOff className="h-6 w-6" />
-                ) : (
-                  <Mic className="h-6 w-6" />
-                )}
+                {!micEnabled ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
               </Button>
 
               {callType === "video" && (
