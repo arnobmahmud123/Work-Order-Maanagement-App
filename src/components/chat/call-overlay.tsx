@@ -13,7 +13,7 @@ import {
   MicOff,
 } from "lucide-react";
 import { playRingtoneSound, playCallConnectSound, playCallEndSound } from "@/lib/sounds";
-import { useRealtimeKitClient } from "@cloudflare/realtimekit-react";
+import { useRealtimeKitClient, useRealtimeKitSelector } from "@cloudflare/realtimekit-react";
 
 type CallStatus = "ringing" | "connected" | "ended" | "declined";
 
@@ -75,8 +75,8 @@ function CallOverlayInternal({
             body: JSON.stringify({
               channelId: channelId || "general",
               channelName: channelName || "Direct Call",
-              targetUserId: targetUserId || participants[0]?.id,
-              targetUserName: targetUserName || participants[0]?.name,
+              targetUserId,
+              targetUserName,
               callType,
             }),
           });
@@ -105,7 +105,7 @@ function CallOverlayInternal({
         ringIntervalRef.current = null;
       }
     };
-  }, [callType, isIncomingAcceptor]);
+  }, [callType, isIncomingAcceptor, targetUserId, targetUserName]);
 
   // 2. Poll call status
   useEffect(() => {
@@ -213,17 +213,50 @@ function CallOverlayInternal({
   }
 
   return (
-    <CallUI 
-      status={status}
-      elapsed={elapsed}
-      formatTime={formatTime}
-      participants={participants}
-      channelName={channelName}
-      callType={callType}
-      handleEnd={() => handleEnd(true)}
-      meeting={meeting}
-    />
-    
+    <>
+      <CallUI 
+        status={status}
+        elapsed={elapsed}
+        formatTime={formatTime}
+        participants={participants}
+        channelName={channelName}
+        callType={callType}
+        handleEnd={() => handleEnd(true)}
+        meeting={meeting}
+      />
+      {meeting && <RemoteAudioRenderer meeting={meeting} />}
+    </>
+  );
+}
+
+function RemoteParticipantAudio({ id }: { id: string }) {
+  const audioTrack = useRealtimeKitSelector((m) => m?.participants?.joined?.get(id)?.audioTrack);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (audioRef.current && audioTrack) {
+      const stream = new MediaStream([audioTrack]);
+      audioRef.current.srcObject = stream;
+    }
+  }, [audioTrack]);
+
+  return <audio ref={audioRef} autoPlay playsInline />;
+}
+
+function RemoteAudioRenderer({ meeting }: { meeting: any }) {
+  const joinedIds = useRealtimeKitSelector((m) => {
+    if (!m?.participants?.joined) return "";
+    return Array.from(m.participants.joined.keys()).join(",");
+  });
+
+  const ids = joinedIds ? joinedIds.split(",") : [];
+
+  return (
+    <div className="hidden" style={{ display: 'none' }}>
+      {ids.map((id) => (
+        <RemoteParticipantAudio key={id} id={id} />
+      ))}
+    </div>
   );
 }
 
@@ -232,12 +265,14 @@ function CallUI({
 }: any) {
   
   // RealtimeKit selector for checking if audio is enabled
+  const audioEnabled = useRealtimeKitSelector((m) => m?.self?.audioEnabled ?? false);
   const [micEnabled, setMicEnabled] = useState(true);
+
   useEffect(() => {
-    if (meeting?.self) {
-      setMicEnabled(meeting.self.audioEnabled !== false);
+    if (meeting) {
+      setMicEnabled(audioEnabled);
     }
-  }, [meeting]);
+  }, [audioEnabled, meeting]);
 
   const toggleMic = () => {
     if (meeting?.self) {

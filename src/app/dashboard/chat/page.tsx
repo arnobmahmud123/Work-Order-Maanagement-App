@@ -2065,8 +2065,8 @@ function ChatArea({
           callType={callType}
           channelId={channel?.id}
           channelName={channel?.name}
-          targetUserId={isDM && otherUser ? otherUser.id : undefined}
-          targetUserName={isDM && otherUser ? otherUser.name : undefined}
+          targetUserId={channel?.members?.find((m: any) => m.userId !== userId)?.user?.id}
+          targetUserName={channel?.members?.find((m: any) => m.userId !== userId)?.user?.name}
           participants={
             isDM && otherUser
               ? [
