@@ -583,7 +583,8 @@ function DialerTab({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to initiate call");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to initiate call");
       }
 
       const call = await response.json();
@@ -594,8 +595,8 @@ function DialerTab({
           ? "Outbound call triggered via ElevenLabs"
           : "Mock call initiated"
       );
-    } catch {
-      toast.error("Failed to initiate call");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to initiate call");
     }
   }
 

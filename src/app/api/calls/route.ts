@@ -80,6 +80,33 @@ export async function POST(req: NextRequest) {
 
   if (apiKey && agentId && phoneNumberId && !enableSimulation) {
     try {
+      // Auto-resolve ElevenLabs phone_number_id if configured with an E.164 string like +16592137866
+      let resolvedPhoneId = phoneNumberId;
+      try {
+        const phoneListRes = await fetch("https://api.elevenlabs.io/v1/convai/phone-numbers", {
+          headers: { "xi-api-key": apiKey },
+        });
+        if (phoneListRes.ok) {
+          const phoneListData = await phoneListRes.json();
+          const list = phoneListData.phone_numbers || (Array.isArray(phoneListData) ? phoneListData : []);
+          if (Array.isArray(list) && list.length > 0) {
+            const match = list.find((p: any) => 
+              p.phone_number === resolvedPhoneId || 
+              p.phone_number?.replace(/\D/g, '') === resolvedPhoneId.replace(/\D/g, '') ||
+              p.phone_number_id === resolvedPhoneId ||
+              p.id === resolvedPhoneId
+            );
+            if (match) {
+              resolvedPhoneId = match.phone_number_id || match.id;
+            } else if (list.length === 1) {
+              resolvedPhoneId = list[0].phone_number_id || list[0].id;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query ElevenLabs phone-numbers:", err);
+      }
+
       const response = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
         method: "POST",
         headers: {
@@ -88,7 +115,7 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           agent_id: agentId,
-          agent_phone_number_id: phoneNumberId,
+          agent_phone_number_id: resolvedPhoneId,
           to_number: recipientPhone,
           conversation_initiation_client_data: {
             dynamic_variables: {
@@ -106,10 +133,10 @@ export async function POST(req: NextRequest) {
         let parsedDetail = errorText;
         try {
           const parsed = JSON.parse(errorText);
-          parsedDetail = parsed.detail?.message || parsed.message || errorText;
+          parsedDetail = parsed.detail?.message || parsed.message || parsed.detail || errorText;
         } catch {}
         return NextResponse.json(
-          { error: `ElevenLabs AI Call Error: ${parsedDetail}` },
+          { error: `ElevenLabs AI Call Error: ${typeof parsedDetail === 'string' ? parsedDetail : JSON.stringify(parsedDetail)}` },
           { status: response.status >= 400 && response.status < 500 ? response.status : 500 }
         );
       }
