@@ -90,12 +90,16 @@ export function useCreateWorkOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: any) => {
+      const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
       const res = await fetch("/api/work-orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        headers: isFormData ? undefined : { "Content-Type": "application/json" },
+        body: isFormData ? data : JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create work order");
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to create work order");
+      }
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["work-orders"] }),
