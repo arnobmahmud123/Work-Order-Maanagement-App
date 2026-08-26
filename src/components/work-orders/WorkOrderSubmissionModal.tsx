@@ -190,13 +190,12 @@ export function WorkOrderSubmissionModal({
       issues.push({
         id: "property-condition-missing",
         type: "MISSING_PROPERTY_CONDITION",
-        severity: "ERROR",
-        title: "No Property Condition / Front Photos Uploaded",
-        description: "Must upload property front/address verification photos, or provide a property access & condition note.",
+        severity: "WARNING",
+        title: "No Property Condition / Front Photos Uploaded (Optional)",
+        description: "Recommended: Upload property front/address verification photos or add a condition note.",
       });
-    } else {
-      passedCount++;
     }
+    passedCount++;
 
     // 3. Check Bids (if any)
     bids.forEach((bid) => {
