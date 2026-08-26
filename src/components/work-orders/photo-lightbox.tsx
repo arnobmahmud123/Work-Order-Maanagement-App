@@ -74,6 +74,7 @@ export function PhotoLightbox({
     try {
       const { generatePhotoWithOverlay, DEFAULT_OVERLAY_OPTIONS } = await import("@/lib/exif");
       const { triggerFileDownload } = await import("@/lib/download-helper");
+      const { optimizePhotoForDownload } = await import("@/lib/image-compression");
       const canvas = generatePhotoWithOverlay(
         imgRef.current,
         {
@@ -83,9 +84,10 @@ export function PhotoLightbox({
         },
         DEFAULT_OVERLAY_OPTIONS
       );
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.95));
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.75));
+      const optimizedBlob = await optimizePhotoForDownload(blob, { maxSizeBytes: 200 * 1024, maxDimension: 1600 });
       const filename = (photo.originalName?.replace(/\.[^.]+$/, "") || "photo") + "-timestamped.jpg";
-      await triggerFileDownload(blob, filename);
+      await triggerFileDownload(optimizedBlob, filename);
     } catch (err) {
       console.error("Download with overlay failed:", err);
       downloadOriginal(); // Fallback

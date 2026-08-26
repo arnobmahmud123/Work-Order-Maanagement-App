@@ -102,6 +102,7 @@ import {
 import { PhotoLightbox } from "@/components/work-orders/photo-lightbox";
 import { GPSCamera, type CapturedPhoto } from "@/components/gps-camera";
 import { addPhotoToQueue } from "@/lib/offline-queue";
+import { compressImageToTarget, optimizePhotoForDownload } from "@/lib/image-compression";
 import {
   TaskEntryList,
   TaskEntry,
@@ -1308,42 +1309,14 @@ export default function WorkOrderDetailPage({
     }
   }
 
-  async function resizeImage(file: File, maxWidth = 1000): Promise<File> {
-    if (!file.type.startsWith("image/")) return file;
-    // Skip resizing for small files (under 400KB) to preserve EXIF data and avoid unnecessary processing
-    if (file.size < 400 * 1024) return file;
-
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(file);
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) return resolve(file);
-            resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
-          },
-          "image/jpeg",
-          0.6
-        );
-      };
-      img.onerror = () => resolve(file);
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
   // Upload handler — uploads a file directly to Cloudflare R2 via pre-signed URL and saves metadata to DB
   async function handlePhotoUpload(originalFile: File, category: string): Promise<{ url: string; rawUrl?: string; id: string }> {
-    const file = await resizeImage(originalFile);
+    // Ultra-fast client-side compression targeting 150KB - 200KB max with crisp 1600px HD resolution & EXIF preservation
+    const file = await compressImageToTarget(originalFile, {
+      maxSizeBytes: 200 * 1024,
+      maxDimension: 1600,
+      initialQuality: 0.72,
+    });
     
     // OFFLINE MODE CHECK
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -2082,7 +2055,9 @@ export default function WorkOrderDetailPage({
     const getOriginal = async () => {
       const response = await fetch(src, { cache: "no-store" });
       if (!response.ok) throw new Error("Photo fetch failed");
-      return { name: `${customFileName}.jpg`, blob: await response.blob() };
+      const rawBlob = await response.blob();
+      const optimizedBlob = await optimizePhotoForDownload(rawBlob, { maxSizeBytes: 200 * 1024, maxDimension: 1600 });
+      return { name: `${customFileName}.jpg`, blob: optimizedBlob };
     };
     if (photoTabDownloadMode === "none") {
       return getOriginal();
@@ -2109,9 +2084,10 @@ export default function WorkOrderDetailPage({
       ctx.fillRect(0, canvas.height - lineHeight - pad, canvas.width, lineHeight + pad);
       ctx.fillStyle = "#ffffff";
       ctx.fillText(photoStampText(photo, photoTabDownloadMode, photoTabCustomDateTime), pad, canvas.height - pad);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.72));
       if (!blob) throw new Error("Photo export failed");
-      return { name: `${customFileName}-${photoTabDownloadMode}.jpg`, blob };
+      const optimizedBlob = await optimizePhotoForDownload(blob, { maxSizeBytes: 200 * 1024, maxDimension: 1600 });
+      return { name: `${customFileName}-${photoTabDownloadMode}.jpg`, blob: optimizedBlob };
     } catch {
       return getOriginal();
     }

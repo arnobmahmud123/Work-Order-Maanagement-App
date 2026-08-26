@@ -22,6 +22,7 @@ import {
   Maximize2,
   Move,
 } from "lucide-react";
+import { compressImageToTarget } from "@/lib/image-compression";
 
 interface PhotoEditorProps {
   imageUrl: string;
@@ -475,11 +476,16 @@ export function PhotoEditor({ imageUrl, onClose, onSave }: PhotoEditorProps) {
     setIsSaving(true);
     canvas.toBlob(async (blob) => {
       if (blob) {
-        await onSave(blob);
+        const compressedFile = await compressImageToTarget(blob, {
+          maxSizeBytes: 200 * 1024,
+          maxDimension: 1600,
+          initialQuality: 0.72,
+        });
+        await onSave(compressedFile);
       }
       setIsSaving(false);
       onClose();
-    }, "image/jpeg", 0.95);
+    }, "image/jpeg", 0.75);
   };
 
   return (

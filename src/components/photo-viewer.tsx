@@ -12,6 +12,7 @@ import {
   type OverlayOptions,
   type GPSData,
 } from "@/lib/exif";
+import { optimizePhotoForDownload } from "@/lib/image-compression";
 import {
   X,
   Download,
@@ -142,12 +143,13 @@ export function PhotoViewer({
         overlayOpts
       );
 
-      // Download canvas as JPEG
+      // Download canvas as optimized JPEG
       const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.95);
+        canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.75);
       });
+      const optimizedBlob = await optimizePhotoForDownload(blob, { maxSizeBytes: 200 * 1024, maxDimension: 1600 });
 
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(optimizedBlob);
       const a = document.createElement("a");
       a.href = url;
       a.download = (photoName?.replace(/\.[^.]+$/, "") || "photo") + "-timestamped.jpg";

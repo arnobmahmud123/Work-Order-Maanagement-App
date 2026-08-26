@@ -19,6 +19,7 @@ import {
   ImagePlus
 } from "lucide-react";
 import { readEXIF, type EXIFInfo } from "@/lib/exif";
+import { compressImageToTarget } from "@/lib/image-compression";
 
 function parseEXIFDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -411,13 +412,18 @@ export function PhotoUploadSection({
         const uploaded: PhotoItem[] = [];
         for (let i = 0; i < files.length; i++) {
           try {
-            const result = await onUpload(files[i], category);
+            const compressedFile = await compressImageToTarget(files[i], {
+              maxSizeBytes: 200 * 1024,
+              maxDimension: 1600,
+              initialQuality: 0.72,
+            });
+            const result = await onUpload(compressedFile, category);
             uploaded.push({
               id: result.id,
               url: result.url,
               rawUrl: result.rawUrl,
-              name: files[i].name,
-              size: files[i].size,
+              name: compressedFile.name,
+              size: compressedFile.size,
               category,
               timestamp: new Date().toISOString(),
               persisted: true,

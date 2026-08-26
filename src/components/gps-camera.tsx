@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { embedGPSInJPEG, reverseGeocode, type GPSData } from "@/lib/exif";
+import { compressImageToTarget } from "@/lib/image-compression";
 import {
   Camera,
   CameraOff,
@@ -86,68 +87,22 @@ export function GPSCamera({
 
     setIsCapturing(true);
     try {
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      img.src = objectUrl;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
+      const compressedFile = await compressImageToTarget(file, {
+        maxSizeBytes: 200 * 1024,
+        maxDimension: 1600,
+        initialQuality: 0.72,
       });
 
-      const canvas = document.createElement("canvas");
-      const MAX_DIMENSION = 1024;
-      let targetWidth = img.width;
-      let targetHeight = img.height;
-
-      if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
-        if (targetWidth > targetHeight) {
-          targetHeight = Math.round((targetHeight * MAX_DIMENSION) / targetWidth);
-          targetWidth = MAX_DIMENSION;
-        } else {
-          targetWidth = Math.round((targetWidth * MAX_DIMENSION) / targetHeight);
-          targetHeight = MAX_DIMENSION;
-        }
-      }
-
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-      let blob: Blob | null = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, "image/jpeg", 0.70);
-      });
-
-      if (!blob) {
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.70);
-        const res = await fetch(dataUrl);
-        blob = await res.blob();
-      }
-
-      const finalBlob = blob!;
-      let resultBlob: Blob = finalBlob;
-      if (gps) {
-        try {
-          const arrayBuffer = await finalBlob.arrayBuffer();
-          const withGPS = embedGPSInJPEG(arrayBuffer, gps, new Date());
-          resultBlob = new Blob([withGPS], { type: "image/jpeg" });
-        } catch (err) {
-          console.warn("Failed to embed GPS in EXIF of chosen file:", err);
-        }
-      }
-
-      const url = canvas.toDataURL("image/jpeg", 0.70);
+      const url = URL.createObjectURL(compressedFile);
       setCapturedPhoto({
-        blob: resultBlob,
+        blob: compressedFile,
         url,
         gps: gps || null,
         timestamp: new Date(),
         address: address || null,
-        width: targetWidth,
-        height: targetHeight,
+        width: 1600,
+        height: 1200,
       });
-
-      URL.revokeObjectURL(objectUrl);
     } catch (err) {
       console.error("Failed to process selected file:", err);
       toast.error("Failed to read image file");
@@ -392,26 +347,28 @@ export function GPSCamera({
       blob = await res.blob();
     }
 
-    // At this point blob is guaranteed non-null (fallback above)
-    const finalBlob = blob!;
-
     // Embed GPS into EXIF
-    let resultBlob: Blob = finalBlob;
+    let resultBlob: Blob = blob;
     if (gps) {
       try {
-        const arrayBuffer = await finalBlob.arrayBuffer();
+        const arrayBuffer = await blob.arrayBuffer();
         const withGPS = embedGPSInJPEG(arrayBuffer, gps, new Date());
         resultBlob = new Blob([withGPS], { type: "image/jpeg" });
       } catch (err) {
         console.warn("Failed to embed GPS in EXIF:", err);
-        // Use original blob — GPS data is still in the metadata object
       }
     }
 
-    const url = canvas.toDataURL("image/jpeg", 0.70);
+    // Fast-compress to strict 150KB - 200KB max with crisp resolution
+    const compressedFile = await compressImageToTarget(resultBlob, {
+      maxSizeBytes: 200 * 1024,
+      maxDimension: 1600,
+      initialQuality: 0.72,
+    });
+    const url = URL.createObjectURL(compressedFile);
 
     setCapturedPhoto({
-      blob: resultBlob,
+      blob: compressedFile,
       url,
       gps,
       timestamp: new Date(),

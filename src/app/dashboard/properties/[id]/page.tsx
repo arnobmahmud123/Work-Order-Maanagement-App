@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { PropertyAiCopilot } from "@/components/work-orders/property-ai-copilot";
+import { compressImageToTarget } from "@/lib/image-compression";
 import {
   cn,
   formatDate,
@@ -148,11 +149,17 @@ export default function PropertyDetailPage({
   }, [lightboxIndex, goPrev, goNext]);
 
   async function handlePropertyFrontUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
 
     setUploadingFrontPhoto(true);
     try {
+      const file = await compressImageToTarget(rawFile, {
+        maxSizeBytes: 200 * 1024,
+        maxDimension: 1600,
+        initialQuality: 0.72,
+      });
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("category", "FRONT");
