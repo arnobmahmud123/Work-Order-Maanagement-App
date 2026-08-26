@@ -131,7 +131,7 @@ function renderMarkdown(text: string) {
     if (linkMatch) return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">{linkMatch[1]}</a>;
     if (part.includes('@')) {
        const subparts = part.split(/(@\w+)/g);
-       return <span key={i}>{subparts.map((sp, j) => sp.startsWith('@') ? <span key={j} className="bg-cyan-500/15 text-cyan-300 px-1.5 py-0.5 rounded-md font-medium cursor-pointer hover:bg-cyan-500/25 transition-colors">{sp}</span> : sp)}</span>;
+       return <span key={i}>{subparts.map((sp, j) => sp.startsWith('@') ? <span key={j} className="bg-cyan-500/15 dark:bg-cyan-500/25 text-cyan-800 dark:text-cyan-200 border border-cyan-500/30 dark:border-cyan-500/40 px-1.5 py-0.5 rounded-md font-bold cursor-pointer hover:bg-cyan-500/25 dark:hover:bg-cyan-500/35 transition-colors inline-block my-0.5 shadow-sm">{sp}</span> : sp)}</span>;
     }
     return part;
   });
@@ -1196,7 +1196,7 @@ function ChatArea({
   function highlightMentions(text: string) {
     return text.replace(
       /@(\w+)/g,
-      '<span class="bg-cyan-500/15 text-cyan-300 px-1.5 py-0.5 rounded-md font-medium cursor-pointer hover:bg-cyan-500/25 transition-colors">@$1</span>'
+      '<span class="bg-cyan-500/15 dark:bg-cyan-500/25 text-cyan-800 dark:text-cyan-200 border border-cyan-500/30 dark:border-cyan-500/40 px-1.5 py-0.5 rounded-md font-bold cursor-pointer hover:bg-cyan-500/25 dark:hover:bg-cyan-500/35 transition-colors inline-block my-0.5 shadow-sm">@$1</span>'
     );
   }
 

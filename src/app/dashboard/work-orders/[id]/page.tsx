@@ -4946,7 +4946,27 @@ function WorkOrderMessagesTab({
                           : "bg-surface-hover backdrop-blur-md text-text-primary rounded-tl-sm border border-border-subtle"
                       )}
                     >
-                      <p className="leading-relaxed font-medium">{msg.content}</p>
+                      <div className="leading-relaxed font-medium">
+                        {typeof msg.content === "string" && msg.content.includes("@")
+                          ? msg.content.split(/(@\w+)/g).map((sp: string, j: number) =>
+                              sp.startsWith("@") ? (
+                                <span
+                                  key={j}
+                                  className={cn(
+                                    "px-1.5 py-0.5 rounded-md font-bold inline-block my-0.5 border shadow-sm",
+                                    isOwn
+                                      ? "bg-white/20 text-white border-white/30"
+                                      : "bg-cyan-500/15 dark:bg-cyan-500/25 text-cyan-800 dark:text-cyan-200 border-cyan-500/30 dark:border-cyan-500/40"
+                                  )}
+                                >
+                                  {sp}
+                                </span>
+                              ) : (
+                                sp
+                              )
+                            )
+                          : msg.content}
+                      </div>
                     </div>
                     <p className={cn("text-[9px] font-black text-text-dim uppercase tracking-tighter mt-1 px-1", isOwn ? "text-right" : "text-left")}>
                       {formatRelativeTime(msg.createdAt)}

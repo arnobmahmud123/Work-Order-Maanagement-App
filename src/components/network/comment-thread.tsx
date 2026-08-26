@@ -152,7 +152,7 @@ function CommentItem({ comment, isReply, onReply, onReact, currentUserId }: {
         <p className="text-sm text-text-secondary mt-0.5 break-words">
           {comment.content.split(/(@\w+)/g).map((part: string, i: number) =>
             part.startsWith("@") ? (
-              <span key={i} className="text-cyan-400 font-medium">{part}</span>
+              <span key={i} className="bg-cyan-500/15 dark:bg-cyan-500/25 text-cyan-800 dark:text-cyan-200 border border-cyan-500/30 dark:border-cyan-500/40 px-1.5 py-0.5 rounded-md font-bold inline-block my-0.5 shadow-sm">{part}</span>
             ) : (
               <span key={i}>{part}</span>
             )
