@@ -71,6 +71,9 @@ function applyWorkOrderVisibility(where: any, role: string, userId: string) {
   if (STAFF_WORK_ORDER_ROLES.has(role)) return;
   if (role === "CONTRACTOR") {
     where.contractorId = userId;
+    // Contractors only have access to work orders while actively working on them;
+    // once submitted (FIELD_COMPLETE, READY_FOR_CLIENT, COMPLETED, CLOSED), they no longer have access.
+    where.status = { notIn: ["FIELD_COMPLETE", "READY_FOR_CLIENT", "COMPLETED", "CLOSED"] };
     return;
   }
 

@@ -1835,6 +1835,38 @@ export default function WorkOrderDetailPage({
   }
 
   if (workOrderLoadFailed) {
+    const errorMsg = workOrderLoadError instanceof Error ? workOrderLoadError.message : "Unknown load error";
+    const isAccessRevoked = errorMsg.includes("revoked") || errorMsg.includes("Forbidden") || errorMsg.includes("403") || errorMsg.includes("submitted");
+
+    if (role === "CONTRACTOR" || isAccessRevoked) {
+      return (
+        <div className="p-4 sm:p-8">
+          <Card className="mx-auto max-w-xl border-emerald-500/20 bg-surface/80 shadow-2xl backdrop-blur-xl rounded-3xl p-6 sm:p-8 text-center space-y-4">
+            <div className="h-16 w-16 rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-lg">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-lg sm:text-xl font-black text-text-primary">
+                Work Order Submitted & Under Review
+              </h2>
+              <p className="text-xs sm:text-sm text-text-muted max-w-md mx-auto leading-relaxed">
+                The results for this work order have been submitted as <strong>Field Complete</strong>. It is now undergoing processor and QA review. Contractor access has been finalized.
+              </p>
+            </div>
+            <div className="pt-2 flex justify-center">
+              <Button
+                type="button"
+                className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg"
+                onClick={() => router.push("/dashboard/work-orders")}
+              >
+                ← Return to My Work Orders
+              </Button>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="p-8">
         <Card className="mx-auto max-w-xl border-red-200 bg-red-50/60">
@@ -1847,9 +1879,7 @@ export default function WorkOrderDetailPage({
               The order is still in the database, but the page could not read it right now.
             </p>
             <p className="mt-3 rounded-md bg-slate-950/60 border border-white/10 px-3 py-2 text-xs text-slate-100 break-words max-h-40 overflow-y-auto font-mono text-left">
-              {workOrderLoadError instanceof Error
-                ? workOrderLoadError.message
-                : "Unknown load error"}
+              {errorMsg}
             </p>
             <div className="mt-5 flex justify-center gap-3">
               <Button type="button" onClick={() => refetchWorkOrder()}>

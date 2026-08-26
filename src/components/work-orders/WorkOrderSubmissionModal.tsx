@@ -353,8 +353,10 @@ export function WorkOrderSubmissionModal({
 
     try {
       await onSubmitWorkOrder(contractorNotes);
-      toast.success("🎉 Work Order successfully submitted as Field Complete!");
+      toast.success("🎉 Work Order successfully submitted as Field Complete! Access has been finalized.");
       onClose();
+      // Redirect contractor back to work order queue where submitted order is removed
+      window.location.href = "/dashboard/work-orders";
     } catch (err: any) {
       toast.error(err?.message || "Failed to submit work order");
     }

@@ -58,7 +58,20 @@ export async function POST(
 
   const { id: workOrderId } = await params;
   const companyId = (session.user as any).companyId;
-  const role = (session.user as any).role;
+  const role = (session.user as any)?.role?.toUpperCase();
+
+  if (role === "CONTRACTOR") {
+    const existingWO = await prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { status: true },
+    });
+    if (existingWO && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "COMPLETED", "CLOSED"].includes(existingWO.status)) {
+      return NextResponse.json(
+        { error: "Forbidden: Work order results have already been submitted and photo uploads are locked." },
+        { status: 403 }
+      );
+    }
+  }
 
   const isJson = req.headers.get("content-type")?.includes("application/json");
   let originalName: string;
