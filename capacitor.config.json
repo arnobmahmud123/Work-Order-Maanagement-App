@@ -5,6 +5,14 @@
   "bundledWebRuntime": false,
   "server": {
     "url": "https://work-order-maanagement-app.arnobmahmud123.workers.dev",
-    "cleartext": true
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "ios": {
+    "allowsLinkPreview": false,
+    "handleApplicationURL": true,
+    "scrollEnabled": true,
+    "preferredContentMode": "mobile",
+    "limitsNavigationsToAppBoundDomains": false
   }
 }
