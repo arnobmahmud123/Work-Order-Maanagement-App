@@ -37,6 +37,17 @@ const DEFAULT_STATUS_MAP: Record<string, CanonicalStatusCode> = {
   "pending client": "PENDING_REVIEW",
   "submitted": "PENDING_REVIEW",
 
+  "ready for client": "READY_FOR_CLIENT",
+  "ready_for_client": "READY_FOR_CLIENT",
+  "ready-for-client": "READY_FOR_CLIENT",
+
+  "sent to client": "SENT_TO_CLIENT",
+  "sent_to_client": "SENT_TO_CLIENT",
+  "sent-to-client": "SENT_TO_CLIENT",
+  "submitted to client": "SENT_TO_CLIENT",
+  "client submitted": "SENT_TO_CLIENT",
+  "client submission": "SENT_TO_CLIENT",
+
   "revisions needed": "REVISIONS_NEEDED",
   "revisions": "REVISIONS_NEEDED",
   "rejected": "REVISIONS_NEEDED",

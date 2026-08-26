@@ -115,8 +115,8 @@ export async function GET(
     }
 
     const userRole = (session.user as any)?.role?.toUpperCase();
-    // Once a contractor submits the results (FIELD_COMPLETE, READY_FOR_CLIENT, COMPLETED, CLOSED), they no longer have access
-    if (userRole === "CONTRACTOR" && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "COMPLETED", "CLOSED"].includes(workOrder.status)) {
+    // Once a contractor submits the results (FIELD_COMPLETE, READY_FOR_CLIENT, SENT_TO_CLIENT, COMPLETED, CLOSED), they no longer have access
+    if (userRole === "CONTRACTOR" && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "SENT_TO_CLIENT", "COMPLETED", "CLOSED"].includes(workOrder.status)) {
       return NextResponse.json(
         { error: "Access revoked: Work order results have been submitted and are under QA/processor review." },
         { status: 403 }
@@ -329,7 +329,7 @@ export async function PATCH(
     }
 
     const userRole = (session.user as any)?.role?.toUpperCase();
-    if (userRole === "CONTRACTOR" && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "COMPLETED", "CLOSED"].includes(existing.status)) {
+    if (userRole === "CONTRACTOR" && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "SENT_TO_CLIENT", "COMPLETED", "CLOSED"].includes(existing.status)) {
       return NextResponse.json(
         { error: "Forbidden: Work order results have already been submitted and locked." },
         { status: 403 }

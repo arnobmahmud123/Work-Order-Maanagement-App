@@ -652,9 +652,11 @@ export default function DashboardPage() {
 
 function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
-    NEW: "#60a5fa", PENDING: "#fbbf24", ASSIGNED: "#a78bfa", IN_PROGRESS: "#22d3ee",
+    NEW: "#60a5fa", UNASSIGNED: "#94a3b8", PENDING: "#fbbf24", ASSIGNED: "#a78bfa", IN_PROGRESS: "#22d3ee",
     FIELD_COMPLETE: "#2dd4bf", QC_REVIEW: "#fb923c", PENDING_REVIEW: "#fbbf24",
-    REVISIONS_NEEDED: "#fb7185", OFFICE_COMPLETE: "#34d399", CANCELLED: "#f43f5e",
+    READY_FOR_CLIENT: "#38bdf8", SENT_TO_CLIENT: "#818cf8",
+    REVISIONS_NEEDED: "#fb7185", OFFICE_COMPLETE: "#34d399", CLOSED: "#94a3b8", CANCELLED: "#f43f5e",
+    ASSETS: "#2dd4bf",
   };
   return colors[status] || "#60a5fa";
 }
@@ -662,16 +664,20 @@ function getStatusColor(status: string): string {
 function getStatusGradient(status: string): string {
   const gradients: Record<string, string> = {
     NEW: "bg-gradient-to-r from-blue-500 to-blue-400",
+    UNASSIGNED: "bg-gradient-to-r from-slate-500 to-slate-400",
     PENDING: "bg-gradient-to-r from-amber-500 to-yellow-400",
     ASSIGNED: "bg-gradient-to-r from-violet-500 to-purple-400",
     IN_PROGRESS: "bg-gradient-to-r from-cyan-500 to-teal-400",
     FIELD_COMPLETE: "bg-gradient-to-r from-teal-500 to-emerald-400",
     QC_REVIEW: "bg-gradient-to-r from-orange-500 to-amber-400",
     PENDING_REVIEW: "bg-gradient-to-r from-amber-500 to-orange-400",
+    READY_FOR_CLIENT: "bg-gradient-to-r from-sky-500 to-cyan-400",
+    SENT_TO_CLIENT: "bg-gradient-to-r from-indigo-500 to-violet-400",
     REVISIONS_NEEDED: "bg-gradient-to-r from-rose-500 to-pink-400",
     OFFICE_COMPLETE: "bg-gradient-to-r from-emerald-500 to-green-400",
     CLOSED: "bg-gradient-to-r from-purple-500 to-violet-400",
     CANCELLED: "bg-gradient-to-r from-rose-600 to-red-400",
+    ASSETS: "bg-gradient-to-r from-teal-500 to-emerald-400",
   };
   return gradients[status] || "bg-gradient-to-r from-cyan-500 to-blue-400";
 }

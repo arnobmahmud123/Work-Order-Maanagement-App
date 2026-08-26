@@ -68,16 +68,20 @@ function useProperty(id: string) {
 
 const STATUS_PILL: Record<string, string> = {
   NEW: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  UNASSIGNED: "bg-slate-500/15 text-slate-400 border-slate-500/30",
   PENDING: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
   ASSIGNED: "bg-purple-500/15 text-purple-400 border-purple-500/30",
   IN_PROGRESS: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
   FIELD_COMPLETE: "bg-teal-500/15 text-teal-400 border-teal-500/30",
   QC_REVIEW: "bg-orange-500/15 text-orange-400 border-orange-500/30",
   PENDING_REVIEW: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  READY_FOR_CLIENT: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  SENT_TO_CLIENT: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
   REVISIONS_NEEDED: "bg-red-500/15 text-red-400 border-red-500/30",
   OFFICE_COMPLETE: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   CLOSED: "bg-gray-500/15 text-text-secondary border-gray-500/30",
   CANCELLED: "bg-gray-500/15 text-text-muted border-gray-500/30",
+  ASSETS: "bg-teal-500/15 text-teal-400 border-teal-500/30",
 };
 
 // ─── Timeline icon/color ─────────────────────────────────────────────────────

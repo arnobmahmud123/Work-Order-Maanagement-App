@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
   switch (action) {
     case "change-status": {
       if (!data?.status) return NextResponse.json({ error: "Status required" }, { status: 400 });
-      const validStatuses = ["NEW", "PENDING", "ASSIGNED", "IN_PROGRESS", "FIELD_COMPLETE", "QC_REVIEW", "PENDING_REVIEW", "REVISIONS_NEEDED", "OFFICE_COMPLETE", "CLOSED", "CANCELLED"];
+      const validStatuses = ["NEW", "UNASSIGNED", "PENDING", "ASSIGNED", "IN_PROGRESS", "FIELD_COMPLETE", "QC_REVIEW", "PENDING_REVIEW", "READY_FOR_CLIENT", "SENT_TO_CLIENT", "REVISIONS_NEEDED", "OFFICE_COMPLETE", "CLOSED", "CANCELLED", "ASSETS"];
       if (!validStatuses.includes(data.status)) {
         return NextResponse.json({ error: `Invalid status: ${data.status}. Valid: ${validStatuses.join(", ")}` }, { status: 400 });
       }

@@ -80,16 +80,20 @@ import { OverdueCountdown } from "@/components/work-orders/overdue-countdown";
 
 const STATUS_PILL_COLORS: Record<string, string> = {
   NEW: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
+  UNASSIGNED: "bg-slate-500/10 text-slate-600 border-slate-500/20",
   PENDING: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   ASSIGNED: "bg-purple-500/10 text-purple-600 border-purple-500/20",
   IN_PROGRESS: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  FIELD_COMPLETE: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  FIELD_COMPLETE: "bg-teal-500/10 text-teal-600 border-teal-500/20",
   QC_REVIEW: "bg-orange-500/10 text-orange-600 border-orange-500/20",
   PENDING_REVIEW: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  READY_FOR_CLIENT: "bg-sky-500/10 text-sky-600 border-sky-500/20",
+  SENT_TO_CLIENT: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
   REVISIONS_NEEDED: "bg-rose-500/10 text-rose-600 border-rose-500/20",
   OFFICE_COMPLETE: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   CLOSED: "bg-slate-500/10 text-text-secondary border-slate-500/20",
   CANCELLED: "bg-slate-700/10 text-text-muted border-border-medium/20",
+  ASSETS: "bg-teal-500/10 text-teal-600 border-teal-500/20",
 };
 
 // ─── Work Order Number Generator ─────────────────────────────────────────────

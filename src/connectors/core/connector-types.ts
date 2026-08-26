@@ -28,16 +28,20 @@ export type CanonicalServiceCode =
  */
 export type CanonicalStatusCode =
   | "NEW"
+  | "UNASSIGNED"
   | "ASSIGNED"
   | "IN_PROGRESS"
   | "FIELD_COMPLETE"
   | "QC_REVIEW"
   | "PENDING_REVIEW"
+  | "READY_FOR_CLIENT"
+  | "SENT_TO_CLIENT"
   | "REVISIONS_NEEDED"
   | "OFFICE_COMPLETE"
   | "CLOSED"
   | "CANCELLED"
-  | "ON_HOLD";
+  | "ON_HOLD"
+  | "ASSETS";
 
 export interface ServiceItem {
   id?: string;

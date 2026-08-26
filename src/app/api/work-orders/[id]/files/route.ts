@@ -65,7 +65,7 @@ export async function POST(
       where: { id: workOrderId },
       select: { status: true },
     });
-    if (existingWO && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "COMPLETED", "CLOSED"].includes(existingWO.status)) {
+    if (existingWO && ["FIELD_COMPLETE", "READY_FOR_CLIENT", "SENT_TO_CLIENT", "COMPLETED", "CLOSED"].includes(existingWO.status)) {
       return NextResponse.json(
         { error: "Forbidden: Work order results have already been submitted and photo uploads are locked." },
         { status: 403 }
