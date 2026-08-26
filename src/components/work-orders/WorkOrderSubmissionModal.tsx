@@ -10,6 +10,7 @@ import {
   FileText,
   ShieldAlert,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Check,
   ChevronRight,
@@ -346,7 +347,7 @@ export function WorkOrderSubmissionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[99999] flex flex-col md:items-center md:justify-center bg-background md:bg-black/85 md:backdrop-blur-md p-0 md:p-4 animate-in fade-in duration-200">
       {/* Hidden File Input for Direct Upload */}
       <input
         ref={fileInputRef}
@@ -356,35 +357,46 @@ export function WorkOrderSubmissionModal({
         onChange={handleFileChange}
       />
 
-      <div className="w-full max-w-3xl max-h-[92vh] bg-surface border border-border-medium rounded-3xl shadow-2xl flex flex-col overflow-hidden text-text-primary">
-        {/* ── Modal Header ─────────────────────────────────────────────────── */}
-        <div className="relative px-6 py-5 border-b border-border-subtle bg-surface-hover/30 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="w-full h-full md:h-auto md:max-w-3xl md:max-h-[92vh] bg-surface md:border md:border-border-medium md:rounded-3xl md:shadow-2xl flex flex-col overflow-hidden text-text-primary">
+        {/* ── Modal Sticky Header ─────────────────────────────────────────── */}
+        <div className="sticky top-0 z-30 px-3 sm:px-6 py-3 sm:py-4 border-b border-border-subtle bg-surface/95 backdrop-blur-xl flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Dedicated prominent Back button */}
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover hover:bg-surface text-text-primary text-xs font-bold border border-border-subtle hover:border-cyan-500/30 transition-all shrink-0 active:scale-95 shadow-sm"
+              title="Return to Work Order"
+            >
+              <ArrowLeft className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+              <span>Back</span>
+            </button>
+
             <div className={cn(
-              "h-10 w-10 rounded-2xl flex items-center justify-center shadow-lg transition-colors",
+              "h-8 w-8 sm:h-9 sm:w-9 rounded-xl flex items-center justify-center shadow-md transition-colors shrink-0",
               validation.isReady
-                ? "bg-emerald-500/20 text-emerald-400 shadow-emerald-500/10 border border-emerald-500/30"
-                : "bg-amber-500/20 text-amber-400 shadow-amber-500/10 border border-amber-500/30"
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
             )}>
-              {validation.isReady ? <CheckCircle2 className="h-6 w-6" /> : <ShieldAlert className="h-6 w-6" />}
+              {validation.isReady ? <CheckCircle2 className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight">Work Order Pre-Submission Review</h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-mono">
+                <h2 className="text-xs sm:text-base font-black tracking-tight truncate">Pre-Submission Review</h2>
+                <span className="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 font-mono shrink-0">
                   WO-{workOrder?.id?.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}
                 </span>
               </div>
-              <p className="text-xs text-text-muted mt-0.5">
-                Verifying all photo requirements, task completions, and quality compliance before client submission.
+              <p className="text-[11px] text-text-muted truncate hidden sm:block">
+                Verifying all photo requirements, task completions, and quality compliance.
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
+            className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors shrink-0 active:scale-95"
+            title="Close"
           >
             <X className="h-5 w-5" />
           </button>
@@ -622,23 +634,30 @@ export function WorkOrderSubmissionModal({
           </div>
         </div>
 
-        {/* ── Modal Footer ─────────────────────────────────────────────────── */}
-        <div className="px-6 py-4 border-t border-border-subtle bg-surface-hover/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* ── Modal Sticky Footer ─────────────────────────────────────────── */}
+        <div className="sticky bottom-0 z-30 px-4 sm:px-6 py-3 sm:py-4 border-t border-border-subtle bg-surface/95 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-lg">
           <div className="text-xs text-text-muted flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-text-dim" />
-            <span>Submitting will update status to <strong>Field Complete</strong> and notify the processor.</span>
+            <Clock className="h-3.5 w-3.5 text-text-dim shrink-0" />
+            <span className="text-[11px] sm:text-xs">Submitting updates status to <strong>Field Complete</strong>.</span>
           </div>
 
-          <div className="flex items-center gap-2.5 self-end sm:self-center">
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting} className="text-xs">
-              Cancel
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="text-xs flex items-center gap-1.5 px-3.5 font-semibold bg-surface-hover/50 hover:bg-surface-hover border-border-subtle"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Order
             </Button>
 
             <Button
               onClick={handleFinalSubmit}
               disabled={!validation.isReady || isSubmitting}
               className={cn(
-                "text-xs px-5 py-2 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2",
+                "text-xs px-4 sm:px-5 py-2 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 flex-1 sm:flex-initial justify-center",
                 validation.isReady
                   ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:opacity-95 shadow-emerald-500/20"
                   : "bg-surface-hover text-text-dim border border-border-subtle cursor-not-allowed opacity-60"
@@ -647,12 +666,12 @@ export function WorkOrderSubmissionModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Submitting Field Complete...
+                  Submitting...
                 </>
               ) : validation.isReady ? (
                 <>
                   <Send className="h-3.5 w-3.5" />
-                  Confirm & Submit Work Order
+                  Confirm & Submit
                 </>
               ) : (
                 <>
