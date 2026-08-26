@@ -693,6 +693,8 @@ function EmailDetail({
         to: [email.from?.email],
         subject: email.subject?.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
         body: quickReplyText.trim(),
+        threadId: email.threadId || email.id,
+        workOrderId: email.workOrderId || undefined,
       });
       setQuickReplyText("");
       setInlineReply(false);

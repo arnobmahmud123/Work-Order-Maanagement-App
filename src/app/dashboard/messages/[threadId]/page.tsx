@@ -158,7 +158,7 @@ export default function ThreadPage({
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)]">
+    <div className="flex flex-col h-[calc(100vh-7rem)] max-w-7xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center gap-4 pb-4 mb-2 border-b border-border-subtle backdrop-blur-sm sticky top-0 z-20">
         <Link href="/dashboard/messages" className="p-2 hover:bg-surface-hover rounded-xl transition-all border border-transparent hover:border-border-subtle group">

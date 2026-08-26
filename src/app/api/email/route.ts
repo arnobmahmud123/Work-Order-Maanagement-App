@@ -2,376 +2,365 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-// ─── Internal Email System ──────────────────────────────────────────────────
-// GET: Fetch emails for the current user (with proper unread tracking)
-// POST: Send a new internal email
+let isTableInitialized = false;
 
-interface EmailDraft {
-  to: string[];
-  cc?: string[];
-  bcc?: string[];
-  subject: string;
-  body: string;
-  workOrderId?: string;
-  threadId?: string;
-  priority?: string;
-  labels?: string[];
-  attachments?: { filename: string; path: string; mimeType: string }[];
+async function ensureEmailTableExists() {
+  if (isTableInitialized) return;
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS email_messages (
+        id TEXT PRIMARY KEY,
+        sender_id TEXT,
+        from_name TEXT NOT NULL,
+        from_email TEXT NOT NULL,
+        "to" TEXT NOT NULL,
+        cc TEXT,
+        bcc TEXT,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        snippet TEXT,
+        folder TEXT DEFAULT 'inbox',
+        direction TEXT DEFAULT 'inbound',
+        is_read INTEGER DEFAULT 0,
+        is_starred INTEGER DEFAULT 0,
+        is_archived INTEGER DEFAULT 0,
+        is_trash INTEGER DEFAULT 0,
+        labels TEXT,
+        priority TEXT DEFAULT 'normal',
+        work_order_id TEXT,
+        thread_id TEXT,
+        attachments TEXT,
+        company_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_email_messages_company_id ON email_messages(company_id);`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_email_messages_folder ON email_messages(folder);`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_email_messages_thread_id ON email_messages(thread_id);`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_email_messages_created_at ON email_messages(created_at);`);
+    isTableInitialized = true;
+  } catch (e) {
+    console.error("[Email] Error ensuring table exists:", e);
+  }
 }
 
-// In-memory email store with per-user read tracking (shared via globalThis)
-function getStore(): Map<string, any[]> {
-  const g = globalThis as any;
-  if (!g.__emailStore) g.__emailStore = new Map();
-  return g.__emailStore;
+function parseJsonSafe(str: any, fallback: any = []) {
+  if (!str) return fallback;
+  if (typeof str !== "string") return str;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
 }
 
-function getReadTracker(): Map<string, Set<string>> {
-  const g = globalThis as any;
-  if (!g.__readTracker) g.__readTracker = new Map();
-  return g.__readTracker;
-}
+function formatEmailRecord(raw: any) {
+  const toList = parseJsonSafe(raw.to, []);
+  const ccList = parseJsonSafe(raw.cc, []);
+  const bccList = parseJsonSafe(raw.bcc, []);
+  const labelsList = parseJsonSafe(raw.labels, ["inbox"]);
+  const attachmentsList = parseJsonSafe(raw.attachments, []);
 
-// Legacy aliases
-const emailStore = { get: (k: string) => getStore().get(k), set: (k: string, v: any[]) => getStore().set(k, v), has: (k: string) => getStore().has(k) };
-const readTracker = { get: (k: string) => getReadTracker().get(k), set: (k: string, v: Set<string>) => getReadTracker().set(k, v), has: (k: string) => getReadTracker().has(k) };
-
-function getUserEmail(user: any): string {
-  if (user.email) return user.email;
-  const name = (user.name || "user").toLowerCase().replace(/\s+/g, ".");
-  return `${name}@proppreserve.com`;
-}
-
-function seedDemoEmails(userId: string, userName: string, userEmail: string) {
-  if (emailStore.has(userId)) return;
-
-  const now = new Date();
-  const emails = [
-    {
-      id: `email-${userId}-1`,
-      from: { name: "John Smith", email: "john.smith@proppreserve.com" },
-      to: [{ name: userName, email: userEmail }],
-      cc: [],
-      subject: "Work Order #1042 — Grass Cut Completed",
-      body: `Hi ${userName?.split(" ")[0] || "there"},\n\nJust wanted to let you know that the grass cut at 456 Oak Avenue has been completed. All photos have been uploaded.\n\nPlease review and let me know if anything else is needed.\n\nBest regards,\nJohn Smith\nContractor`,
-      date: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-      read: false,
-      starred: true,
-      labels: ["work-order"],
-      priority: "normal",
-      workOrderId: null,
-      attachments: [],
-      direction: "inbound",
+  return {
+    id: raw.id,
+    from: {
+      name: raw.fromName || raw.from_name || "Unknown",
+      email: raw.fromEmail || raw.from_email || "",
     },
-    {
-      id: `email-${userId}-2`,
-      from: { name: "Sarah Johnson", email: "sarah.johnson@proppreserve.com" },
-      to: [{ name: userName, email: userEmail }],
-      cc: [{ name: "Mike Wilson", email: "mike.wilson@proppreserve.com" }],
-      subject: "Urgent: Board-Up Required at 789 Elm Street",
-      body: `Hello,\n\nWe have an emergency situation at 789 Elm Street. A window was broken during the storm last night and we need an immediate board-up.\n\nCan you prioritize this? The property is vacant and we need to secure it ASAP.\n\nThanks,\nSarah Johnson\nProperty Manager`,
-      date: new Date(now.getTime() - 5 * 60 * 60 * 1000).toISOString(),
-      read: false,
-      starred: false,
-      labels: ["urgent"],
-      priority: "high",
-      workOrderId: null,
-      attachments: [],
-      direction: "inbound",
-    },
-    {
-      id: `email-${userId}-3`,
-      from: { name: userName, email: userEmail },
-      to: [{ name: "Mike Contractor", email: "mike.contractor@proppreserve.com" }],
-      cc: [],
-      subject: "Assignment: Winterization — 321 Pine Road",
-      body: `Hi Mike,\n\nYou've been assigned a new winterization job:\n\nProperty: 321 Pine Road, Springfield, IL\nDue Date: ${new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString()}\n\nAccess Info:\n- Lock Code: 4582\n- Gate Code: N/A\n\nPlease confirm receipt and schedule the work.\n\nThanks,\n${userName}\nPropPreserve Team`,
-      date: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
-      read: true,
-      starred: false,
-      labels: ["assignment"],
-      priority: "normal",
-      workOrderId: null,
-      attachments: [],
-      direction: "outbound",
-    },
-    {
-      id: `email-${userId}-4`,
-      from: { name: "Accounting Dept", email: "accounting@proppreserve.com" },
-      to: [{ name: userName, email: userEmail }],
-      cc: [],
-      subject: "Invoice #INV-2024-0047 Overdue — Action Required",
-      body: `Hi ${userName?.split(" ")[0] || "there"},\n\nInvoice #INV-2024-0047 for $1,250.00 is now 15 days overdue.\n\nProperty: 567 Maple Drive\nClient: ABC Properties LLC\nAmount: $1,250.00\nDue Date: ${new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toLocaleDateString()}\n\nPlease follow up with the client.\n\nThanks,\nAccounting Department`,
-      date: new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString(),
-      read: true,
-      starred: true,
-      labels: ["accounting"],
-      priority: "high",
-      workOrderId: null,
-      attachments: [],
-      direction: "inbound",
-    },
-    {
-      id: `email-${userId}-5`,
-      from: { name: userName, email: userEmail },
-      to: [{ name: "Sarah Johnson", email: "sarah.johnson@proppreserve.com" }],
-      cc: [],
-      subject: "Re: Monthly Property Report — April 2024",
-      body: `Hi Sarah,\n\nAttached is the monthly property report for April 2024.\n\nSummary:\n- 12 work orders completed\n- 3 in progress\n- Total spend: $8,450\n- Average completion time: 2.3 days\n\nLet me know if you need any clarification.\n\nBest,\n${userName}`,
-      date: new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString(),
-      read: true,
-      starred: false,
-      labels: ["report"],
-      priority: "normal",
-      workOrderId: null,
-      attachments: [{ filename: "april-2024-report.pdf", path: "#", mimeType: "application/pdf" }],
-      direction: "outbound",
-    },
-    {
-      id: `email-${userId}-6`,
-      from: { name: "David Lee", email: "david.lee@proppreserve.com" },
-      to: [{ name: userName, email: userEmail }],
-      cc: [],
-      subject: "Quote: Debris Removal — 890 Industrial Blvd",
-      body: `Hi ${userName?.split(" ")[0] || "there"},\n\nPer your request, here's our quote for debris removal at 890 Industrial Blvd:\n\n- Labor (4 hours @ $55/hr): $220\n- Dumpster rental: $175\n- Disposal fees: $125\n- Trip fee: $25\n\nTotal: $545\n\nThis quote is valid for 14 days. Let me know if you'd like to proceed.\n\nThanks,\nDavid Lee\nClean-Up Pro Services`,
-      date: new Date(now.getTime() - 96 * 60 * 60 * 1000).toISOString(),
-      read: true,
-      starred: false,
-      labels: ["quote"],
-      priority: "normal",
-      workOrderId: null,
-      attachments: [],
-      direction: "inbound",
-    },
-    {
-      id: `email-${userId}-7`,
-      from: { name: "Lisa Chen", email: "lisa.chen@proppreserve.com" },
-      to: [{ name: userName, email: userEmail }],
-      cc: [],
-      subject: "New Training Module Available — Safety Protocols 2024",
-      body: `Hi team,\n\nWe've just published a new training module on safety protocols for 2024. Please complete it by end of this week.\n\nTopics covered:\n- Updated PPE requirements\n- Hazardous material handling\n- Emergency procedures\n- Client property protection\n\nAccess it from the Training section in your dashboard.\n\nBest,\nLisa Chen\nTraining Coordinator`,
-      date: new Date(now.getTime() - 120 * 60 * 60 * 1000).toISOString(),
-      read: false,
-      starred: false,
-      labels: [],
-      priority: "normal",
-      workOrderId: null,
-      attachments: [],
-      direction: "inbound",
-    },
-  ];
-
-  emailStore.set(userId, emails);
-  // Mark some as read
-  const readSet = new Set<string>();
-  emails.forEach((e) => { if (e.read) readSet.add(e.id); });
-  readTracker.set(userId, readSet);
+    to: Array.isArray(toList) ? toList : [{ name: String(toList), email: String(toList) }],
+    cc: Array.isArray(ccList) ? ccList : [],
+    bcc: Array.isArray(bccList) ? bccList : [],
+    subject: raw.subject || "(No Subject)",
+    body: raw.body || "",
+    snippet: raw.snippet || (raw.body ? raw.body.substring(0, 100).replace(/\n/g, " ") : ""),
+    date: raw.createdAt ? new Date(raw.createdAt).toISOString() : new Date().toISOString(),
+    read: Boolean(raw.isRead ?? raw.is_read),
+    starred: Boolean(raw.isStarred ?? raw.is_starred),
+    archived: Boolean(raw.isArchived ?? raw.is_archived),
+    trashed: Boolean(raw.isTrash ?? raw.is_trash),
+    labels: Array.isArray(labelsList) ? labelsList : ["inbox"],
+    priority: raw.priority || "normal",
+    workOrderId: raw.workOrderId || raw.work_order_id || null,
+    threadId: raw.threadId || raw.thread_id || raw.id,
+    attachments: Array.isArray(attachmentsList) ? attachmentsList : [],
+    direction: raw.direction || "inbound",
+    folder: raw.folder || "inbox",
+  };
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await ensureEmailTableExists();
+
+    const user = session.user as any;
+    const userId = user.id;
+    const userEmail = (user.email || "").toLowerCase();
+    const userName = user.name || "User";
+    const companyId = user.companyId || null;
+
+    const { searchParams } = new URL(req.url);
+    const folder = searchParams.get("folder") || "inbox";
+    const search = (searchParams.get("search") || "").toLowerCase().trim();
+    const label = searchParams.get("label") || "";
+    const workOrderId = searchParams.get("workOrderId") || "";
+
+    // Build raw SQL query for strict company multi-tenant isolation
+    let whereConditions: string[] = [];
+    const params: any[] = [];
+
+    if (companyId) {
+      whereConditions.push(`company_id = ?`);
+      params.push(companyId);
+    }
+
+    // Exclude trashed emails unless viewing trash
+    if (folder === "trash") {
+      whereConditions.push(`is_trash = 1`);
+    } else {
+      whereConditions.push(`is_trash = 0`);
+
+      if (folder === "starred") {
+        whereConditions.push(`is_starred = 1`);
+      } else if (folder === "sent") {
+        whereConditions.push(`folder = 'sent'`);
+      } else if (folder === "drafts") {
+        whereConditions.push(`folder = 'drafts'`);
+      } else if (folder === "unread") {
+        whereConditions.push(`is_read = 0 AND folder != 'sent' AND folder != 'drafts'`);
+      } else if (folder === "archive") {
+        whereConditions.push(`is_archived = 1`);
+      } else {
+        // Inbox default
+        whereConditions.push(`folder = 'inbox' AND is_archived = 0`);
+      }
+    }
+
+    if (workOrderId) {
+      whereConditions.push(`work_order_id = ?`);
+      params.push(workOrderId);
+    }
+
+    if (label) {
+      whereConditions.push(`labels LIKE ?`);
+      params.push(`%${label}%`);
+    }
+
+    if (search) {
+      whereConditions.push(`(
+        LOWER(subject) LIKE ? OR 
+        LOWER(body) LIKE ? OR 
+        LOWER(from_name) LIKE ? OR 
+        LOWER(from_email) LIKE ? OR 
+        LOWER("to") LIKE ?
+      )`);
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
+    }
+
+    const whereSql = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+    const sql = `SELECT * FROM email_messages ${whereSql} ORDER BY created_at DESC LIMIT 200`;
+
+    let rawEmails: any[] = [];
+    try {
+      rawEmails = (await prisma.$queryRawUnsafe(sql, ...params)) as any[];
+    } catch (dbErr) {
+      console.error("[Email API] Query error:", dbErr);
+      rawEmails = [];
+    }
+
+    // If this company has 0 emails in total, seed an initial welcome email
+    if (rawEmails.length === 0 && folder === "inbox" && !search && !label) {
+      const countCheck = ((await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*) as cnt FROM email_messages WHERE company_id = ?`,
+        companyId || "global"
+      ).catch(() => [{ cnt: 0 }])) as any[]) || [];
+
+      const totalCompanyEmails = Number(countCheck[0]?.cnt || 0);
+
+      if (totalCompanyEmails === 0) {
+        const welcomeId = `email-${Date.now()}`;
+        const welcomeTo = JSON.stringify([{ name: userName, email: userEmail }]);
+        const welcomeLabels = JSON.stringify(["inbox", "work-order"]);
+
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO email_messages (
+            id, sender_id, from_name, from_email, "to", subject, body, snippet, folder, direction, is_read, is_starred, is_archived, is_trash, labels, priority, company_id, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'inbox', 'inbound', 0, 1, 0, 0, ?, 'normal', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          welcomeId,
+          userId,
+          "System Notifications",
+          "dispatch@proppreserve.com",
+          welcomeTo,
+          "Welcome to your Company Communication Center",
+          `Hello ${userName},\n\nWelcome to your dedicated company communication center. All company communications, contractor dispatches, and client work order updates are unified here.\n\nYou can compose messages, attach work order documents, and maintain full communication trails for every property.\n\nBest regards,\nPlatform Operations Team`,
+          "Welcome to your dedicated company communication center. All company communications...",
+          welcomeLabels,
+          companyId
+        ).catch((err) => console.error("Seed welcome email failed:", err));
+
+        // Re-fetch seeded email
+        rawEmails = ((await prisma.$queryRawUnsafe(sql, ...params).catch(() => [])) as any[]) || [];
+      }
+    }
+
+    const emails = rawEmails.map(formatEmailRecord);
+
+    // Compute folder unread & total counts
+    const unreadCount = emails.filter((e) => !e.read && e.folder === "inbox").length;
+
+    return NextResponse.json({
+      emails,
+      unreadCount,
+      total: emails.length,
+      folder,
+      companyId,
+    });
+  } catch (error: any) {
+    console.error("[Email GET Error]:", error);
+    return NextResponse.json({ error: error.message || "Failed to fetch emails" }, { status: 500 });
   }
-
-  const userId = (session.user as any).id;
-  const userName = (session.user as any).name || "User";
-  const userEmail = getUserEmail(session.user);
-
-  const { searchParams } = new URL(req.url);
-  const folder = searchParams.get("folder") || "inbox";
-  const search = searchParams.get("search") || "";
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "50");
-
-  seedDemoEmails(userId, userName, userEmail);
-
-  let emails = emailStore.get(userId) || [];
-  const readSet = readTracker.get(userId) || new Set();
-
-  // Apply read status from tracker
-  emails = emails.map((e) => ({
-    ...e,
-    read: readSet.has(e.id),
-  }));
-
-  // Filter by folder
-  if (folder === "inbox") {
-    emails = emails.filter((e) => e.direction === "inbound");
-  } else if (folder === "sent") {
-    emails = emails.filter((e) => e.direction === "outbound");
-  } else if (folder === "starred") {
-    emails = emails.filter((e) => e.starred);
-  } else if (folder === "unread") {
-    emails = emails.filter((e) => !e.read);
-  } else if (folder === "drafts") {
-    emails = emails.filter((e) => e.isDraft);
-  } else if (folder === "trash") {
-    emails = emails.filter((e) => e.trashed);
-  }
-
-  // Search
-  if (search) {
-    const s = search.toLowerCase();
-    emails = emails.filter(
-      (e) =>
-        e.subject?.toLowerCase().includes(s) ||
-        e.body?.toLowerCase().includes(s) ||
-        e.from?.name?.toLowerCase().includes(s) ||
-        e.from?.email?.toLowerCase().includes(s) ||
-        e.to?.some((t: any) => t.name?.toLowerCase().includes(s) || t.email?.toLowerCase().includes(s))
-    );
-  }
-
-  // Sort by date descending
-  emails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const total = emails.length;
-  const paginated = emails.slice((page - 1) * limit, page * limit);
-
-  // Count unread inbound emails
-  const allEmails = emailStore.get(userId) || [];
-  const allReadSet = readTracker.get(userId) || new Set();
-  const unreadCount = allEmails.filter(
-    (e) => e.direction === "inbound" && !allReadSet.has(e.id) && !e.trashed
-  ).length;
-
-  return NextResponse.json({
-    emails: paginated,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
-    unreadCount,
-  });
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const userId = (session.user as any).id;
-  const userName = (session.user as any).name || "User";
-  const userEmail = getUserEmail(session.user);
-  const body: EmailDraft = await req.json();
+    await ensureEmailTableExists();
 
-  if (!body.to?.length || !body.subject || !body.body) {
-    return NextResponse.json(
-      { error: "To, subject, and body are required" },
-      { status: 400 }
-    );
-  }
+    const user = session.user as any;
+    const userId = user.id;
+    const userEmail = (user.email || "").toLowerCase();
+    const userName = user.name || "User";
+    const companyId = user.companyId || null;
 
-  seedDemoEmails(userId, userName, userEmail);
+    const body = await req.json();
+    const { to, cc, bcc, subject, body: content, workOrderId, priority, labels, attachments, threadId } = body;
 
-  const newEmail = {
-    id: `email-${userId}-${Date.now()}`,
-    from: { name: userName, email: userEmail },
-    to: body.to.map((email) => {
-      // Find user name from email
-      const name = email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-      return { name, email };
-    }),
-    cc: (body.cc || []).map((email) => {
-      const name = email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-      return { name, email };
-    }),
-    subject: body.subject,
-    body: body.body,
-    date: new Date().toISOString(),
-    read: true,
-    starred: false,
-    labels: body.labels || [],
-    priority: body.priority || "normal",
-    workOrderId: body.workOrderId || null,
-    attachments: body.attachments || [],
-    direction: "outbound",
-  };
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+      return NextResponse.json({ error: "Recipient (to) is required" }, { status: 400 });
+    }
+    if (!subject || !subject.trim()) {
+      return NextResponse.json({ error: "Subject is required" }, { status: 400 });
+    }
 
-  // Add to sender's store
-  const emails = emailStore.get(userId) || [];
-  emails.unshift(newEmail);
-  emailStore.set(userId, emails);
-
-  // Mark as read for sender
-  const readSet = readTracker.get(userId) || new Set();
-  readSet.add(newEmail.id);
-  readTracker.set(userId, readSet);
-
-  // Also deliver to recipients (internal emails)
-  for (const recipient of body.to) {
-    // Find recipient user by email pattern
-    const recipientEmail = recipient.toLowerCase();
-    // In a real system, look up by email. For demo, create inbox entries for all users.
-    const allUsers = await prisma.user.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, email: true },
+    // Format recipients array: [{ name, email }]
+    const formattedTo = (Array.isArray(to) ? to : [to]).map((item: any) => {
+      if (typeof item === "string") {
+        return { name: item.split("@")[0], email: item.trim() };
+      }
+      return { name: item.name || item.email?.split("@")[0] || "Recipient", email: item.email };
     });
 
-    for (const user of allUsers) {
-      const uEmail = getUserEmail(user);
-      if (uEmail.toLowerCase() === recipientEmail && user.id !== userId) {
-        const recipientEmailObj = {
-          ...newEmail,
-          id: `email-${user.id}-${Date.now()}`,
-          direction: "inbound",
-          read: false,
-          to: [{ name: user.name || "User", email: uEmail }],
-        };
+    const formattedCc = cc ? (Array.isArray(cc) ? cc : [cc]).map((item: any) => {
+      if (typeof item === "string") return { name: item.split("@")[0], email: item.trim() };
+      return { name: item.name || item.email?.split("@")[0], email: item.email };
+    }) : [];
 
-        if (!emailStore.has(user.id)) {
-          emailStore.set(user.id, []);
-        }
-        emailStore.get(user.id)!.unshift(recipientEmailObj);
-        // Don't mark as read for recipient
+    const formattedBcc = bcc ? (Array.isArray(bcc) ? bcc : [bcc]).map((item: any) => {
+      if (typeof item === "string") return { name: item.split("@")[0], email: item.trim() };
+      return { name: item.name || item.email?.split("@")[0], email: item.email };
+    }) : [];
+
+    const finalThreadId = threadId || `thread-${Date.now()}`;
+    const sentEmailId = `email-sent-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const snippet = content ? content.substring(0, 100).replace(/\n/g, " ") : "";
+    const priorityVal = priority || "normal";
+    const labelsJson = JSON.stringify(labels || ["work-order"]);
+    const attachmentsJson = JSON.stringify(attachments || []);
+    const toJson = JSON.stringify(formattedTo);
+    const ccJson = JSON.stringify(formattedCc);
+    const bccJson = JSON.stringify(formattedBcc);
+
+    // 1. Permanently insert into sender's "sent" folder
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO email_messages (
+        id, sender_id, from_name, from_email, "to", cc, bcc, subject, body, snippet, folder, direction, is_read, is_starred, is_archived, is_trash, labels, priority, work_order_id, thread_id, attachments, company_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', 'outbound', 1, 0, 0, 0, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      sentEmailId,
+      userId,
+      userName,
+      userEmail,
+      toJson,
+      ccJson,
+      bccJson,
+      subject,
+      content,
+      snippet,
+      labelsJson,
+      priorityVal,
+      workOrderId || null,
+      finalThreadId,
+      attachmentsJson,
+      companyId
+    );
+
+    // 2. Also create inbound inbox record for internal company recipients so recipient sees it in their inbox!
+    for (const recipient of formattedTo) {
+      if (recipient.email && recipient.email.toLowerCase() !== userEmail) {
+        const inboxEmailId = `email-in-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO email_messages (
+            id, sender_id, from_name, from_email, "to", cc, bcc, subject, body, snippet, folder, direction, is_read, is_starred, is_archived, is_trash, labels, priority, work_order_id, thread_id, attachments, company_id, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inbox', 'inbound', 0, 0, 0, 0, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          inboxEmailId,
+          userId,
+          userName,
+          userEmail,
+          toJson,
+          ccJson,
+          bccJson,
+          subject,
+          content,
+          snippet,
+          labelsJson,
+          priorityVal,
+          workOrderId || null,
+          finalThreadId,
+          attachmentsJson,
+          companyId
+        );
       }
     }
+
+    const createdRecord = {
+      id: sentEmailId,
+      from: { name: userName, email: userEmail },
+      to: formattedTo,
+      cc: formattedCc,
+      bcc: formattedBcc,
+      subject,
+      body: content,
+      snippet,
+      date: new Date().toISOString(),
+      read: true,
+      starred: false,
+      archived: false,
+      trashed: false,
+      labels: labels || ["work-order"],
+      priority: priorityVal,
+      workOrderId: workOrderId || null,
+      threadId: finalThreadId,
+      attachments: attachments || [],
+      direction: "outbound",
+      folder: "sent",
+    };
+
+    return NextResponse.json({
+      success: true,
+      email: createdRecord,
+      message: "Email sent and saved permanently",
+    });
+  } catch (error: any) {
+    console.error("[Email POST Error]:", error);
+    return NextResponse.json({ error: error.message || "Failed to send email" }, { status: 500 });
   }
-
-  // Log activity
-  await prisma.activityLog.create({
-    data: {
-      action: "EMAIL_SENT",
-      details: `Email sent to ${body.to.join(", ")}: ${body.subject}`,
-      userId,
-      workOrderId: body.workOrderId || null,
-    },
-  });
-
-  return NextResponse.json(newEmail, { status: 201 });
-}
-
-// PATCH: Mark email as read/unread, star/unstar
-export async function PATCH(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const userId = (session.user as any).id;
-  const body = await req.json();
-  const { emailId, read, starred, archived, trashed } = body;
-
-  if (!emailId) {
-    return NextResponse.json({ error: "emailId required" }, { status: 400 });
-  }
-
-  const readSet = readTracker.get(userId) || new Set();
-
-  if (read === true) readSet.add(emailId);
-  if (read === false) readSet.delete(emailId);
-
-  readTracker.set(userId, readSet);
-
-  // Update starred/archived/trashed in store
-  const emails = emailStore.get(userId) || [];
-  const email = emails.find((e) => e.id === emailId);
-  if (email) {
-    if (starred !== undefined) email.starred = starred;
-    if (archived !== undefined) email.archived = archived;
-    if (trashed !== undefined) email.trashed = trashed;
-  }
-
-  return NextResponse.json({ success: true });
 }

@@ -103,6 +103,7 @@ model User {
   purchaseOrders       PurchaseOrder[]       @relation("PurchaseOrderCreator")
   materialTransactions MaterialTransaction[] @relation("MaterialTransactionUser")
   documents            UserDocument[]
+  sentEmails           EmailMessage[]        @relation("EmailSender")
   companyId  String?  @map("company_id")
   companyRef Company? @relation(fields: [companyId], references: [id])
   @@index([role])
@@ -160,6 +161,7 @@ model WorkOrder {
   jobRequests JobRequest[]
   formSubmissions WorkOrderFormSubmission[]
   automationExecutions AutomationExecution[]
+  emailMessages EmailMessage[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   companyId  String?  @map("company_id")
@@ -1216,6 +1218,7 @@ model Company {
   userDocuments         UserDocument[]
   bills                 Bill[]
   chargebacks           Chargeback[]
+  emailMessages         EmailMessage[]
   @@map("companies")
 }
 // ─── Financial Transactions ──────────────────────────────────────────────────
@@ -1449,3 +1452,43 @@ model UserDocument {
   @@index([companyId])
   @@map("user_documents")
 }
+
+model EmailMessage {
+  id          String   @id @default(cuid())
+  senderId    String?  @map("sender_id")
+  sender      User?    @relation("EmailSender", fields: [senderId], references: [id], onDelete: SetNull)
+  fromName    String   @map("from_name")
+  fromEmail   String   @map("from_email")
+  to          String   // JSON array of recipient objects: [{ name, email }]
+  cc          String?  // JSON array of recipient objects
+  bcc         String?  // JSON array of recipient objects
+  subject     String
+  body        String
+  snippet     String?
+  folder      String   @default("inbox") // "inbox", "sent", "drafts", "trash", "archive"
+  direction   String   @default("inbound") // "inbound", "outbound"
+  isRead      Boolean  @default(false) @map("is_read")
+  isStarred   Boolean  @default(false) @map("is_starred")
+  isArchived  Boolean  @default(false) @map("is_archived")
+  isTrash     Boolean  @default(false) @map("is_trash")
+  labels      String?  // JSON array of labels e.g. ["work-order", "urgent"]
+  priority    String   @default("normal") // "normal", "high", "low"
+  workOrderId String?  @map("work_order_id")
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  threadId    String?  @map("thread_id")
+  attachments String?  // JSON array: [{ filename, path, mimeType, size }]
+  companyId   String?  @map("company_id")
+  companyRef  Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@index([senderId])
+  @@index([folder])
+  @@index([threadId])
+  @@index([workOrderId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("email_messages")
+}
+

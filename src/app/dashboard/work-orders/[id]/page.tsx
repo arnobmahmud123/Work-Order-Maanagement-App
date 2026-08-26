@@ -4841,7 +4841,7 @@ function WorkOrderMessagesTab({
         }
       );
     }
-  }, [channelsData, workOrderChannel, creatingChannel, workOrderId, workOrderTitle]); // omitted createChannel to prevent infinite loops
+  }, [channelsData, workOrderChannel, creatingChannel, workOrderId, workOrderTitle]);
 
   // Fetch messages for this specific channel only
   const channelId = workOrderChannel?.id || "";
@@ -4874,7 +4874,7 @@ function WorkOrderMessagesTab({
   }
 
   return (
-    <div className="bg-surface/60 backdrop-blur-xl rounded-3xl border border-border-subtle overflow-hidden shadow-2xl flex flex-col h-[600px]">
+    <div className="bg-surface/60 backdrop-blur-xl rounded-3xl border border-border-subtle overflow-hidden shadow-2xl flex flex-col min-h-[680px] lg:h-[760px]">
       {/* Channel header */}
       <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between bg-surface-hover">
         <div className="flex items-center gap-3">
@@ -4892,10 +4892,10 @@ function WorkOrderMessagesTab({
           </div>
         </div>
         <Link
-          href={`/dashboard/chat`}
-          className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 transition-all text-[10px] font-black uppercase tracking-widest border border-cyan-500/20 shadow-lg shadow-cyan-500/5"
+          href={`/dashboard/chat?channelId=${channelId || ""}&workOrderId=${workOrderId}`}
+          className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 transition-all text-xs font-black uppercase tracking-widest border border-cyan-500/20 shadow-lg shadow-cyan-500/5"
         >
-          <MessageSquare className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />
+          <MessageSquare className="h-4 w-4 group-hover:scale-110 transition-transform" />
           Full Channel
         </Link>
       </div>
@@ -4934,7 +4934,7 @@ function WorkOrderMessagesTab({
                       )}
                     </div>
                   )}
-                  <div className={cn("max-w-[80%] space-y-1", isOwn ? "items-end" : "items-start")}>
+                  <div className={cn("max-w-[85%] space-y-1", isOwn ? "items-end" : "items-start")}>
                     {showAvatar && (
                       <p className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1 mb-1">{msg.author?.name}</p>
                     )}
@@ -4961,7 +4961,7 @@ function WorkOrderMessagesTab({
       </div>
 
       {/* Input section */}
-      <div className="p-6 bg-surface-hover border-t border-border-subtle">
+      <div className="p-5 md:p-6 bg-surface-hover border-t border-border-subtle">
         <form onSubmit={handleSend} className="flex items-end gap-3">
           <div className="flex-1 relative group">
             {showMentions && (
@@ -4970,7 +4970,6 @@ function WorkOrderMessagesTab({
                 query={mentionQuery}
                 position={mentionPosition}
                 onSelect={(user) => {
-                  // Replace @query with @name in the message
                   const textarea = textareaRef.current;
                   if (textarea) {
                     const cursorPos = textarea.selectionStart;
@@ -4993,18 +4992,15 @@ function WorkOrderMessagesTab({
               onChange={(e) => {
                 const val = e.target.value;
                 setNewMessage(val);
-                // Detect @ mentions
                 const cursorPos = e.target.selectionStart;
                 const textBefore = val.slice(0, cursorPos);
                 const atIdx = textBefore.lastIndexOf("@");
                 if (atIdx >= 0) {
                   const queryAfterAt = textBefore.slice(atIdx + 1);
-                  // Only show if @ is at start or preceded by space
                   if (atIdx === 0 || textBefore[atIdx - 1] === " ") {
                     if (!queryAfterAt.includes(" ") || queryAfterAt.length < 20) {
                       setMentionQuery(queryAfterAt);
                       setShowMentions(true);
-                      // Position the dropdown
                       const textarea = e.target;
                       const rect = textarea.getBoundingClientRect();
                       setMentionPosition({ top: rect.top, left: 0 });
@@ -5015,9 +5011,9 @@ function WorkOrderMessagesTab({
                 setShowMentions(false);
                 setMentionQuery(null);
               }}
-              placeholder="Transmit message to field staff... (type @ to mention)"
-              rows={1}
-              className="w-full px-5 py-4 bg-surface/60 border border-border-subtle rounded-2xl text-sm text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:bg-surface-hover transition-all resize-none shadow-inner"
+              placeholder={`Message #${workOrderChannel?.name || `WO-${workOrderId.slice(-8).toUpperCase()}`}... (Type @ to mention team members)`}
+              rows={2}
+              className="w-full px-5 py-3.5 bg-surface border border-border-medium rounded-2xl text-sm md:text-base text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:ring-4 focus:ring-cyan-500/10 focus:outline-none resize-none transition-all shadow-inner leading-relaxed min-h-[56px]"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !showMentions) {
                   e.preventDefault();

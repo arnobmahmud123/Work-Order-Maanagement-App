@@ -642,13 +642,16 @@ export function useSendEmail() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: {
-      to: string[];
-      cc?: string[];
+      to: string[] | any[];
+      cc?: string[] | any[];
+      bcc?: string[] | any[];
       subject: string;
       body: string;
       workOrderId?: string;
+      threadId?: string;
       priority?: string;
       labels?: string[];
+      attachments?: any[];
     }) => {
       const res = await fetch("/api/email", {
         method: "POST",
@@ -658,7 +661,9 @@ export function useSendEmail() {
       if (!res.ok) throw new Error("Failed to send email");
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["emails"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["emails"] });
+    },
   });
 }
 

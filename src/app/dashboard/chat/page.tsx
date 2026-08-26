@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useChatChannels,
@@ -153,6 +154,23 @@ function getGradientForUser(userId: string) {
 }
 
 export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-surface">
+        <Loader2 className="h-8 w-8 text-cyan-500 animate-spin mb-3" />
+        <p className="text-xs font-black uppercase tracking-widest text-text-muted">Loading Communications Hub...</p>
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
+  );
+}
+
+function ChatContent() {
+  const searchParams = useSearchParams();
+  const queryChannelId = searchParams.get("channelId");
+  const queryWorkOrderId = searchParams.get("workOrderId");
+
   const { topNavHidden } = useAppStore();
   const { data: session } = useSession();
   const qc = useQueryClient();
@@ -178,11 +196,34 @@ export default function ChatPage() {
   const channels = channelsData?.channels || [];
   const users = Array.isArray(usersData) ? usersData : usersData?.users || [];
 
+  // Auto-connect to requested channel from URL params
   useEffect(() => {
-    if (!activeChannelId && channels.length > 0 && window.innerWidth >= 768) {
+    if (channels.length === 0) return;
+
+    if (queryChannelId && channels.some((c: any) => c.id === queryChannelId)) {
+      setActiveChannelId(queryChannelId);
+      return;
+    }
+
+    if (queryWorkOrderId) {
+      const shortId = queryWorkOrderId.slice(-8).toUpperCase();
+      const targetChannel = channels.find(
+        (c: any) =>
+          c.type === "WORK_ORDERS" &&
+          (c.name?.includes(queryWorkOrderId) ||
+           c.name?.includes(shortId) ||
+           c.description?.includes(queryWorkOrderId))
+      );
+      if (targetChannel) {
+        setActiveChannelId(targetChannel.id);
+        return;
+      }
+    }
+
+    if (!activeChannelId && window.innerWidth >= 768) {
       setActiveChannelId(channels[0].id);
     }
-  }, [channels, activeChannelId]);
+  }, [channels, activeChannelId, queryChannelId, queryWorkOrderId]);
 
   const generalChannels = channels.filter(
     (c: any) =>
@@ -2176,48 +2217,49 @@ function ThreadPanel({
   }
 
   return (
-    <div className="absolute inset-0 z-50 md:relative md:inset-auto md:z-auto w-full md:w-80 border-l border-border-subtle flex flex-col bg-surface flex-shrink-0">
+    <div className="absolute inset-0 z-50 md:relative md:inset-auto md:z-auto w-full md:w-96 lg:w-[460px] xl:w-[540px] 2xl:w-[600px] border-l border-border-subtle flex flex-col bg-surface flex-shrink-0 shadow-2xl transition-all">
       {/* Header */}
-      <div className="flex items-center px-2 py-2 md:py-3 border-b border-border-subtle">
+      <div className="flex items-center px-4 py-3 md:py-4 border-b border-border-subtle bg-surface-hover/50">
         <button
           onClick={onClose}
           className="md:hidden p-2 rounded-xl hover:bg-surface-hover text-text-muted transition-colors mr-2"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h3 className="font-semibold text-text-primary flex items-center gap-2 text-sm flex-1">
+        <h3 className="font-bold text-text-primary flex items-center gap-2 text-sm md:text-base flex-1">
           <Reply className="h-4 w-4 text-cyan-400 hidden md:block" />
-          Thread
+          Thread Discussion
         </h3>
         <button
           onClick={onClose}
-          className="hidden md:block p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
+          className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 scrollbar-thin scrollbar-thumb-white/[0.06]">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin scrollbar-thumb-white/[0.06]">
         {parentMsg && (
-          <div className="pb-3 border-b border-border-subtle">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="pb-4 border-b border-border-subtle">
+            <div className="flex items-center gap-2.5 mb-2.5">
               <Avatar
                 src={parentMsg.author?.image}
                 name={parentMsg.author?.name}
                 size="sm"
+                className="ring-2 ring-white/[0.05]"
               />
               <div>
-                <span className="text-sm font-semibold text-text-primary">
+                <span className="text-sm font-bold text-text-primary">
                   {parentMsg.author?.name}
                 </span>
-                <span className="text-[11px] text-text-dim ml-2">
+                <span className="text-xs text-text-dim ml-2 font-medium">
                   {formatRelativeTime(parentMsg.createdAt)}
                 </span>
               </div>
             </div>
-            <div className="rounded-xl bg-surface-hover border border-border-subtle px-3 py-2.5">
-              <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
+            <div className="rounded-2xl bg-surface-hover border border-border-subtle px-4 py-3 shadow-sm">
+              <div className="text-sm md:text-base text-text-primary whitespace-pre-wrap leading-relaxed">
                 {parentMsg.isDeleted ? parentMsg.content : renderMarkdown(parentMsg.content)}
               </div>
             </div>
@@ -2225,64 +2267,38 @@ function ThreadPanel({
         )}
 
         {replies.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="h-12 w-12 rounded-xl bg-surface-hover border border-border-subtle flex items-center justify-center mx-auto mb-3">
-              <Reply className="h-6 w-6 text-text-dim" />
+          <div className="text-center py-12">
+            <div className="h-14 w-14 rounded-2xl bg-surface-hover border border-border-subtle flex items-center justify-center mx-auto mb-3">
+              <Reply className="h-7 w-7 text-text-dim" />
             </div>
-            <p className="text-sm text-text-muted">No replies yet</p>
+            <p className="text-sm font-semibold text-text-muted">No replies yet</p>
             <p className="text-xs text-text-dim mt-1">
-              Start the conversation
+              Start the discussion below
             </p>
           </div>
         ) : (
           replies.map((msg: any) => (
-            <div key={msg.id} className="flex gap-2.5">
+            <div key={msg.id} className="flex gap-3">
               <Avatar
                 src={msg.author?.image}
                 name={msg.author?.name}
                 size="sm"
+                className="ring-2 ring-white/[0.05] flex-shrink-0 mt-0.5"
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-semibold text-text-primary">
+                  <span className="text-xs md:text-sm font-bold text-text-primary">
                     {msg.author?.name}
                   </span>
-                  <span className="text-[10px] text-text-dim">
+                  <span className="text-[11px] text-text-dim">
                     {formatRelativeTime(msg.createdAt)}
                   </span>
                 </div>
-                <div className="rounded-xl bg-surface-hover border border-border-subtle px-3 py-2">
-                  <div className="text-[13px] text-text-primary whitespace-pre-wrap leading-relaxed">
+                <div className="rounded-2xl bg-surface-hover border border-border-subtle px-4 py-2.5 shadow-sm">
+                  <div className="text-sm md:text-base text-text-secondary whitespace-pre-wrap leading-relaxed">
                     {msg.isDeleted ? msg.content : renderMarkdown(msg.content)}
                   </div>
                 </div>
-                {msg.reactions?.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {Object.entries(
-                      msg.reactions.reduce((acc: any, r: any) => {
-                        if (!acc[r.emoji]) acc[r.emoji] = [];
-                        acc[r.emoji].push(r);
-                        return acc;
-                      }, {})
-                    ).map(([emoji, reactions]: [string, any]) => (
-                      <button
-                        key={emoji}
-                        onClick={() =>
-                          toggleReaction.mutate({ messageId: msg.id, emoji })
-                        }
-                        className={cn(
-                          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border",
-                          reactions.some((r: any) => r.userId === userId)
-                            ? "bg-cyan-500/15 border-cyan-500/30"
-                            : "bg-surface-hover border-border-subtle"
-                        )}
-                      >
-                        <span>{emoji}</span>
-                        <span>{reactions.length}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           ))
@@ -2290,8 +2306,8 @@ function ThreadPanel({
       </div>
 
       {/* Reply input */}
-      <div className="px-4 py-3 border-t border-border-subtle">
-        <form onSubmit={handleSendReply} className="flex items-end gap-2 relative">
+      <div className="p-4 md:p-5 border-t border-border-subtle bg-surface-hover/50">
+        <form onSubmit={handleSendReply} className="flex items-end gap-3 relative">
           <div className="flex-1 relative">
             {showMentions && (
               <MentionDropdown
@@ -2339,9 +2355,9 @@ function ThreadPanel({
                 setShowMentions(false);
                 setMentionQuery(null);
               }}
-              placeholder="Reply in thread... (type @ to mention)"
-              rows={1}
-              className="flex-1 px-3 py-2.5 bg-surface-hover border border-border-subtle rounded-xl text-sm text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none resize-none transition-all"
+              placeholder="Reply to thread... (Press Enter to send, Shift+Enter for new line)"
+              rows={2}
+              className="w-full px-4 py-3 bg-surface border border-border-medium rounded-2xl text-sm md:text-base text-text-primary placeholder:text-text-dim focus:border-cyan-500/50 focus:ring-4 focus:ring-cyan-500/10 focus:outline-none resize-none transition-all shadow-inner leading-relaxed min-h-[52px]"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !showMentions) {
                   e.preventDefault();
