@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   CheckCircle2,
@@ -228,7 +229,21 @@ export function WorkOrderSubmissionModal({
     };
   }, [tasks, propertyFrontPhotos, workOrder, customInspectionItems, allPhotos, bids, propertyConditionNote]);
 
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !mounted) return null;
 
   // ── Action Handlers ────────────────────────────────────────────────────────
   const handlePickFileForIssue = (issue: ValidationIssue) => {
@@ -333,7 +348,7 @@ export function WorkOrderSubmissionModal({
 
   const handleFinalSubmit = async () => {
     if (!validation.isReady) {
-      toast.error(`Please resolve the ${validation.errorCount} required issue(s) before submitting.`);
+    toast.error(`Please resolve the ${validation.errorCount} required issue(s) before submitting.`);
       return;
     }
 
@@ -346,8 +361,13 @@ export function WorkOrderSubmissionModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[99999] flex flex-col md:items-center md:justify-center bg-background md:bg-black/85 md:backdrop-blur-md p-0 md:p-4 animate-in fade-in duration-200">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[999999] flex flex-col md:items-center md:justify-center bg-black/85 backdrop-blur-md p-0 md:p-4 overflow-hidden pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       {/* Hidden File Input for Direct Upload */}
       <input
         ref={fileInputRef}
@@ -359,15 +379,15 @@ export function WorkOrderSubmissionModal({
 
       <div className="w-full h-full md:h-auto md:max-w-3xl md:max-h-[92vh] bg-surface md:border md:border-border-medium md:rounded-3xl md:shadow-2xl flex flex-col overflow-hidden text-text-primary">
         {/* ── Modal Sticky Header ─────────────────────────────────────────── */}
-        <div className="sticky top-0 z-30 px-3 sm:px-6 py-3 sm:py-4 border-b border-border-subtle bg-surface/95 backdrop-blur-xl flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-sm">
+        <div className="sticky top-0 z-50 px-3 sm:px-6 py-3 sm:py-4 border-b border-border-subtle bg-surface/98 backdrop-blur-xl flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-md">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Dedicated prominent Back button */}
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-hover hover:bg-surface text-text-primary text-xs font-bold border border-border-subtle hover:border-cyan-500/30 transition-all shrink-0 active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-black shadow-md active:scale-95 transition-all shrink-0"
               title="Return to Work Order"
             >
-              <ArrowLeft className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+              <ArrowLeft className="h-4 w-4" />
               <span>Back</span>
             </button>
 
@@ -395,10 +415,11 @@ export function WorkOrderSubmissionModal({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors shrink-0 active:scale-95"
+            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-surface-hover hover:bg-surface text-text-primary text-xs font-bold border border-border-subtle shadow-sm active:scale-95 transition-all shrink-0"
             title="Close"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
+            <span>Close</span>
           </button>
         </div>
 
@@ -439,26 +460,37 @@ export function WorkOrderSubmissionModal({
         </div>
 
         {/* ── Modal Body / Issues List ─────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          {/* Quick Filter / Tabs */}
+          <div className="flex items-center justify-between pb-1 border-b border-border-subtle">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4 text-cyan-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+                Action Items & Quality Validation Notices
+              </span>
+            </div>
+
+            <Badge variant={validation.isReady ? "emerald" : "amber"} size="sm">
+              {validation.isReady ? "All Verified" : `${validation.errorCount} Blocking`}
+            </Badge>
+          </div>
+
+          {/* Validation Issues List */}
           {validation.issues.length === 0 ? (
-            <div className="py-8 text-center space-y-3">
-              <div className="h-16 w-16 rounded-3xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/10">
-                <Check className="h-8 w-8" />
+            <div className="p-8 text-center bg-surface-hover/30 border border-dashed border-border-medium rounded-2xl space-y-3">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
+                <Check className="h-6 w-6" />
               </div>
-              <h3 className="text-base font-bold text-text-primary">100% Quality Verified</h3>
-              <p className="text-xs text-text-muted max-w-md mx-auto leading-relaxed">
-                All tasks have verified Before & After photos, property condition photos are attached, and no pending issues remain.
+              <h3 className="text-base font-bold text-emerald-400">Zero Blocking Issues Found</h3>
+              <p className="text-xs text-text-muted max-w-md mx-auto">
+                All tasks are marked completed with verified Before and After photos. You are ready to complete this work order.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
-                <ListChecks className="h-3.5 w-3.5" /> Action Items & Quality Validation Notices
-              </p>
-
               {validation.issues.map((issue) => {
                 const isUploading = uploadingForIssueId === issue.id;
-                const isWritingReason = inlineReasonTaskId === issue.targetId;
+                const isEditingReason = inlineReasonTaskId === issue.targetId;
 
                 return (
                   <div
@@ -466,122 +498,172 @@ export function WorkOrderSubmissionModal({
                     className={cn(
                       "p-4 rounded-2xl border transition-all space-y-3",
                       issue.severity === "ERROR"
-                        ? "bg-rose-500/[0.04] border-rose-500/30 hover:border-rose-500/50"
-                        : "bg-amber-500/[0.04] border-amber-500/30 hover:border-amber-500/50"
+                        ? "bg-rose-500/5 border-rose-500/20 hover:border-rose-500/40"
+                        : "bg-amber-500/5 border-amber-500/20 hover:border-amber-500/40"
                     )}
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
                           <span className={cn(
-                            "text-[9px] font-black px-1.5 py-0.2 rounded uppercase tracking-wider border",
+                            "text-[10px] font-black uppercase px-2 py-0.5 rounded-md",
                             issue.severity === "ERROR"
-                              ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
-                              : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                              : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                           )}>
-                            {issue.severity === "ERROR" ? "Required" : "Notice"}
+                            {issue.severity === "ERROR" ? "Required" : "Recommended"}
                           </span>
-                          <h4 className="text-xs font-bold text-text-primary">{issue.title}</h4>
+                          <h4 className="text-sm font-bold text-text-primary">
+                            {issue.title}
+                          </h4>
                         </div>
-                        <p className="text-xs text-text-muted leading-relaxed">
+                        <p className="text-xs text-text-muted">
                           {issue.description}
                         </p>
                       </div>
-
-                      {/* Action Buttons for this issue */}
-                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                        {/* 1. Upload Photo Action */}
-                        {(issue.type === "MISSING_BEFORE_PHOTO" || issue.type === "MISSING_AFTER_PHOTO" || issue.type === "MISSING_PROPERTY_CONDITION") && (
-                          <>
-                            <Button
-                              size="sm"
-                              disabled={isUploading}
-                              onClick={() => handlePickFileForIssue(issue)}
-                              className="text-[11px] h-7 px-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white flex items-center gap-1 shadow-sm"
-                            >
-                              {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                              Upload {issue.category || "Photo"}
-                            </Button>
-
-                            {onOpenCamera && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenCamera(issue.type === "MISSING_PROPERTY_CONDITION" ? "global" : "task", issue.category || "BEFORE", issue.targetId)}
-                                className="p-1.5 rounded-lg bg-surface-hover text-text-secondary hover:text-cyan-400 border border-border-subtle"
-                                title="Open GPS Camera"
-                              >
-                                <Camera className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </>
-                        )}
-
-                        {/* 2. Mark Not Needed / Reject with Reason */}
-                        {issue.targetId && (issue.type === "MISSING_BEFORE_PHOTO" || issue.type === "MISSING_AFTER_PHOTO" || issue.type === "TASK_NOT_COMPLETED" || issue.type === "MISSING_REJECTION_REASON") && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInlineReasonTaskId(issue.targetId || null);
-                              setInlineReasonText(tasks.find((t) => t.id === issue.targetId)?.statusNote || "");
-                            }}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-surface-hover text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
-                          >
-                            Cannot Complete / Reject
-                          </button>
-                        )}
-
-                        {/* 3. Mark Task Complete */}
-                        {issue.type === "TASK_NOT_COMPLETED" && issue.targetId && (
-                          <button
-                            type="button"
-                            onClick={() => handleMarkTaskComplete(issue.targetId!)}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors flex items-center gap-1"
-                          >
-                            <Check className="h-3 w-3" /> Mark Done
-                          </button>
-                        )}
-
-                        {/* 4. Add Property Condition Note */}
-                        {issue.type === "MISSING_PROPERTY_CONDITION" && (
-                          <button
-                            type="button"
-                            onClick={() => setShowPropertyNoteInput(true)}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-surface-hover text-text-muted hover:text-text-primary border border-border-subtle transition-colors"
-                          >
-                            Add Access/Condition Note
-                          </button>
-                        )}
-                      </div>
                     </div>
 
-                    {/* Inline Task Reason Input */}
-                    {isWritingReason && (
-                      <div className="pt-2 border-t border-border-subtle space-y-2 animate-in fade-in">
-                        <label className="block text-[11px] font-bold text-text-secondary">
-                          Reason why "{issue.targetName}" was not completed:
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={inlineReasonText}
-                            onChange={(e) => setInlineReasonText(e.target.value)}
-                            placeholder="e.g. Locked gate, power disconnected, customer cancelled..."
-                            className="flex-1 px-3 py-1.5 bg-surface border border-border-medium rounded-xl text-xs text-text-primary outline-none focus:border-cyan-500/50"
-                          />
+                    {/* Action Bar for this specific Issue */}
+                    <div className="pt-2 border-t border-border-subtle/50 flex flex-wrap items-center gap-2">
+                      {/* Photo Upload Issue Actions */}
+                      {(issue.type === "MISSING_BEFORE_PHOTO" || issue.type === "MISSING_AFTER_PHOTO") && (
+                        <>
                           <Button
                             size="sm"
-                            onClick={() => handleSaveTaskReason(issue.targetId!)}
-                            className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white"
+                            onClick={() => handlePickFileForIssue(issue)}
+                            disabled={isUploading}
+                            className="text-xs bg-gradient-to-r from-cyan-600 to-blue-600 text-white flex items-center gap-1.5 shadow-sm"
                           >
-                            Save Exemption
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-3.5 w-3.5" />
+                                Upload {issue.category}
+                              </>
+                            )}
                           </Button>
+
+                          {onOpenCamera && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                onOpenCamera(
+                                  issue.targetId?.startsWith("insp-") ? "inspection" : "task",
+                                  issue.category || "BEFORE",
+                                  issue.targetId
+                                );
+                              }}
+                              className="text-xs flex items-center gap-1.5 border-border-subtle"
+                            >
+                              <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                              GPS Camera
+                            </Button>
+                          )}
+
+                          {/* Quick Bypass: Cannot Complete / Reject Task */}
+                          {issue.targetId && !isEditingReason && (
+                            <button
+                              onClick={() => {
+                                setInlineReasonTaskId(issue.targetId!);
+                                setInlineReasonText("");
+                              }}
+                              className="text-[11px] font-semibold text-text-muted hover:text-amber-400 px-2.5 py-1.5 rounded-lg border border-border-subtle hover:bg-surface-hover transition-colors"
+                            >
+                              Cannot Complete / Reject
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Incomplete Task Action */}
+                      {issue.type === "TASK_NOT_COMPLETED" && issue.targetId && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleMarkTaskComplete(issue.targetId!)}
+                            className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Mark as Completed
+                          </Button>
+
+                          {!isEditingReason && (
+                            <button
+                              onClick={() => {
+                                setInlineReasonTaskId(issue.targetId!);
+                                setInlineReasonText("");
+                              }}
+                              className="text-[11px] font-semibold text-text-muted hover:text-amber-400 px-2.5 py-1.5 rounded-lg border border-border-subtle hover:bg-surface-hover transition-colors"
+                            >
+                              Mark as Not Needed (Reason)
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Missing Rejection Reason Action */}
+                      {issue.type === "MISSING_REJECTION_REASON" && issue.targetId && !isEditingReason && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setInlineReasonTaskId(issue.targetId!);
+                            setInlineReasonText("");
+                          }}
+                          className="text-xs bg-amber-600 hover:bg-amber-500 text-white flex items-center gap-1.5"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          Add Required Reason
+                        </Button>
+                      )}
+
+                      {/* Missing Property Condition Note */}
+                      {issue.type === "MISSING_PROPERTY_CONDITION" && !showPropertyNoteInput && (
+                        <Button
+                          size="sm"
+                          onClick={() => setShowPropertyNoteInput(true)}
+                          className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white flex items-center gap-1.5"
+                        >
+                          <Building2 className="h-3.5 w-3.5" />
+                          Add Condition Note
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Inline Reason Form when user clicks Cannot Complete / Add Reason */}
+                    {isEditingReason && (
+                      <div className="mt-3 p-3 bg-surface border border-amber-500/30 rounded-xl space-y-2 animate-in fade-in">
+                        <label className="block text-[11px] font-bold text-amber-300">
+                          Why cannot complete this task? (Required for client record):
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={inlineReasonText}
+                          onChange={(e) => setInlineReasonText(e.target.value)}
+                          placeholder="E.g., Property occupied, gate locked, utility turned off, not needed per client..."
+                          className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-xl text-xs text-text-primary outline-none focus:border-amber-500/50"
+                        />
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            type="button"
-                            onClick={() => setInlineReasonTaskId(null)}
-                            className="px-2 text-xs text-text-dim hover:text-text-primary"
+                            onClick={() => {
+                              setInlineReasonTaskId(null);
+                              setInlineReasonText("");
+                            }}
+                            className="text-xs px-3 py-1 rounded-lg text-text-muted hover:text-text-primary"
                           >
                             Cancel
                           </button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveTaskReason(issue.targetId!)}
+                            className="text-xs bg-amber-600 hover:bg-amber-500 text-white font-bold"
+                          >
+                            Confirm Reason & Bypass
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -591,24 +673,23 @@ export function WorkOrderSubmissionModal({
             </div>
           )}
 
-          {/* Inline Property Note Input if opened */}
+          {/* Property Condition Note Input Form */}
           {showPropertyNoteInput && (
-            <div className="p-4 rounded-2xl bg-surface-hover border border-border-medium space-y-2">
-              <label className="block text-xs font-bold text-text-primary">
-                Property Access & Condition Note:
+            <div className="p-4 bg-surface border border-cyan-500/30 rounded-2xl space-y-2 animate-in fade-in">
+              <label className="block text-xs font-bold text-cyan-300">
+                Property Overall Condition Summary (Occupied/Vacant, Damages, Utilities):
               </label>
               <textarea
-                rows={2}
+                rows={3}
                 value={propertyConditionNote}
                 onChange={(e) => setPropertyConditionNote(e.target.value)}
-                placeholder="Explain why photos could not be taken or describe overall property condition (e.g. Vacant, secure, utilities off)..."
-                className="w-full px-3 py-2 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary outline-none focus:border-cyan-500/50"
+                placeholder="E.g. Property is vacant and secured. Electric on, water off. Roof is intact..."
+                className="w-full px-3 py-2 bg-surface-hover border border-border-subtle rounded-xl text-xs text-text-primary outline-none focus:border-cyan-500/50"
               />
-              <div className="flex justify-end gap-2">
+              <div className="flex items-center justify-end gap-2">
                 <button
-                  type="button"
                   onClick={() => setShowPropertyNoteInput(false)}
-                  className="px-3 py-1 text-xs text-text-muted hover:text-text-primary"
+                  className="text-xs px-3 py-1 rounded-lg text-text-muted hover:text-text-primary"
                 >
                   Cancel
                 </button>
@@ -635,7 +716,7 @@ export function WorkOrderSubmissionModal({
         </div>
 
         {/* ── Modal Sticky Footer ─────────────────────────────────────────── */}
-        <div className="sticky bottom-0 z-30 px-4 sm:px-6 py-3 sm:py-4 border-t border-border-subtle bg-surface/95 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-lg">
+        <div className="sticky bottom-0 z-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-border-subtle bg-surface/98 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-2xl">
           <div className="text-xs text-text-muted flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 text-text-dim shrink-0" />
             <span className="text-[11px] sm:text-xs">Submitting updates status to <strong>Field Complete</strong>.</span>
@@ -647,9 +728,9 @@ export function WorkOrderSubmissionModal({
               size="sm"
               onClick={onClose}
               disabled={isSubmitting}
-              className="text-xs flex items-center gap-1.5 px-3.5 font-semibold bg-surface-hover/50 hover:bg-surface-hover border-border-subtle"
+              className="text-xs flex items-center gap-1.5 px-4 py-2.5 font-bold bg-surface-hover/80 hover:bg-surface-hover border-border-medium shadow-sm"
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
+              <ArrowLeft className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
               Back to Order
             </Button>
 
@@ -657,7 +738,7 @@ export function WorkOrderSubmissionModal({
               onClick={handleFinalSubmit}
               disabled={!validation.isReady || isSubmitting}
               className={cn(
-                "text-xs px-4 sm:px-5 py-2 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 flex-1 sm:flex-initial justify-center",
+                "text-xs px-4 sm:px-5 py-2.5 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 flex-1 sm:flex-initial justify-center",
                 validation.isReady
                   ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:opacity-95 shadow-emerald-500/20"
                   : "bg-surface-hover text-text-dim border border-border-subtle cursor-not-allowed opacity-60"
@@ -683,6 +764,7 @@ export function WorkOrderSubmissionModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
