@@ -15,7 +15,6 @@ const nextConfig: NextConfig = {
     resolveAlias: {},
     root: ".",
   },
-  output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
