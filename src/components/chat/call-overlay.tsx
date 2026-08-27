@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { Phone, PhoneOff, Video, Mic, MicOff } from "lucide-react";
+import { Phone, PhoneOff, Video, Mic, MicOff, Minimize2, Maximize2, MessageSquare, ChevronDown } from "lucide-react";
 import {
   playRingtoneSound,
   playCallConnectSound,
@@ -55,6 +55,7 @@ function CallOverlayInternal({
   );
   const [elapsed, setElapsed] = useState(0);
   const [micEnabled, setMicEnabled] = useState(true);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const ringIntervalRef = useRef<any>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -373,7 +374,98 @@ function CallOverlayInternal({
     return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   }
 
-  // ── UI ────────────────────────────────────────────────────────────────────
+  // ── Floating Minimized Call Dock (Allows unrestricted chat & messaging while on call) ──
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-5 right-5 z-[2147483646] pointer-events-auto animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="bg-surface/95 backdrop-blur-xl border border-cyan-500/30 hover:border-cyan-500/50 rounded-2xl shadow-2xl shadow-cyan-500/10 p-3 flex items-center gap-3 ring-1 ring-white/10 min-w-[290px] max-w-[360px]">
+          {/* Avatar with live pulse */}
+          <div
+            onClick={() => setIsMinimized(false)}
+            className="relative cursor-pointer flex-shrink-0"
+            title="Click to expand call"
+          >
+            <div className="h-10 w-10 rounded-full bg-surface border-2 border-cyan-500/40 shadow-md overflow-hidden flex items-center justify-center">
+              {participants[0]?.image ? (
+                <img src={participants[0].image} alt="Caller" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-sm font-bold text-white uppercase">
+                  {(participants[0]?.name || "U")[0]}
+                </div>
+              )}
+            </div>
+            {status === "connected" && (
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-surface" />
+              </span>
+            )}
+          </div>
+
+          {/* Caller name & live status */}
+          <div
+            onClick={() => setIsMinimized(false)}
+            className="flex-1 min-w-0 cursor-pointer group"
+          >
+            <div className="flex items-center gap-1.5">
+              <h4 className="text-xs font-bold text-text-primary truncate group-hover:text-cyan-400 transition-colors">
+                {participants.length > 0 ? participants[0].name : channelName}
+              </h4>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[11px] font-mono text-emerald-400 font-semibold">
+                {status === "connected" ? formatTime(elapsed) : status}
+              </span>
+              <span className="text-[10px] text-cyan-400/80 group-hover:underline">
+                (Tap to expand)
+              </span>
+            </div>
+          </div>
+
+          {/* Mini Action Buttons */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Toggle Mic */}
+            <button
+              type="button"
+              onClick={toggleMic}
+              disabled={status !== "connected"}
+              className={cn(
+                "p-2 rounded-xl border transition-all active:scale-95",
+                !micEnabled
+                  ? "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20"
+                  : "bg-surface text-text-secondary border-border-subtle hover:bg-surface-hover hover:text-cyan-400"
+              )}
+              title={!micEnabled ? "Unmute Mic" : "Mute Mic"}
+            >
+              {!micEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </button>
+
+            {/* Expand / Maximize View */}
+            <button
+              type="button"
+              onClick={() => setIsMinimized(false)}
+              className="p-2 rounded-xl bg-surface text-text-secondary border border-border-subtle hover:bg-surface-hover hover:text-cyan-400 transition-all active:scale-95"
+              title="Expand Call View"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+
+            {/* End Call */}
+            <button
+              type="button"
+              onClick={() => doEnd(true)}
+              className="p-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20 transition-all active:scale-95"
+              title="End Call"
+            >
+              <PhoneOff className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Full Screen Call View ──────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/80 backdrop-blur-md">
       <div className="relative w-full max-w-lg mx-4">
@@ -390,17 +482,32 @@ function CallOverlayInternal({
                 {callType === "video" ? "Video Call" : "Audio Call"}
               </h3>
             </div>
-            {status === "connected" && (
-              <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                </span>
-                <span className="text-xs font-bold tracking-widest">
-                  {formatTime(elapsed)}
-                </span>
-              </div>
-            )}
+
+            <div className="flex items-center gap-2">
+              {/* Chat while on call minimize button */}
+              <button
+                type="button"
+                onClick={() => setIsMinimized(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-hover text-text-secondary hover:text-cyan-400 border border-border-subtle transition-all active:scale-95 text-xs font-medium"
+                title="Chat & Send Messages while on call"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                <span>Chat</span>
+                <Minimize2 className="h-3.5 w-3.5 ml-0.5 opacity-70" />
+              </button>
+
+              {status === "connected" && (
+                <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  <span className="text-xs font-bold tracking-widest">
+                    {formatTime(elapsed)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Main */}
@@ -449,18 +556,35 @@ function CallOverlayInternal({
             </p>
 
             {status === "connected" && (
-              <div className="mt-8 flex items-center gap-1.5 h-8">
-                {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                  <div
-                    key={i}
-                    className="w-1.5 bg-emerald-500/50 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]"
-                    style={{
-                      height: `${20 + ((i * 13) % 80)}%`,
-                      animationDuration: `${0.5 + (i % 3) * 0.2}s`,
-                    }}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="mt-6 flex items-center gap-1.5 h-8">
+                  {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                    <div
+                      key={i}
+                      className="w-1.5 bg-emerald-500/50 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                      style={{
+                        height: `${20 + ((i * 13) % 80)}%`,
+                        animationDuration: `${0.5 + (i % 3) * 0.2}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Quick Action: Open Chat & Send Messages */}
+                <div className="mt-6 flex flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsMinimized(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:border-cyan-500/50 shadow-lg shadow-cyan-500/5 transition-all hover:scale-105 active:scale-95 text-xs font-bold"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    <span>Open Chat & Send Messages</span>
+                  </button>
+                  <span className="text-[11px] text-text-muted opacity-70">
+                    Call will remain active in the floating bar
+                  </span>
+                </div>
+              </>
             )}
           </div>
 
