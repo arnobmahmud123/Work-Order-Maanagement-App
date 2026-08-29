@@ -95,7 +95,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       select: { type: true, companyId: true },
     });
     const userCompanyId = (session.user as any).companyId || null;
-    const isCompanyMatch = channel && (channel.companyId === null || channel.companyId === userCompanyId || (session.user as any).role === "SUPER_ADMIN");
+    const userRole = (session.user as any).role;
+    const isContractor = userRole === "CONTRACTOR";
+
+    // Contractors can auto-join GENERAL only, not random internal staff channels
+    if (isContractor && channel?.type !== "GENERAL") {
+      return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
+    }
+
+    const isCompanyMatch = channel && (channel.companyId === null || channel.companyId === userCompanyId || userRole === "SUPER_ADMIN");
     if (channel && channel.type !== "DIRECT_MESSAGE" && isCompanyMatch) {
       await prisma.channelMember.create({
         data: { channelId: id, userId, role: "MEMBER" },

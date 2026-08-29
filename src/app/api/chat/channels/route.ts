@@ -11,22 +11,30 @@ export async function GET(req: NextRequest) {
   const userId = (session.user as any).id;
   const userCompanyId = (session.user as any).companyId || null;
   const userRole = (session.user as any).role;
+  const isContractor = userRole === "CONTRACTOR";
 
   // Single query: get channels with members, last message, and counts
   const channels = await prisma.channel.findMany({
     where: {
       isArchived: false,
-      OR: [
-        {
-          type: { in: ["GENERAL", "WORK_ORDERS", "CUSTOM"] },
-          OR: [
-            { companyId: null },
-            ...(userCompanyId ? [{ companyId: userCompanyId }] : []),
+      OR: isContractor
+        ? [
+            // Contractors only see GENERAL announcements or channels/DMs they are an explicit member of
+            { type: "GENERAL" },
+            { members: { some: { userId } } },
+          ]
+        : [
+            // Staff and Admins see general, work orders, and all company/platform custom channels
+            {
+              type: { in: ["GENERAL", "WORK_ORDERS", "CUSTOM"] },
+              OR: [
+                { companyId: null },
+                ...(userCompanyId ? [{ companyId: userCompanyId }] : []),
+              ],
+            },
+            { members: { some: { userId } } },
+            ...(userRole === "SUPER_ADMIN" ? [{ type: { not: "DIRECT_MESSAGE" } }] : []),
           ],
-        },
-        { members: { some: { userId } } },
-        ...(userRole === "SUPER_ADMIN" ? [{ type: { not: "DIRECT_MESSAGE" } }] : []),
-      ],
     },
     include: {
       members: {
@@ -160,8 +168,16 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = (session.user as any).id;
+    const userRole = (session.user as any).role;
     const body = await req.json();
     const { name, description, type, memberIds } = body;
+
+    if (userRole === "CONTRACTOR" && type !== "DIRECT_MESSAGE") {
+      return NextResponse.json(
+        { error: "Forbidden - Contractors are not permitted to create channels" },
+        { status: 403 }
+      );
+    }
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });

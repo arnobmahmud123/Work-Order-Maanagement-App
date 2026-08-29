@@ -176,6 +176,8 @@ function ChatContent() {
   const { data: session } = useSession();
   const qc = useQueryClient();
   const userId = (session?.user as any)?.id;
+  const userRole = (session?.user as any)?.role;
+  const isContractor = userRole === "CONTRACTOR";
   const { data: channelsData, isLoading: channelsLoading } = useChatChannels();
   const { data: usersData } = useUsers();
   const createChannel = useCreateChatChannel();
@@ -328,13 +330,15 @@ function ChatContent() {
               >
                 <Search className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setShowNewChannel(true)}
-                className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-cyan-400 transition-all"
-                title="New channel"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
+              {!isContractor && (
+                <button
+                  onClick={() => setShowNewChannel(true)}
+                  className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-cyan-400 transition-all"
+                  title="New channel"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
               <button
                 onClick={() => setShowSidebar(false)}
                 className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-rose-400 transition-all"
@@ -533,12 +537,13 @@ function ChatContent() {
         <ChannelInfoPanelWrapper
           channelId={activeChannelId}
           userId={userId}
+          userRole={userRole}
           onClose={() => setShowChannelInfo(false)}
         />
       )}
 
       {/* New Channel Modal */}
-      {showNewChannel && (
+      {showNewChannel && !isContractor && (
         <NewChannelModal
           onClose={() => setShowNewChannel(false)}
           users={users}
@@ -572,10 +577,12 @@ function ChatContent() {
 function ChannelInfoPanelWrapper({
   channelId,
   userId,
+  userRole,
   onClose,
 }: {
   channelId: string;
   userId: string;
+  userRole?: string;
   onClose: () => void;
 }) {
   const { data: channel, refetch: refetchChannel } = useChatChannel(channelId);
@@ -587,6 +594,7 @@ function ChannelInfoPanelWrapper({
     <ChannelInfoPanel
       channel={channel}
       userId={userId}
+      userRole={userRole}
       onClose={onClose}
       pinnedMessages={pinnedMessages}
       onChannelUpdate={refetchChannel}

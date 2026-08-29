@@ -35,6 +35,7 @@ import toast from "react-hot-toast";
 interface ChannelInfoPanelProps {
   channel: any;
   userId: string;
+  userRole?: string;
   onClose: () => void;
   pinnedMessages?: any[];
   onUnpin?: (messageId: string) => void;
@@ -44,6 +45,7 @@ interface ChannelInfoPanelProps {
 export function ChannelInfoPanel({
   channel,
   userId,
+  userRole,
   onClose,
   pinnedMessages = [],
   onUnpin,
@@ -60,6 +62,8 @@ export function ChannelInfoPanel({
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const isContractor = userRole === "CONTRACTOR";
 
   const Icon =
     channel?.type === "DIRECT_MESSAGE"
@@ -248,20 +252,24 @@ export function ChannelInfoPanel({
                 </div>
               )}
             </div>
-            <button
-              onClick={() => photoInputRef.current?.click()}
-              className="absolute -bottom-1 -right-1 p-1 rounded-full bg-cyan-500 text-white hover:bg-cyan-400 transition-colors shadow-lg"
-              title="Change photo"
-            >
-              <Camera className="h-3 w-3" />
-            </button>
-            <input
-              ref={photoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoUpload}
-            />
+            {!isContractor && (
+              <>
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 p-1 rounded-full bg-cyan-500 text-white hover:bg-cyan-400 transition-colors shadow-lg"
+                  title="Change photo"
+                >
+                  <Camera className="h-3 w-3" />
+                </button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+              </>
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -292,13 +300,15 @@ export function ChannelInfoPanel({
 
       {/* Action buttons */}
       <div className="px-4 py-2 border-b border-border-subtle flex gap-2">
-        <button
-          onClick={() => setShowInvite(!showInvite)}
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-colors"
-        >
-          <UserPlus className="h-3.5 w-3.5" />
-          Invite
-        </button>
+        {!isContractor && (
+          <button
+            onClick={() => setShowInvite(!showInvite)}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 text-xs font-medium hover:bg-cyan-500/20 transition-colors"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Invite
+          </button>
+        )}
         <button
           onClick={handleLeave}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors"
@@ -416,8 +426,8 @@ export function ChannelInfoPanel({
                       </p>
                     </div>
 
-                    {/* Actions menu (for non-self members) */}
-                    {!isMe && (
+                    {/* Actions menu (for non-self members) - only non-contractors with admin/owner status */}
+                    {!isMe && !isContractor && (isAdmin || isOwner) && (
                       <button
                         onClick={() =>
                           setMemberMenuOpen(

@@ -48,6 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const userId = (session.user as any).id;
+  const userRole = (session.user as any).role;
   const { id } = await params;
   const body = await req.json();
 
@@ -68,6 +69,41 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       update: {
         lastReadAt: lastMsg ? lastMsg.createdAt : new Date(),
       },
+    });
+    return NextResponse.json({ success: true });
+  }
+
+  if (body.action === "leave") {
+    await prisma.channelMember.deleteMany({
+      where: { channelId: id, userId },
+    });
+    return NextResponse.json({ success: true });
+  }
+
+  // All other actions (modifying channel, inviting, removing, changing photo) are forbidden for contractors
+  if (userRole === "CONTRACTOR") {
+    return NextResponse.json(
+      { error: "Forbidden - Contractors cannot modify channel settings" },
+      { status: 403 }
+    );
+  }
+
+  if (body.action === "invite" && body.userId) {
+    await prisma.channelMember.upsert({
+      where: { channelId_userId: { channelId: id, userId: body.userId } },
+      create: {
+        channelId: id,
+        userId: body.userId,
+        role: "MEMBER",
+      },
+      update: {},
+    });
+    return NextResponse.json({ success: true });
+  }
+
+  if (body.action === "remove" && body.userId) {
+    await prisma.channelMember.deleteMany({
+      where: { channelId: id, userId: body.userId },
     });
     return NextResponse.json({ success: true });
   }
