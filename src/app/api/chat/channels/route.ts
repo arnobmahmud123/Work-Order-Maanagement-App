@@ -9,14 +9,23 @@ export async function GET(req: NextRequest) {
   }
 
   const userId = (session.user as any).id;
+  const userCompanyId = (session.user as any).companyId || null;
+  const userRole = (session.user as any).role;
 
   // Single query: get channels with members, last message, and counts
   const channels = await prisma.channel.findMany({
     where: {
       isArchived: false,
       OR: [
-        { type: { in: ["GENERAL", "WORK_ORDERS"] } },
+        {
+          type: { in: ["GENERAL", "WORK_ORDERS", "CUSTOM"] },
+          OR: [
+            { companyId: null },
+            ...(userCompanyId ? [{ companyId: userCompanyId }] : []),
+          ],
+        },
         { members: { some: { userId } } },
+        ...(userRole === "SUPER_ADMIN" ? [{ type: { not: "DIRECT_MESSAGE" } }] : []),
       ],
     },
     include: {

@@ -11,9 +11,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = (session.user as any).id;
   const { id } = await params;
 
-  await prisma.channelMember.updateMany({
-    where: { channelId: id, userId },
-    data: { lastTypedAt: new Date() },
+  await prisma.channelMember.upsert({
+    where: { channelId_userId: { channelId: id, userId } },
+    create: {
+      channelId: id,
+      userId,
+      role: "MEMBER",
+      lastTypedAt: new Date(),
+    },
+    update: {
+      lastTypedAt: new Date(),
+    },
   });
 
   return NextResponse.json({ success: true });

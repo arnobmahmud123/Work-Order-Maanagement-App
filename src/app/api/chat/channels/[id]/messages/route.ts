@@ -92,9 +92,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!membership) {
     const channel = await prisma.channel.findUnique({
       where: { id },
-      select: { type: true },
+      select: { type: true, companyId: true },
     });
-    if (channel && ["GENERAL", "WORK_ORDERS"].includes(channel.type)) {
+    const userCompanyId = (session.user as any).companyId || null;
+    const isCompanyMatch = channel && (channel.companyId === null || channel.companyId === userCompanyId || (session.user as any).role === "SUPER_ADMIN");
+    if (channel && channel.type !== "DIRECT_MESSAGE" && isCompanyMatch) {
       await prisma.channelMember.create({
         data: { channelId: id, userId, role: "MEMBER" },
       });

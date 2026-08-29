@@ -57,9 +57,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       orderBy: { createdAt: "desc" }
     });
     
-    await prisma.channelMember.updateMany({
-      where: { channelId: id, userId },
-      data: { lastReadAt: lastMsg ? lastMsg.createdAt : new Date() },
+    await prisma.channelMember.upsert({
+      where: { channelId_userId: { channelId: id, userId } },
+      create: {
+        channelId: id,
+        userId,
+        role: "MEMBER",
+        lastReadAt: lastMsg ? lastMsg.createdAt : new Date(),
+      },
+      update: {
+        lastReadAt: lastMsg ? lastMsg.createdAt : new Date(),
+      },
     });
     return NextResponse.json({ success: true });
   }
