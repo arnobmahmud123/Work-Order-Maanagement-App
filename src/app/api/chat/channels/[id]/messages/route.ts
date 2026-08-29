@@ -60,7 +60,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     take: limit,
   });
 
-  return NextResponse.json({ messages: messages.reverse() });
+  const members = await prisma.channelMember.findMany({
+    where: { channelId: id },
+    select: { userId: true, lastReadAt: true, lastTypedAt: true, user: { select: { name: true } } },
+  });
+
+  return NextResponse.json({ messages: messages.reverse(), members });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

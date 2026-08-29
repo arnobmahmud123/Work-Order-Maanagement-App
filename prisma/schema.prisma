@@ -584,6 +584,7 @@ model ChannelMember {
   userId     String
   role       String    @default("MEMBER") // ADMIN, MEMBER
   lastReadAt DateTime?
+  lastTypedAt DateTime?
   joinedAt   DateTime  @default(now())
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

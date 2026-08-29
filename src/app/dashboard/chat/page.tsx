@@ -66,6 +66,7 @@ import {
   StopCircle,
   Clock,
   Trash2,
+  CheckCheck,
 } from "lucide-react";
 import { cn, formatRelativeTime, truncate } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -813,6 +814,8 @@ function ChatArea({
   const markRead = useMarkChannelRead(channelId);
 
   const messages = messagesData?.messages || [];
+  const members = messagesData?.members || [];
+  const lastTypedEmitRef = useRef(0);
   const [message, setMessage] = useState("");
   const [pendingFiles, setPendingFiles] = useState<{file: File, previewUrl: string}[]>([]);
   const [pendingAudio, setPendingAudio] = useState<{file: File, previewUrl: string} | null>(null);
@@ -955,10 +958,25 @@ function ChatArea({
     return () => document.removeEventListener("click", handleClick);
   }, [showMessageActions]);
 
-  // Handle @mention detection
+  useEffect(() => {
+    if (!members || !members.length) return;
+    const now = new Date().getTime();
+    const typers = members
+      .filter((m: any) => m.userId !== userId && m.lastTypedAt && (now - new Date(m.lastTypedAt).getTime() < 4000))
+      .map((m: any) => m.user?.name || "User");
+    setTypingUsers(typers);
+  }, [members, userId]);
+
+  // Handle @mention detection and typing emit
   function handleMessageChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value;
     setMessage(val);
+
+    const now = Date.now();
+    if (val && now - lastTypedEmitRef.current > 3000) {
+      lastTypedEmitRef.current = now;
+      fetch(`/api/chat/channels/${channelId}/typing`, { method: "POST" }).catch(() => {});
+    }
 
     const cursor = e.target.selectionStart;
     setCursorPosition(cursor);
@@ -1825,6 +1843,16 @@ function ChatArea({
                               <Reply className="h-2.5 w-2.5 -scale-x-100" />
                               {msg._count.replies} {msg._count.replies === 1 ? "REPLY" : "REPLIES"}
                             </button>
+                          )}
+
+                          {/* Seen Indicator */}
+                          {isLastInGroup && isOwn && members.some((m: any) => m.userId !== userId && m.lastReadAt && new Date(m.lastReadAt).getTime() >= new Date(msg.createdAt).getTime()) && (
+                            <div className="flex justify-end mt-1.5 px-1">
+                              <span className="text-[10px] text-cyan-500 flex items-center gap-1 opacity-80" title="Seen">
+                                <span className="font-bold text-[9px] uppercase tracking-widest">Seen</span>
+                                <CheckCheck className="h-3 w-3" />
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>

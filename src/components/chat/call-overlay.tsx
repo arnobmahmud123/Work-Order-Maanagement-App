@@ -118,9 +118,9 @@ function CallOverlayInternal({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Poll call status (caller waits for accept) ───────────────────────────
+  // ── Poll call status (detect disconnects) ───────────────────────────
   useEffect(() => {
-    if (!sessionId || isIncomingAcceptor) return;
+    if (!sessionId) return;
     let isMounted = true;
     const interval = setInterval(async () => {
       try {
@@ -135,7 +135,7 @@ function CallOverlayInternal({
           doEnd(false);
         }
       } catch {}
-    }, 1200);
+    }, 1500);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -242,6 +242,12 @@ function CallOverlayInternal({
 
       pc.onconnectionstatechange = () => {
         console.log("[CallOverlay] Connection state:", pc.connectionState);
+        if (
+          pc.connectionState === "failed" ||
+          pc.connectionState === "closed"
+        ) {
+          doEnd(false);
+        }
       };
 
       pc.oniceconnectionstatechange = () => {
