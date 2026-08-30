@@ -293,7 +293,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px] border-collapse text-left text-xs">
+          <table className="w-full min-w-[850px] border-collapse text-left text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 border-b border-slate-200 dark:border-slate-800 font-black uppercase text-[10px] tracking-wider select-none">
                 <th className="py-3 px-3 text-center w-16">Pending</th>
@@ -301,18 +301,15 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                 <th className="py-3 px-3 text-center w-16">N/A</th>
                 <th className="py-3 px-3 text-center w-16">Multi-Day</th>
                 <th className="py-3 px-4 w-40">Completed</th>
-                <th className="py-3 px-4 w-60">Description</th>
-                <th className="py-3 px-4 w-80">Vendor's Comment (to MCS)</th>
-                <th className="py-3 px-4 w-60">MCS Comment (to vendor)</th>
-                <th className="py-3 px-3 text-center w-24">Img Count</th>
-                <th className="py-3 px-4">WO Instructions</th>
+                <th className="py-3 px-4 w-72">Description</th>
+                <th className="py-3 px-4">Vendor's Comment (to MCS)</th>
                 <th className="py-3 px-4 text-center w-16">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
               {!data.tasks || data.tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-10 px-4 text-center text-slate-400 font-bold">
+                  <td colSpan={8} className="py-10 px-4 text-center text-slate-400 font-bold">
                     No tasks added. Click "+ Add Task" to add a new task item.
                   </td>
                 </tr>
@@ -325,7 +322,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         type="checkbox"
                         checked={task.pending}
                         onChange={(e) => updateTask(index, { pending: e.target.checked })}
-                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4"
+                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4 cursor-pointer"
                       />
                     </td>
 
@@ -335,7 +332,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         type="checkbox"
                         checked={task.done}
                         onChange={(e) => updateTask(index, { done: e.target.checked })}
-                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4"
+                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4 cursor-pointer"
                       />
                     </td>
 
@@ -345,7 +342,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         type="checkbox"
                         checked={task.na}
                         onChange={(e) => updateTask(index, { na: e.target.checked })}
-                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4"
+                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4 cursor-pointer"
                       />
                     </td>
 
@@ -355,7 +352,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         type="checkbox"
                         checked={task.multiDay}
                         onChange={(e) => updateTask(index, { multiDay: e.target.checked })}
-                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4"
+                        className="rounded border-slate-300 dark:border-slate-700 text-cyan-500 focus:ring-cyan-500 h-4 w-4 cursor-pointer"
                       />
                     </td>
 
@@ -389,39 +386,12 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                       />
                     </td>
 
-                    {/* MCS Comment */}
-                    <td className="py-3 px-2">
-                      <input
-                        type="text"
-                        value={task.mcsComment}
-                        placeholder="Auditor feedback..."
-                        onChange={(e) => updateTask(index, { mcsComment: e.target.value })}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm"
-                      />
-                    </td>
-
-                    {/* Img Count */}
-                    <td className="py-3 px-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={task.imgCount}
-                        onChange={(e) => updateTask(index, { imgCount: Number(e.target.value) })}
-                        className="w-16 mx-auto bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-1.5 py-1.5 text-xs font-bold text-center text-slate-900 dark:text-slate-100 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm"
-                      />
-                    </td>
-
-                    {/* WO Instructions (ReadOnly label) */}
-                    <td className="py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400 max-w-[280px] truncate" title={task.woInstructions}>
-                      {task.woInstructions || <span className="italic text-slate-400">None</span>}
-                    </td>
-
                     {/* Delete action */}
                     <td className="py-3 px-4 text-center">
                       <button
                         type="button"
                         onClick={() => handleDeleteTask(index)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                         title="Delete Task"
                       >
                         <Trash2 className="h-4 w-4" />
