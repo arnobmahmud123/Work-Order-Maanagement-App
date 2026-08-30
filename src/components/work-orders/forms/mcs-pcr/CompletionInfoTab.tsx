@@ -295,7 +295,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1200px] border-collapse text-left text-xs">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 border-b border-slate-200 dark:border-slate-850 font-black uppercase text-[10px] tracking-wider select-none">
+              <tr className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 border-b border-slate-200 dark:border-slate-800 font-black uppercase text-[10px] tracking-wider select-none">
                 <th className="py-3 px-3 text-center w-16">Pending</th>
                 <th className="py-3 px-3 text-center w-16">Done</th>
                 <th className="py-3 px-3 text-center w-16">N/A</th>
@@ -309,7 +309,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                 <th className="py-3 px-4 text-center w-16">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-150 dark:divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
               {!data.tasks || data.tasks.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-10 px-4 text-center text-slate-400 font-bold">
@@ -365,7 +365,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         type="date"
                         value={task.completedDate}
                         onChange={(e) => updateTask(index, { completedDate: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:outline-none"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm"
                       />
                     </td>
 
@@ -375,7 +375,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         type="text"
                         value={task.description}
                         onChange={(e) => updateTask(index, { description: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 focus:border-cyan-500 focus:outline-none"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm"
                       />
                     </td>
 
@@ -385,7 +385,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         value={task.vendorComment}
                         rows={1}
                         onChange={(e) => updateTask(index, { vendorComment: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 focus:border-cyan-500 focus:outline-none resize-y min-h-[30px]"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm resize-y min-h-[32px]"
                       />
                     </td>
 
@@ -396,7 +396,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         value={task.mcsComment}
                         placeholder="Auditor feedback..."
                         onChange={(e) => updateTask(index, { mcsComment: e.target.value })}
-                        className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-850 dark:text-slate-200 focus:border-cyan-500 focus:outline-none"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm"
                       />
                     </td>
 
@@ -407,7 +407,7 @@ export function CompletionInfoTab({ data, onChange, woTasks }: CompletionInfoTab
                         min="0"
                         value={task.imgCount}
                         onChange={(e) => updateTask(index, { imgCount: Number(e.target.value) })}
-                        className="w-16 mx-auto bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-lg px-1.5 py-1.5 text-xs text-center text-slate-850 dark:text-slate-200 focus:border-cyan-500 focus:outline-none"
+                        className="w-16 mx-auto bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-1.5 py-1.5 text-xs font-bold text-center text-slate-900 dark:text-slate-100 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none shadow-sm"
                       />
                     </td>
 

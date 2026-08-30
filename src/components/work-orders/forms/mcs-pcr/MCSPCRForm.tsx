@@ -20,6 +20,8 @@ import {
 import {
   WinterizationTab,
   GenericChecklistTab,
+  defaultWinterizationData,
+  type WinterizationData,
 } from "./OtherMCSTabs";
 
 import {
@@ -74,6 +76,7 @@ interface FullMCSPCRData {
   dumpStorage: DumpStorageData;
   violations: ViolationsData;
   damages: DamagesData;
+  winterization: WinterizationData;
 }
 
 const defaultFullData: FullMCSPCRData = {
@@ -85,6 +88,7 @@ const defaultFullData: FullMCSPCRData = {
   dumpStorage: defaultDumpStorageData,
   violations: defaultViolationsData,
   damages: defaultDamagesData,
+  winterization: defaultWinterizationData,
 };
 
 export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Props) {
@@ -128,6 +132,7 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
             dumpStorage: { ...defaultDumpStorageData, ...parsed.dumpStorage },
             violations: { ...defaultViolationsData, ...parsed.violations },
             damages: { ...defaultDamagesData, ...parsed.damages },
+            winterization: { ...defaultWinterizationData, ...parsed.winterization },
           });
         }
       } catch (err: any) {
@@ -238,6 +243,14 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
     setFormData((prev) => ({
       ...prev,
       damages: damagesData,
+    }));
+    setIsDirty(true);
+  };
+
+  const handleWinterizationChange = (winterizationData: WinterizationData) => {
+    setFormData((prev) => ({
+      ...prev,
+      winterization: winterizationData,
     }));
     setIsDirty(true);
   };
@@ -490,7 +503,12 @@ export function MCSPCRForm({ workOrderId, submissionId, onClose, onSaved }: Prop
                     onChange={handleDumpStorageChange}
                   />
                 )}
-                {activeTab === "winterization" && <WinterizationTab />}
+                {activeTab === "winterization" && (
+                  <WinterizationTab
+                    data={formData.winterization}
+                    onChange={handleWinterizationChange}
+                  />
+                )}
                 {activeTab === "access_issue" && (
                   <AccessIssueTab
                     data={formData.accessIssue}

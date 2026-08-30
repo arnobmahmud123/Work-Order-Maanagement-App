@@ -373,7 +373,7 @@ export function ViolationsTab({ data, onChange, enabled }: ViolationsTabProps) {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] border-collapse text-left text-xs">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 border-b border-slate-200 dark:border-slate-850 font-black uppercase text-[10px] tracking-wider select-none">
+                <tr className="bg-slate-50 dark:bg-slate-900/40 text-slate-500 border-b border-slate-200 dark:border-slate-800 font-black uppercase text-[10px] tracking-wider select-none">
                   <th className="py-3 px-4">Violation Type</th>
                   <th className="py-3 px-4">Case #</th>
                   <th className="py-3 px-4">Amount</th>
