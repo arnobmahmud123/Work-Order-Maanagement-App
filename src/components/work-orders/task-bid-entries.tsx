@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { downloadSingleBid, downloadSingleTask } from "@/lib/download-helper";
 import { printTasksReport, printBidsReport } from "@/lib/print-reports";
+import { ItemPhotoDownloadModal } from "./item-photo-download-modal";
 
 // ─── Unit Options ────────────────────────────────────────────────────────────
 
@@ -445,6 +446,7 @@ export function TaskEntryList({
   const [showAITask, setShowAITask] = useState(false);
   const [aiTaskPrompt, setAiTaskPrompt] = useState("");
   const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
+  const [taskPhotoModal, setTaskPhotoModal] = useState<{ open: boolean; title: string; photos: any[] } | null>(null);
 
   const templates = getTemplatesForService(serviceType);
 
@@ -668,7 +670,27 @@ export function TaskEntryList({
               <p className="text-[10px] font-bold text-text-muted">{completedCount} of {totalCount} requirements met</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {tasks.some((t) => t.photos?.length > 0) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const allTaskPhotos = tasks.flatMap((t) => t.photos || []);
+                  setTaskPhotoModal({
+                    open: true,
+                    title: "All Task Photos",
+                    photos: allTaskPhotos,
+                  });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                title="Download All Task Photos with Timestamp & Selection"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Download Task Photos ({tasks.reduce((sum, t) => sum + (t.photos?.length || 0), 0)})</span>
+                <span className="sm:hidden">Photos ({tasks.reduce((sum, t) => sum + (t.photos?.length || 0), 0)})</span>
+              </button>
+            )}
+
             <button
               onClick={() => toast.promise(printTasksReport(tasks), { loading: "Preparing PDF...", success: "PDF Ready", error: "Failed to generate PDF" })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer"
@@ -943,10 +965,29 @@ export function TaskEntryList({
 
                   {/* Task Actions Toolbar */}
                   <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1 ml-auto">
+                    {task.photos && task.photos.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTaskPhotoModal({
+                            open: true,
+                            title: `Task: ${task.title}`,
+                            photos: task.photos,
+                          });
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                        title="Download Task Photos (Date/Time stamp & selection)"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span>Photos ({task.photos.length})</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => downloadSingleTask(task)}
                       className="p-1.5 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
-                      title="Download Task Details"
+                      title="Download Task Details Report"
                     >
                       <Download className="h-3.5 w-3.5" />
                     </button>
@@ -1291,6 +1332,17 @@ export function TaskEntryList({
               ))}
           </div>
         </div>
+      )}
+
+      {/* Task Photos Download Modal */}
+      {taskPhotoModal?.open && (
+        <ItemPhotoDownloadModal
+          isOpen={taskPhotoModal.open}
+          onClose={() => setTaskPhotoModal(null)}
+          title={taskPhotoModal.title}
+          photos={taskPhotoModal.photos}
+          itemType="task"
+        />
       )}
     </div>
   );
@@ -2548,6 +2600,7 @@ export function BidEntryList({
   const [showAIBid, setShowAIBid] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [bidPhotoModal, setBidPhotoModal] = useState<{ open: boolean; title: string; photos: any[] } | null>(null);
   const [newDescRows, setNewDescRows] = useState(3);
   const [editDescRows, setEditDescRows] = useState(2);
   const [newTitle, setNewTitle] = useState("");
@@ -2760,7 +2813,27 @@ export function BidEntryList({
             <p className="text-[10px] font-bold text-text-muted">{bids.length} proposed bid{bids.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {bids.some((b) => b.photos?.length > 0) && (
+            <button
+              type="button"
+              onClick={() => {
+                const allBidPhotos = bids.flatMap((b) => b.photos || []);
+                setBidPhotoModal({
+                  open: true,
+                  title: "All Bid Photos",
+                  photos: allBidPhotos,
+                });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm"
+              title="Download All Bid Photos with Timestamp & Selection"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Download Bid Photos ({bids.reduce((sum, b) => sum + (b.photos?.length || 0), 0)})</span>
+              <span className="sm:hidden">Photos ({bids.reduce((sum, b) => sum + (b.photos?.length || 0), 0)})</span>
+            </button>
+          )}
+
           <button
             onClick={() => toast.promise(printBidsReport(bids), { loading: "Preparing PDF...", success: "PDF Ready", error: "Failed to generate PDF" })}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer"
@@ -3000,6 +3073,25 @@ export function BidEntryList({
 
                   {/* Bid Action Toolbar */}
                   <div className="flex items-center bg-surface-hover border border-border-subtle rounded-xl p-1 gap-1 ml-auto">
+                    {bid.photos && bid.photos.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBidPhotoModal({
+                            open: true,
+                            title: `Bid: ${bid.title}`,
+                            photos: bid.photos,
+                          });
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[10px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                        title="Download Bid Photos (Date/Time stamp & selection)"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span>Photos ({bid.photos.length})</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => downloadSingleBid(bid)}
                       className="p-1.5 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-all"
@@ -3289,6 +3381,17 @@ export function BidEntryList({
         <BidTemplateSelector
           onSelect={(items) => loadBidTemplates(items)}
           onClose={() => setShowBidTemplates(false)}
+        />
+      )}
+
+      {/* Bid Photos Download Modal */}
+      {bidPhotoModal?.open && (
+        <ItemPhotoDownloadModal
+          isOpen={bidPhotoModal.open}
+          onClose={() => setBidPhotoModal(null)}
+          title={bidPhotoModal.title}
+          photos={bidPhotoModal.photos}
+          itemType="bid"
         />
       )}
     </div>

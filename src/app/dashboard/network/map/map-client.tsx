@@ -182,14 +182,13 @@ function ContractorMapContent() {
         attributionControl: false,
       }).setView([39.8283, -98.5795], 4); // US center
 
-      // Dynamic tile layer based on theme
+      // Dynamic tile layer based on theme using free OpenStreetMap with dark theme filter (no API key required)
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-      const tileUrl = isDark 
-        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+      const tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
       L.tileLayer(tileUrl, {
         maxZoom: 19,
+        className: isDark ? "dark-tiles" : "",
       }).addTo(map);
 
       // Zoom control position
@@ -197,7 +196,7 @@ function ContractorMapContent() {
 
       // Attribution
       L.control.attribution({ position: "bottomleft", prefix: false })
-        .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>')
+        .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
         .addTo(map);
 
       leafletMapRef.current = map;
@@ -427,6 +426,9 @@ function ContractorMapContent() {
     <>
       {/* Leaflet marker styles */}
       <style jsx global>{`
+        .dark-tiles {
+          filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.28) brightness(0.75) !important;
+        }
         .contractor-marker-container {
           background: none !important;
           border: none !important;

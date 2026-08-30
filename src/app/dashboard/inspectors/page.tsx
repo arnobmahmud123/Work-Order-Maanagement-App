@@ -127,12 +127,16 @@ export default function InspectorsPage() {
         attributionControl: false,
       }).setView(coords ? [coords.lat, coords.lng] : [39.8283, -98.5795], coords ? 10 : 4);
 
-      const tileUrl = isDark 
-        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+      const tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-      L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+      L.tileLayer(tileUrl, {
+        maxZoom: 19,
+        className: isDark ? "dark-tiles" : "",
+      }).addTo(map);
       L.control.zoom({ position: "bottomright" }).addTo(map);
+      L.control.attribution({ position: "bottomleft", prefix: false })
+        .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
+        .addTo(map);
 
       leafletMapRef.current = map;
       setMapReady(true);
@@ -355,6 +359,11 @@ export default function InspectorsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Map */}
         <Card className="lg:col-span-3" padding={false}>
+          <style jsx global>{`
+            .dark-tiles {
+              filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.28) brightness(0.75) !important;
+            }
+          `}</style>
           <div
             ref={mapRef}
             className="w-full h-[500px] rounded-xl overflow-hidden"

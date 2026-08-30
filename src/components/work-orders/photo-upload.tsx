@@ -16,10 +16,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
-  ImagePlus
+  ImagePlus,
+  Download,
 } from "lucide-react";
 import { readEXIF, type EXIFInfo } from "@/lib/exif";
 import { compressImageToTarget } from "@/lib/image-compression";
+import { ItemPhotoDownloadModal } from "./item-photo-download-modal";
 
 function parseEXIFDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -102,6 +104,8 @@ function PhotoBucket({
   onRemove,
   onView,
   onEdit,
+  onDownload,
+  onDownloadSingle,
   hideLabel,
   uploading,
   compact,
@@ -112,6 +116,8 @@ function PhotoBucket({
   onRemove: (id: string) => void;
   onView: (photo: PhotoItem) => void;
   onEdit?: (photo: PhotoItem) => void;
+  onDownload?: (category: PhotoCategory) => void;
+  onDownloadSingle?: (photo: PhotoItem) => void;
   hideLabel?: boolean;
   uploading?: boolean;
   compact?: boolean;
@@ -164,6 +170,19 @@ function PhotoBucket({
           </span>
           {uploading && (
             <Loader2 className="h-3 w-3 text-cyan-400 animate-spin" />
+          )}
+          {photos.length > 0 && onDownload && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload(category);
+              }}
+              className="p-1 rounded-lg hover:bg-surface-hover text-text-muted hover:text-cyan-400 transition-colors ml-auto cursor-pointer"
+              title={`Download ${config.label} photos`}
+            >
+              <Download className="h-3.5 w-3.5" />
+            </button>
           )}
         </div>
       )}
@@ -278,6 +297,18 @@ function PhotoBucket({
                       >
                         <ZoomIn className="h-3 w-3" />
                       </button>
+                      {onDownloadSingle && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDownloadSingle(photo);
+                          }}
+                          className="p-1.5 rounded-lg bg-cyan-600/80 text-white hover:bg-cyan-600 transition-colors"
+                          title="Download photo"
+                        >
+                          <Download className="h-3 w-3" />
+                        </button>
+                      )}
                       {onEdit && (
                         <button
                           onClick={(e) => {
@@ -364,6 +395,9 @@ export function PhotoUploadSection({
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [selectedExistingIds, setSelectedExistingIds] = useState<Set<string>>(new Set());
   const [targetCategory, setTargetCategory] = useState<PhotoCategory>("DURING");
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [downloadModalPhotos, setDownloadModalPhotos] = useState<PhotoItem[]>([]);
+  const [downloadModalTitle, setDownloadModalTitle] = useState("");
 
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -462,12 +496,27 @@ export function PhotoUploadSection({
           <div className="flex items-center gap-2">
             <Camera className="h-4 w-4 text-text-muted" />
             <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
-            {totalPhotos > 0 && (
+          </div>
+          {totalPhotos > 0 && (
+            <div className="flex items-center gap-2">
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">
                 {totalPhotos} photo{totalPhotos !== 1 ? "s" : ""}
               </span>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDownloadModalPhotos(photos);
+                  setDownloadModalTitle(title || "Photos");
+                  setDownloadModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-xs font-semibold transition-all cursor-pointer shadow-sm"
+                title="Download photos with timestamp & selection"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <PhotoBucket
@@ -477,6 +526,16 @@ export function PhotoUploadSection({
           onRemove={handleRemove}
           onView={setViewerPhoto}
           onEdit={setEditorPhoto}
+          onDownload={() => {
+            setDownloadModalPhotos(photos);
+            setDownloadModalTitle(title || "Photos");
+            setDownloadModalOpen(true);
+          }}
+          onDownloadSingle={(singleP) => {
+            setDownloadModalPhotos([singleP]);
+            setDownloadModalTitle(singleP.name || "Photo");
+            setDownloadModalOpen(true);
+          }}
           hideLabel
           uploading={uploading}
           compact={compact}
@@ -631,6 +690,16 @@ export function PhotoUploadSection({
           </div>,
           document.body
         )}
+
+        {/* Single Bucket Photo Download Modal */}
+        {downloadModalOpen && (
+          <ItemPhotoDownloadModal
+            isOpen={downloadModalOpen}
+            onClose={() => setDownloadModalOpen(false)}
+            title={downloadModalTitle || title || "Photos"}
+            photos={downloadModalPhotos}
+          />
+        )}
       </div>
     );
   }
@@ -646,10 +715,27 @@ export function PhotoUploadSection({
         <div className="flex items-center gap-2">
           <Camera className="h-4 w-4 text-text-muted" />
           <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
+        </div>
+        <div className="flex items-center gap-2">
           {totalPhotos > 0 && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">
-              {totalPhotos} photo{totalPhotos !== 1 ? "s" : ""}
-            </span>
+            <>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">
+                {totalPhotos} photo{totalPhotos !== 1 ? "s" : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDownloadModalPhotos(photos);
+                  setDownloadModalTitle(title || "Photos");
+                  setDownloadModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-xs font-semibold transition-all cursor-pointer shadow-sm"
+                title="Download photos with timestamp & selection"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download</span>
+              </button>
+            </>
           )}
           {uploading && (
             <span className="text-[10px] text-cyan-400 flex items-center gap-1">
@@ -658,21 +744,6 @@ export function PhotoUploadSection({
             </span>
           )}
         </div>
-        {filledBuckets > 0 && (
-          <div className="flex items-center gap-1">
-            {activeBuckets.map((b, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "h-1.5 w-6 rounded-full transition-all",
-                  b.photos.length > 0
-                    ? "bg-gradient-to-r from-cyan-500 to-blue-600"
-                    : "bg-surface-hover"
-                )}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Buckets */}
@@ -686,6 +757,17 @@ export function PhotoUploadSection({
               onRemove={handleRemove}
               onView={setViewerPhoto}
               onEdit={setEditorPhoto}
+              onDownload={(bucketCat) => {
+                const bPhotos = getPhotosByCategory(bucketCat);
+                setDownloadModalPhotos(bPhotos);
+                setDownloadModalTitle(`${title || "Photos"} - ${bucketCat}`);
+                setDownloadModalOpen(true);
+              }}
+              onDownloadSingle={(singleP) => {
+                setDownloadModalPhotos([singleP]);
+                setDownloadModalTitle(singleP.name || "Photo");
+                setDownloadModalOpen(true);
+              }}
               uploading={uploading}
             />
             <div className="flex gap-2">
@@ -864,6 +946,16 @@ export function PhotoUploadSection({
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Multi-Bucket Photo Download Modal */}
+      {downloadModalOpen && (
+        <ItemPhotoDownloadModal
+          isOpen={downloadModalOpen}
+          onClose={() => setDownloadModalOpen(false)}
+          title={downloadModalTitle || title || "Photos"}
+          photos={downloadModalPhotos}
+        />
       )}
     </div>
   );

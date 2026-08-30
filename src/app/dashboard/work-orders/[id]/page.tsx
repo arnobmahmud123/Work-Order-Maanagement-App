@@ -3586,13 +3586,13 @@ export default function WorkOrderDetailPage({
                 <select
                   value={photoTabDownloadMode}
                   onChange={(e) => setPhotoTabDownloadMode(e.target.value as typeof photoTabDownloadMode)}
-                  className="bg-transparent px-3 py-1.5 text-xs text-text-secondary outline-none font-bold"
+                  className="bg-transparent px-3 py-1.5 text-xs text-text-secondary outline-none font-bold cursor-pointer"
                 >
-                  <option value="datetime">Timestamped</option>
-                  <option value="date">Date Only</option>
-                  <option value="datetimeExif">Full Metadata</option>
-                  <option value="custom">Manual Stamp</option>
-                  <option value="none">Raw Original</option>
+                  <option value="datetime">✓ With date & time stamp</option>
+                  <option value="date">With date only stamp</option>
+                  <option value="datetimeExif">With date, time & EXIF data</option>
+                  <option value="custom">Custom date & time stamp</option>
+                  <option value="none">Without date/time stamp</option>
                 </select>
                 {photoTabDownloadMode === "custom" && (
                   <input
