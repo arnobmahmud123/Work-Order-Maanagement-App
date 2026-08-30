@@ -2079,10 +2079,10 @@ export default function WorkOrderDetailPage({
       const fontSize = Math.max(18, Math.floor(canvas.width / 42));
       const pad = Math.max(14, Math.floor(fontSize * 0.75));
       const lineHeight = Math.floor(fontSize * 1.35);
-      ctx.font = `${fontSize}px Arial, sans-serif`;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.68)";
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
       ctx.fillRect(0, canvas.height - lineHeight - pad, canvas.width, lineHeight + pad);
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#FFFF00";
       ctx.fillText(photoStampText(photo, photoTabDownloadMode, photoTabCustomDateTime), pad, canvas.height - pad);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.72));
       if (!blob) throw new Error("Photo export failed");
@@ -5486,10 +5486,10 @@ function AllPhotosModal({
       const fontSize = Math.max(18, Math.floor(canvas.width / 42));
       const pad = Math.max(14, Math.floor(fontSize * 0.75));
       const lineHeight = Math.floor(fontSize * 1.35);
-      ctx.font = `${fontSize}px Arial, sans-serif`;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.68)";
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
       ctx.fillRect(0, canvas.height - lineHeight - pad, canvas.width, lineHeight + pad);
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#FFFF00";
       ctx.fillText(text, pad, canvas.height - pad);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
       if (!blob) throw new Error("Photo export failed");

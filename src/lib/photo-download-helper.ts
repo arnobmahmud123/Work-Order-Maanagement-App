@@ -241,10 +241,10 @@ export async function processPhotoForDownload(
       ctx.fillRect(bgX, bgY, 6, bgHeight);
     }
 
-    // Text with soft shadow
-    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+    // Text with soft shadow in industry-standard yellow
+    ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
     ctx.shadowBlur = 4;
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#FFFF00";
     ctx.fillText(stamp, bgX + pad * 1.2, bgY + fontSize + (pad * 0.2));
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));

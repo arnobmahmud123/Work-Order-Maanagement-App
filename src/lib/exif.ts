@@ -772,7 +772,7 @@ export const DEFAULT_OVERLAY_OPTIONS: OverlayOptions = {
   showContractor: false,
   position: "bottom-left",
   fontSize: 16,
-  fontColor: "#ffffff",
+  fontColor: "#FFFF00",
   backgroundColor: "rgba(0,0,0,0.6)",
   format: "24h",
   dateFormat: "MM/DD/YYYY",

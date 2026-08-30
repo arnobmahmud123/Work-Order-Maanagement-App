@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   RadioGroup,
   TextField,
@@ -9,8 +9,16 @@ import {
   CheckboxField,
   FormSection,
 } from "../FormPrimitives";
+import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import toast from "react-hot-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface PCRWorker {
+  id: string;
+  workerId: string;
+  workerName: string;
+}
 
 export interface GeneralInformationData {
   wasWorkPerformed: string; // "yes" | "no" | ""
@@ -43,6 +51,7 @@ export interface GeneralInformationData {
   antiFreezeInTraps: string;
   utilitiesActive: string;
   postStickers: string;
+  workers?: PCRWorker[];
   // Proof of Service Summary dropdowns
   escalatedEvents: string;
   healthSafetyIssues: string;
@@ -93,6 +102,7 @@ export const defaultGeneralInformationData: GeneralInformationData = {
   antiFreezeInTraps: "",
   utilitiesActive: "",
   postStickers: "",
+  workers: [],
   escalatedEvents: "No",
   healthSafetyIssues: "No",
   unsecuredOpenings: "No",
@@ -140,8 +150,63 @@ interface Props {
 }
 
 export function GeneralInformationTab({ data, onChange }: Props) {
+  const [workerInputId, setWorkerInputId] = useState("");
+  const [workerInputName, setWorkerInputName] = useState("");
+  const [editingWorkerId, setEditingWorkerId] = useState<string | null>(null);
+
   const set = (key: keyof GeneralInformationData) => (value: string | boolean) =>
     onChange({ ...data, [key]: value });
+
+  const workers = data.workers || [];
+
+  const handleSaveWorker = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!workerInputId.trim() && !workerInputName.trim()) {
+      toast.error("Please enter a Worker ID and Name");
+      return;
+    }
+    if (editingWorkerId) {
+      const updated = workers.map((w) =>
+        w.id === editingWorkerId
+          ? { ...w, workerId: workerInputId.trim(), workerName: workerInputName.trim() }
+          : w
+      );
+      onChange({ ...data, workers: updated });
+      setEditingWorkerId(null);
+      toast.success("Worker updated");
+    } else {
+      const newWorker: PCRWorker = {
+        id: `worker-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        workerId: workerInputId.trim(),
+        workerName: workerInputName.trim(),
+      };
+      onChange({ ...data, workers: [...workers, newWorker] });
+      toast.success("Worker added");
+    }
+    setWorkerInputId("");
+    setWorkerInputName("");
+  };
+
+  const handleEditWorker = (w: PCRWorker) => {
+    setEditingWorkerId(w.id);
+    setWorkerInputId(w.workerId);
+    setWorkerInputName(w.workerName);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingWorkerId(null);
+    setWorkerInputId("");
+    setWorkerInputName("");
+  };
+
+  const handleDeleteWorker = (id: string) => {
+    const updated = workers.filter((w) => w.id !== id);
+    onChange({ ...data, workers: updated });
+    if (editingWorkerId === id) {
+      handleCancelEdit();
+    }
+    toast.success("Worker removed");
+  };
 
   return (
     <div className="space-y-5">
@@ -340,25 +405,130 @@ export function GeneralInformationTab({ data, onChange }: Props) {
 
       {/* ── Workers Table ─────────────────────────────────────────────────── */}
       <FormSection title="Workers">
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                <th className="px-4 py-2 text-left font-semibold text-slate-600 dark:text-slate-300 w-24">Actions</th>
-                <th className="px-4 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">Worker ID</th>
-                <th className="px-4 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">Worker Name</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500 italic">
-                  No records available.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
-            <span>0 – 0 of 0 items</span>
+        <div className="space-y-3">
+          {/* Add / Edit Worker Inline Form */}
+          <form
+            onSubmit={handleSaveWorker}
+            className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-end gap-3"
+          >
+            <div className="w-full sm:w-44">
+              <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 block uppercase tracking-wider">
+                Worker ID / Work Order ID
+              </label>
+              <input
+                type="number"
+                value={workerInputId}
+                onChange={(e) => setWorkerInputId(e.target.value)}
+                placeholder="e.g. 1024"
+                className="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:outline-none shadow-sm"
+              />
+            </div>
+
+            <div className="flex-1">
+              <label className="text-[11px] font-black text-slate-700 dark:text-slate-300 mb-1 block uppercase tracking-wider">
+                Worker Name
+              </label>
+              <input
+                type="text"
+                value={workerInputName}
+                onChange={(e) => setWorkerInputName(e.target.value)}
+                placeholder="e.g. John Smith"
+                className="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:border-cyan-500 focus:outline-none shadow-sm"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                className="h-8 px-4 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap cursor-pointer"
+              >
+                {editingWorkerId ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Save</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Add Worker</span>
+                  </>
+                )}
+              </button>
+
+              {editingWorkerId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="h-8 px-3 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Cancel</span>
+                </button>
+              )}
+            </div>
+          </form>
+
+          {/* Workers Table */}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                  <th className="px-4 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 w-28">Actions</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 w-44">Worker ID</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300">Worker Name</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
+                {workers.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500 italic">
+                      No records available. Enter Worker ID and Name above to add workers.
+                    </td>
+                  </tr>
+                ) : (
+                  workers.map((w, idx) => (
+                    <tr
+                      key={w.id || idx}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
+                    >
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleEditWorker(w)}
+                            className="p-1 rounded-md text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors cursor-pointer"
+                            title="Edit Worker"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWorker(w.id)}
+                            className="p-1 rounded-md text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title="Delete Worker"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 font-mono font-bold text-cyan-600 dark:text-cyan-400">
+                        {w.workerId || "—"}
+                      </td>
+                      <td className="px-4 py-2 font-medium text-slate-800 dark:text-slate-200">
+                        {w.workerName || "—"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/20">
+              <span>
+                {workers.length > 0
+                  ? `1 – ${workers.length} of ${workers.length} items`
+                  : "0 – 0 of 0 items"}
+              </span>
+            </div>
           </div>
         </div>
       </FormSection>
