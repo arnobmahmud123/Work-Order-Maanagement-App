@@ -633,221 +633,215 @@ function DialerTab({
     .slice(0, 4);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="max-w-5xl mx-auto space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Left Side: Call Details & Parameters Form */}
-        <div className="lg:col-span-7 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <PhoneCall className="h-5 w-5 text-cyan-500" />
-                  <span>Call Details & Setup</span>
-                </div>
-                
-                <div className="flex items-center bg-surface-hover rounded-xl p-1 border border-border-subtle">
-                  <button
-                    type="button"
-                    onClick={() => setCallMode("ai")}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                      callMode === "ai"
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md"
-                        : "text-text-muted hover:text-text-primary"
-                    )}
-                  >
-                    AI Voice
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCallMode("manual")}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                      callMode === "manual"
-                        ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md"
-                        : "text-text-muted hover:text-text-primary"
-                    )}
-                  >
-                    Manual
-                  </button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-
-            <form onSubmit={handleCall} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1.5">
-                  Select Work Order (Optional)
-                </label>
-                <div className="relative">
-                  <select
-                    value={selectedWorkOrderId}
-                    onChange={(e) => handleWorkOrderChange(e.target.value)}
-                    disabled={loadingWorkOrder}
-                    className="block w-full rounded-xl border border-border-medium px-4 py-2.5 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
-                  >
-                    <option value="">-- No Work Order Selected --</option>
-                    {workOrders.map((wo: any) => (
-                      <option key={wo.id} value={wo.id}>
-                        {wo.title} ({wo.status}) — {wo.address}
-                      </option>
-                    ))}
-                  </select>
-                  {loadingWorkOrder && (
-                    <div className="absolute right-3 top-3">
-                      <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1.5">
-                    Recipient Phone *
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={form.recipientPhone}
-                    onChange={(e) => setForm({ ...form, recipientPhone: e.target.value })}
-                    placeholder="+1 (555) 123-4567"
-                    className="block w-full rounded-xl border border-border-medium px-4 py-2.5 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner font-mono font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1.5">
-                    Recipient Name
-                  </label>
-                  <input
-                    type="text"
-                    value={form.recipientName}
-                    onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
-                    placeholder="John Doe"
-                    className="block w-full rounded-xl border border-border-medium px-4 py-2.5 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
-                  />
-                </div>
-              </div>
-
-              {callMode === "ai" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1.5">
-                      Voice Profile
-                    </label>
-                    <select
-                      value={form.voiceProfileId}
-                      onChange={(e) => setForm({ ...form, voiceProfileId: e.target.value })}
-                      className="block w-full rounded-xl border border-border-medium px-4 py-2.5 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
+        <div className="lg:col-span-7 flex flex-col justify-between">
+          <Card className="h-full flex flex-col justify-between">
+            <div>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <PhoneCall className="h-5 w-5 text-cyan-500" />
+                    <span>Call Details & Setup</span>
+                  </div>
+                  
+                  <div className="flex items-center bg-surface-hover rounded-xl p-1 border border-border-subtle">
+                    <button
+                      type="button"
+                      onClick={() => setCallMode("ai")}
+                      className={cn(
+                        "px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                        callMode === "ai"
+                          ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md"
+                          : "text-text-muted hover:text-text-primary"
+                      )}
                     >
-                      <option value="">Default (System Coordinator Voice)</option>
-                      {profiles.map((p: any) => (
-                        <option key={p.id} value={p.id}>
-                          🎙️ {p.name} — {p.user?.name}
+                      AI Voice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCallMode("manual")}
+                      className={cn(
+                        "px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                        callMode === "manual"
+                          ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md"
+                          : "text-text-muted hover:text-text-primary"
+                      )}
+                    >
+                      Manual
+                    </button>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+
+              <form onSubmit={handleCall} className="space-y-3.5 px-6 pb-2">
+                <div>
+                  <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
+                    Select Work Order (Optional)
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedWorkOrderId}
+                      onChange={(e) => handleWorkOrderChange(e.target.value)}
+                      disabled={loadingWorkOrder}
+                      className="block w-full rounded-xl border border-border-medium px-3.5 py-2 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
+                    >
+                      <option value="">-- No Work Order Selected --</option>
+                      {workOrders.map((wo: any) => (
+                        <option key={wo.id} value={wo.id}>
+                          {wo.title} ({wo.status}) — {wo.address}
                         </option>
                       ))}
                     </select>
-                    {form.voiceProfileId && (
-                      <p className="text-xs text-purple-400 mt-1.5 flex items-center gap-1.5 font-medium">
-                        <Volume2 className="h-3.5 w-3.5" />
-                        AI will speak with the cloned coordinator voice
-                      </p>
+                    {loadingWorkOrder && (
+                      <div className="absolute right-3 top-2.5">
+                        <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
+                      </div>
                     )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
+                      Recipient Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={form.recipientPhone}
+                      onChange={(e) => setForm({ ...form, recipientPhone: e.target.value })}
+                      placeholder="+1 (555) 123-4567"
+                      className="block w-full rounded-xl border border-border-medium px-3.5 py-2 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner font-mono font-bold"
+                    />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1.5">
-                      Purpose / Instructions
+                    <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
+                      Recipient Name
                     </label>
                     <input
                       type="text"
-                      value={form.purpose}
-                      onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-                      placeholder="Schedule inspection, follow up on work order..."
-                      className="block w-full rounded-xl border border-border-medium px-4 py-2.5 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
+                      value={form.recipientName}
+                      onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
+                      placeholder="John Doe"
+                      className="block w-full rounded-xl border border-border-medium px-3.5 py-2 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
                     />
                   </div>
-                </>
-              )}
+                </div>
 
-              <Button
-                type="submit"
-                className={cn(
-                  "w-full h-12 rounded-xl font-bold shadow-lg transition-all cursor-pointer",
-                  callMode === "manual"
-                    ? "bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white"
-                    : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+                {callMode === "ai" && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
+                        Voice Profile
+                      </label>
+                      <select
+                        value={form.voiceProfileId}
+                        onChange={(e) => setForm({ ...form, voiceProfileId: e.target.value })}
+                        className="block w-full rounded-xl border border-border-medium px-3.5 py-2 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
+                      >
+                        <option value="">Default (System Coordinator Voice)</option>
+                        {profiles.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            🎙️ {p.name} — {p.user?.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
+                        Purpose / Instructions
+                      </label>
+                      <input
+                        type="text"
+                        value={form.purpose}
+                        onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+                        placeholder="Schedule inspection, follow up on work order..."
+                        className="block w-full rounded-xl border border-border-medium px-3.5 py-2 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
+                      />
+                    </div>
+                  </>
                 )}
-                size="lg"
-                loading={initiateCall.isPending}
-                disabled={!!activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"}
-              >
-                <Phone className="h-5 w-5 mr-2" />
-                {callMode === "manual"
-                  ? "Start Manual Direct Call"
-                  : activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"
-                  ? "Call in Progress..."
-                  : "Launch AI Auto Call"}
-              </Button>
-            </form>
-          </Card>
 
-          {/* Speed Dial / Recent Contractor Contacts */}
-          {speedDialContractors.length > 0 && (
-            <Card>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-black text-text-dim uppercase tracking-wider flex items-center gap-1.5">
-                  <Star className="h-3.5 w-3.5 text-yellow-500" />
-                  Speed Dial Contacts
-                </h4>
-                <span className="text-[10px] text-text-muted">From Active Work Orders</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {speedDialContractors.map((c: any) => (
-                  <button
-                    key={c.id + c.phone}
-                    type="button"
-                    onClick={() => {
-                      setForm((prev) => ({
-                        ...prev,
-                        recipientPhone: c.phone,
-                        recipientName: c.name,
-                        recipientId: c.id,
-                        purpose: `Follow up on work order: ${c.workOrderTitle}`,
-                      }));
-                      setSelectedWorkOrderId(c.workOrderId);
-                      toast.success(`Loaded ${c.name} (${c.phone})`);
-                    }}
-                    className="p-3 rounded-xl border border-border-subtle bg-surface-hover hover:border-cyan-500/40 hover:bg-cyan-500/5 transition-all text-left group flex items-center justify-between cursor-pointer"
+                <div className="pt-2">
+                  <Button
+                    type="submit"
+                    className={cn(
+                      "w-full h-11 rounded-xl font-bold shadow-md transition-all cursor-pointer",
+                      callMode === "manual"
+                        ? "bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white"
+                        : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+                    )}
+                    size="lg"
+                    loading={initiateCall.isPending}
+                    disabled={!!activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"}
                   >
-                    <div className="min-w-0 pr-2">
-                      <p className="text-xs font-bold text-text-primary group-hover:text-cyan-400 transition-colors truncate">
-                        {c.name}
-                      </p>
-                      <p className="text-[11px] font-mono text-text-muted mt-0.5">{c.phone}</p>
-                      <p className="text-[10px] text-text-dim truncate mt-0.5">{c.workOrderTitle}</p>
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-white transition-all flex-shrink-0">
-                      <Phone className="h-3.5 w-3.5" />
-                    </div>
-                  </button>
-                ))}
+                    <Phone className="h-4 w-4 mr-2" />
+                    {callMode === "manual"
+                      ? "Start Manual Direct Call"
+                      : activeCall && activeCall.status !== "COMPLETED" && activeCall.status !== "FAILED"
+                      ? "Call in Progress..."
+                      : "Launch AI Auto Call"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+
+            {/* Quick Speed Dial Mini Bar */}
+            {speedDialContractors.length > 0 && (
+              <div className="p-4 mx-6 mb-4 rounded-xl bg-surface-hover/70 border border-border-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-wider flex items-center gap-1">
+                    <Star className="h-3 w-3 text-yellow-500" /> Speed Dial
+                  </span>
+                  <span className="text-[9px] text-text-muted">Click to populate</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {speedDialContractors.slice(0, 2).map((c: any) => (
+                    <button
+                      key={c.id + c.phone}
+                      type="button"
+                      onClick={() => {
+                        setForm((prev) => ({
+                          ...prev,
+                          recipientPhone: c.phone,
+                          recipientName: c.name,
+                          recipientId: c.id,
+                          purpose: `Follow up on work order: ${c.workOrderTitle}`,
+                        }));
+                        setSelectedWorkOrderId(c.workOrderId);
+                        toast.success(`Loaded ${c.name}`);
+                      }}
+                      className="p-2 rounded-lg border border-border-subtle bg-surface hover:border-cyan-500/40 text-left flex items-center justify-between transition-all group cursor-pointer"
+                    >
+                      <div className="min-w-0 pr-1">
+                        <p className="text-[11px] font-bold text-text-primary truncate group-hover:text-cyan-400">
+                          {c.name}
+                        </p>
+                        <p className="text-[10px] font-mono text-text-muted">{c.phone}</p>
+                      </div>
+                      <Phone className="h-3 w-3 text-cyan-400 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
 
         {/* Right Side: Dashing Smart Phone Keypad Dialer */}
-        <div className="lg:col-span-5 flex flex-col items-center justify-center">
-          <div className="w-full flex flex-col items-center">
-            <div className="mb-3 text-center">
-              <h3 className="text-sm font-black text-text-primary uppercase tracking-wider flex items-center justify-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-cyan-400" />
+        <div className="lg:col-span-5 flex flex-col items-center justify-between h-full">
+          <div className="w-full flex flex-col items-center justify-between h-full">
+            <div className="mb-2 text-center">
+              <h3 className="text-xs font-black text-text-primary uppercase tracking-wider flex items-center justify-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
                 Interactive Mobile Dialer
               </h3>
-              <p className="text-xs text-text-muted mt-0.5">
-                Dial digits directly or click speed dial to call
+              <p className="text-[11px] text-text-muted">
+                Tap keys or type with laptop keyboard
               </p>
             </div>
 
