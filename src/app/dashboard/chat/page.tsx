@@ -286,7 +286,7 @@ function ChatContent() {
       "flex -m-3 md:-mb-4 lg:-m-8 bg-background overflow-hidden md:rounded-2xl md:border border-border-subtle shadow-xl overscroll-none",
       topNavHidden 
         ? "h-[100dvh] md:h-[100vh] rounded-none border-0" 
-        : "h-[calc(100dvh-5rem)] pb-4 md:pb-0 md:h-[calc(100vh-4rem)]"
+        : "h-[calc(100dvh-4rem)] pb-1 md:pb-0 md:h-[calc(100vh-4rem)]"
     )}>
       {/* Sidebar Toggle (when hidden) */}
       {!showSidebar && (
@@ -361,7 +361,7 @@ function ChatContent() {
         </div>
 
         {/* Channel List */}
-        <div className="flex-1 min-h-0 overflow-y-auto pt-2 pb-32 md:pb-2 scrollbar-thin scrollbar-thumb-white/[0.06]">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y pt-2 pb-40 md:pb-4 scrollbar-thin scrollbar-thumb-white/[0.06]">
           {/* Channels Section */}
           <div className="px-2">
             <button

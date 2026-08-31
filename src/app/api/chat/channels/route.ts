@@ -8,33 +8,55 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = (session.user as any).id;
-  const userCompanyId = (session.user as any).companyId || null;
-  const userRole = (session.user as any).role;
-  const isContractor = userRole === "CONTRACTOR";
+  let userId = (session.user as any).id;
+  const userEmail = session.user.email ? session.user.email.toLowerCase().trim() : null;
+
+  // Resolve user and company from DB to ensure reliable real-time data
+  let dbUser = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
+  if (!dbUser && userEmail) {
+    dbUser = await prisma.user.findUnique({ where: { email: userEmail } });
+    if (dbUser) {
+      userId = dbUser.id;
+    }
+  }
+
+  const userCompanyId = dbUser?.companyId || (session.user as any).companyId || null;
+  const userRole = dbUser?.role || (session.user as any).role || "CLIENT";
+  const isSuperAdmin = userRole === "SUPER_ADMIN";
 
   // Single query: get channels with members, last message, and counts
   const channels = await prisma.channel.findMany({
     where: {
       isArchived: false,
-      OR: isContractor
-        ? [
-            // Contractors only see GENERAL announcements or channels/DMs they are an explicit member of
-            { type: "GENERAL" },
+      OR: [
+        // All general announcement channels
+        { type: "GENERAL" },
+        // All custom channels belonging to the user's company or public or where user is member
+        {
+          type: "CUSTOM",
+          OR: [
+            { companyId: null },
+            ...(userCompanyId ? [{ companyId: userCompanyId }] : []),
             { members: { some: { userId } } },
-          ]
-        : [
-            // Staff and Admins see general, work orders, and all company/platform custom channels
-            {
-              type: { in: ["GENERAL", "WORK_ORDERS", "CUSTOM"] },
-              OR: [
-                { companyId: null },
-                ...(userCompanyId ? [{ companyId: userCompanyId }] : []),
-              ],
-            },
-            { members: { some: { userId } } },
-            ...(userRole === "SUPER_ADMIN" ? [{ type: { not: "DIRECT_MESSAGE" } }] : []),
+            ...(isSuperAdmin ? [{}] : []),
           ],
+        },
+        // Work order channels belonging to company or where user is member
+        {
+          type: "WORK_ORDERS",
+          OR: [
+            { companyId: null },
+            ...(userCompanyId ? [{ companyId: userCompanyId }] : []),
+            { members: { some: { userId } } },
+            ...(isSuperAdmin ? [{}] : []),
+          ],
+        },
+        // Direct messages where user is an explicit member
+        {
+          type: "DIRECT_MESSAGE",
+          members: { some: { userId } },
+        },
+      ],
     },
     include: {
       members: {
