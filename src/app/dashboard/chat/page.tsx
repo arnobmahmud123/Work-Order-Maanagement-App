@@ -548,6 +548,10 @@ function ChatContent() {
           onClose={() => setShowNewChannel(false)}
           users={users}
           userId={userId}
+          onSelectChannel={(newId) => {
+            setActiveChannelId(newId);
+            setShowNewChannel(false);
+          }}
         />
       )}
 
@@ -2423,10 +2427,12 @@ function NewChannelModal({
   onClose,
   users,
   userId,
+  onSelectChannel,
 }: {
   onClose: () => void;
   users: any[];
   userId: string;
+  onSelectChannel?: (id: string) => void;
 }) {
   const createChannel = useCreateChatChannel();
   const [name, setName] = useState("");
@@ -2447,16 +2453,19 @@ function NewChannelModal({
       return;
     }
     try {
-      await createChannel.mutateAsync({
-        name: name.trim().toLowerCase().replace(/\s+/g, "-"),
-        description: description || undefined,
+      const newChan = await createChannel.mutateAsync({
+        name: name.trim().toLowerCase().replace(/^[#\s]+/, "").replace(/\s+/g, "-"),
+        description: description.trim() || undefined,
         type,
         memberIds: selectedMembers,
       });
-      toast.success("Channel created");
+      toast.success("Channel created successfully");
       onClose();
-    } catch {
-      toast.error("Failed to create channel");
+      if (newChan?.id && onSelectChannel) {
+        onSelectChannel(newChan.id);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create channel");
     }
   }
 

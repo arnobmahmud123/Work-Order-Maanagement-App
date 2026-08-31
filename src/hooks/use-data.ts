@@ -1115,7 +1115,10 @@ export function useCreateChatChannel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create channel");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to create channel (${res.status})`);
+      }
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["chat-channels"] }),

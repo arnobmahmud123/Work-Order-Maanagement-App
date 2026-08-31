@@ -167,57 +167,99 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
-    const userRole = (session.user as any).role;
-    const body = await req.json();
-    const { name, description, type, memberIds } = body;
+    let userId = (session.user as any).id;
+    const userEmail = session.user.email ? session.user.email.toLowerCase().trim() : null;
+    let userRole = (session.user as any).role;
 
-    if (userRole === "CONTRACTOR" && type !== "DIRECT_MESSAGE") {
+    // 1. Locate or self-heal creator User record in DB to prevent foreign key errors
+    let dbUser = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
+    if (!dbUser && userEmail) {
+      dbUser = await prisma.user.findUnique({ where: { email: userEmail } });
+      if (dbUser) {
+        userId = dbUser.id;
+        userRole = dbUser.role || userRole;
+      }
+    }
+
+    if (!dbUser) {
+      dbUser = await prisma.user.create({
+        data: {
+          id: userId || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          email: userEmail || `user_${Date.now()}@proppreserve.com`,
+          name: session.user.name || "User",
+          role: userRole || "ADMIN",
+          isActive: true,
+        },
+      });
+      userId = dbUser.id;
+      userRole = dbUser.role || userRole;
+    }
+
+    const body = await req.json();
+    const { name, description, type = "CUSTOM", memberIds, recipientId, workOrderId } = body;
+
+    // Consolidate memberIds if recipientId is passed
+    const memberIdSet = new Set<string>();
+    if (memberIds && Array.isArray(memberIds)) {
+      for (const mId of memberIds) {
+        if (mId && typeof mId === "string" && mId.trim() !== "" && mId.trim() !== userId) {
+          memberIdSet.add(mId.trim());
+        }
+      }
+    }
+    if (recipientId && typeof recipientId === "string" && recipientId.trim() !== "" && recipientId.trim() !== userId) {
+      memberIdSet.add(recipientId.trim());
+    }
+
+    const effectiveRole = dbUser.role || userRole || "CLIENT";
+    // Contractors can create DIRECT_MESSAGE channels and WORK_ORDERS discussions, but cannot create arbitrary public channels
+    if (effectiveRole === "CONTRACTOR" && type !== "DIRECT_MESSAGE" && type !== "WORK_ORDERS") {
       return NextResponse.json(
-        { error: "Forbidden - Contractors are not permitted to create channels" },
+        { error: "Forbidden - Contractors can only create direct messages or work order discussions" },
         { status: 403 }
       );
     }
 
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    }
-
-    // 1. Verify creator user exists in DB to prevent foreign key violation on ChannelMember
-    const userExists = await prisma.user.findUnique({ where: { id: userId } });
-    if (!userExists) {
-      console.warn(`[POST /api/chat/channels] Creator user ID ${userId} does not exist in users table`);
-      return NextResponse.json({ error: "Authenticated user record not found in database" }, { status: 400 });
-    }
-
-    // 2. Validate and fallback companyId if it doesn't exist in Company table
-    let companyId = (session.user as any).companyId || null;
-    if (companyId) {
-      const companyExists = await prisma.company.findUnique({ where: { id: companyId } });
-      if (!companyExists) {
-        console.warn(`[POST /api/chat/channels] Company ID ${companyId} does not exist, resetting to null`);
-        companyId = null;
+    let channelName = (name || "").trim();
+    if (!channelName) {
+      if (type === "DIRECT_MESSAGE") {
+        channelName = "Direct Message";
+      } else if (workOrderId) {
+        channelName = `wo-${workOrderId.slice(-8)}`;
+      } else {
+        channelName = `channel-${Date.now()}`;
       }
+    }
+
+    if (type !== "DIRECT_MESSAGE") {
+      channelName = channelName.toLowerCase().replace(/^[#\s]+/, "").replace(/\s+/g, "-");
+    }
+
+    if (!channelName) {
+      channelName = `channel-${Date.now()}`;
+    }
+
+    // 2. Validate and fallback companyId if not found in database
+    let companyId: string | null = dbUser.companyId || (session.user as any).companyId || null;
+    if (companyId && typeof companyId === "string" && companyId.trim() !== "" && companyId !== "null" && companyId !== "undefined") {
+      const companyExists = await prisma.company.findUnique({ where: { id: companyId.trim() } });
+      companyId = companyExists ? companyExists.id : null;
+    } else {
+      companyId = null;
     }
 
     // 3. Build validated members list
     const membersToCreate = [{ userId, role: "ADMIN" }];
-    if (memberIds && Array.isArray(memberIds)) {
-      for (const mId of memberIds) {
-        if (mId && mId !== userId) {
-          const mExists = await prisma.user.findUnique({ where: { id: mId } });
-          if (mExists) {
-            membersToCreate.push({ userId: mId, role: "MEMBER" });
-          } else {
-            console.warn(`[POST /api/chat/channels] Member user ID ${mId} does not exist, skipping`);
-          }
-        }
+    for (const mId of memberIdSet) {
+      const mExists = await prisma.user.findUnique({ where: { id: mId } });
+      if (mExists) {
+        membersToCreate.push({ userId: mExists.id, role: "MEMBER" });
       }
     }
 
-    // Check if a DIRECT_MESSAGE channel between these two users already exists
-    if (type === "DIRECT_MESSAGE" && memberIds && memberIds.length > 0) {
-      const otherUserId = memberIds.find((id: string) => id !== userId) || memberIds[0];
+    // 4. Check if a DIRECT_MESSAGE channel between these users already exists
+    if (type === "DIRECT_MESSAGE" && memberIdSet.size > 0) {
+      const otherUserId = Array.from(memberIdSet)[0];
       const existingDM = await prisma.channel.findFirst({
         where: {
           type: "DIRECT_MESSAGE",
@@ -228,7 +270,7 @@ export async function POST(req: NextRequest) {
         },
         include: {
           members: {
-            include: { user: { select: { id: true, name: true, email: true, image: true } } },
+            include: { user: { select: { id: true, name: true, email: true, image: true, role: true } } },
           },
           _count: { select: { messages: true, members: true } },
         },
@@ -239,58 +281,92 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check if channel already exists with this name for this company
+    // 5. Check if channel already exists with this name for this company
     const existingChannel = await prisma.channel.findFirst({
-      where: { name, companyId },
+      where: {
+        name: channelName,
+        ...(companyId ? { companyId } : { companyId: null }),
+      },
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true, image: true } } },
+          include: { user: { select: { id: true, name: true, email: true, image: true, role: true } } },
         },
         _count: { select: { messages: true, members: true } },
       },
     });
 
     if (existingChannel) {
-      // If the current user is not a member, add them as a member
-      const isMember = existingChannel.members.some((m: any) => m.userId === userId);
-      if (!isMember) {
-        await prisma.channelMember.create({
-          data: {
-            channelId: existingChannel.id,
-            userId,
-            role: "MEMBER",
-          },
-        });
-        existingChannel.members.push({
-          userId,
-          role: "MEMBER",
-          user: userExists,
-        } as any);
-        existingChannel._count.members += 1;
+      // Ensure all requested members are added
+      for (const m of membersToCreate) {
+        const hasMem = existingChannel.members.some((em: any) => em.userId === m.userId);
+        if (!hasMem) {
+          await prisma.channelMember.upsert({
+            where: { channelId_userId: { channelId: existingChannel.id, userId: m.userId } },
+            create: { channelId: existingChannel.id, userId: m.userId, role: m.role },
+            update: {},
+          });
+        }
       }
-      return NextResponse.json(existingChannel, { status: 200 });
+
+      const refreshed = await prisma.channel.findUnique({
+        where: { id: existingChannel.id },
+        include: {
+          members: {
+            include: { user: { select: { id: true, name: true, email: true, image: true, role: true } } },
+          },
+          _count: { select: { messages: true, members: true } },
+        },
+      });
+
+      return NextResponse.json(refreshed || existingChannel, { status: 200 });
     }
 
+    // 6. Create channel record
     const channel = await prisma.channel.create({
       data: {
-        name,
-        description,
+        name: channelName,
+        description: description ? description.trim() : null,
         type: type || "CUSTOM",
         createdById: userId,
-        companyId,
-        members: {
-          create: membersToCreate,
-        },
+        companyId: companyId || null,
       },
+    });
+
+    // 7. Add validated members safely
+    for (const member of membersToCreate) {
+      try {
+        await prisma.channelMember.upsert({
+          where: {
+            channelId_userId: {
+              channelId: channel.id,
+              userId: member.userId,
+            },
+          },
+          create: {
+            channelId: channel.id,
+            userId: member.userId,
+            role: member.role,
+          },
+          update: {
+            role: member.role,
+          },
+        });
+      } catch (memberErr) {
+        console.warn(`[POST /api/chat/channels] Member add warning for ${member.userId}:`, memberErr);
+      }
+    }
+
+    const fullChannel = await prisma.channel.findUnique({
+      where: { id: channel.id },
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true, image: true } } },
+          include: { user: { select: { id: true, name: true, email: true, image: true, role: true } } },
         },
         _count: { select: { messages: true, members: true } },
       },
     });
 
-    return NextResponse.json(channel, { status: 201 });
+    return NextResponse.json(fullChannel || channel, { status: 201 });
   } catch (error: any) {
     console.error("[POST /api/chat/channels] Error creating channel:", error);
     return NextResponse.json(
