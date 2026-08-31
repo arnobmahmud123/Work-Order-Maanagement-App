@@ -2,13 +2,14 @@
 
 import { useSession } from "next-auth/react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useCalls,
   useInitiateCall,
   useVoiceProfiles,
   useCreateVoiceProfile,
   useWorkOrders,
+  useCallDirectory,
 } from "@/hooks/use-data";
 import { useCallStore } from "@/hooks/use-call";
 import { SmartPhoneDialer } from "@/components/calls/smart-phone-dialer";
@@ -36,6 +37,12 @@ import {
   Bot,
   Star,
   Sparkles,
+  Users,
+  Search,
+  BookUser,
+  ExternalLink,
+  Check,
+  Building,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime, formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -470,11 +477,16 @@ function DialerTab({
   const initiateCall = useInitiateCall();
   const startCall = useCallStore((s) => s.startCall);
   const { data: workOrdersData } = useWorkOrders();
+  const { data: directoryData, isLoading: directoryLoading } = useCallDirectory();
   const workOrders = workOrdersData?.workOrders || [];
+  const contacts: any[] = directoryData?.contacts || [];
 
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState("");
   const [loadingWorkOrder, setLoadingWorkOrder] = useState(false);
   const [callMode, setCallMode] = useState<"ai" | "manual">("ai");
+  const [showDirectoryModal, setShowDirectoryModal] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const [configStatus, setConfigStatus] = useState({
     configured: false,
@@ -484,7 +496,6 @@ function DialerTab({
   });
 
   useEffect(() => {
-    // Load general config
     fetch("/api/calls/config")
       .then((res) => {
         if (res.ok) return res.json();
@@ -503,6 +514,17 @@ function DialerTab({
       .catch(() => {});
   }, []);
 
+  // Close autocomplete on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [form, setForm] = useState({
     recipientPhone: "",
     recipientName: "",
@@ -510,6 +532,30 @@ function DialerTab({
     voiceProfileId: "",
     recipientId: "",
   });
+
+  // Filter directory contacts for autocomplete dropdown
+  const filteredSuggestions = contacts.filter((c) => {
+    if (!form.recipientName) return true;
+    const query = form.recipientName.toLowerCase();
+    return (
+      c.name?.toLowerCase().includes(query) ||
+      c.phone?.toLowerCase().includes(query) ||
+      c.email?.toLowerCase().includes(query) ||
+      c.role?.toLowerCase().includes(query)
+    );
+  }).slice(0, 6);
+
+  const handleSelectContact = (c: any) => {
+    setForm((prev) => ({
+      ...prev,
+      recipientName: c.name,
+      recipientPhone: c.phone || prev.recipientPhone,
+      recipientId: c.id,
+      purpose: prev.purpose || `Call with ${c.name} (${c.role})`,
+    }));
+    setShowSuggestions(false);
+    toast.success(`Selected ${c.name} ${c.phone ? `(${c.phone})` : ""}`);
+  };
 
   async function handleWorkOrderChange(woId: string) {
     setSelectedWorkOrderId(woId);
@@ -615,22 +661,35 @@ function DialerTab({
     }
   }
 
-  // Find quick contractor speed dials from assigned work orders
-  const speedDialContractors = workOrders
-    .filter((wo: any) => wo.contractor && wo.contractor.phone)
-    .reduce((acc: any[], wo: any) => {
-      if (!acc.some((item) => item.phone === wo.contractor.phone)) {
-        acc.push({
-          id: wo.contractor.id,
-          name: wo.contractor.name,
-          phone: wo.contractor.phone,
-          workOrderTitle: wo.title,
-          workOrderId: wo.id,
-        });
-      }
-      return acc;
-    }, [])
-    .slice(0, 4);
+  // Find quick contractor speed dials from assigned work orders or active directory
+  const speedDialContractors = (
+    workOrders
+      .filter((wo: any) => wo.contractor && wo.contractor.phone)
+      .map((wo: any) => ({
+        id: wo.contractor.id,
+        name: wo.contractor.name,
+        phone: wo.contractor.phone,
+        workOrderTitle: wo.title,
+        workOrderId: wo.id,
+        role: "CONTRACTOR",
+      }))
+  ).concat(
+    contacts
+      .filter((c: any) => c.phone && c.role === "CONTRACTOR")
+      .map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        workOrderTitle: "Contractor Directory",
+        workOrderId: "",
+        role: c.role,
+      }))
+  ).reduce((acc: any[], item: any) => {
+    if (!acc.some((x) => x.phone === item.phone)) {
+      acc.push(item);
+    }
+    return acc;
+  }, []).slice(0, 4);
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -646,31 +705,43 @@ function DialerTab({
                     <span>Call Details & Setup</span>
                   </div>
                   
-                  <div className="flex items-center bg-surface-hover rounded-xl p-1 border border-border-subtle">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setCallMode("ai")}
-                      className={cn(
-                        "px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                        callMode === "ai"
-                          ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md"
-                          : "text-text-muted hover:text-text-primary"
-                      )}
+                      onClick={() => setShowDirectoryModal(true)}
+                      className="px-2.5 py-1 text-xs font-bold rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                      title="Browse Contractor Directory"
                     >
-                      AI Voice
+                      <Users className="h-3.5 w-3.5" />
+                      <span>Directory</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setCallMode("manual")}
-                      className={cn(
-                        "px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                        callMode === "manual"
-                          ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md"
-                          : "text-text-muted hover:text-text-primary"
-                      )}
-                    >
-                      Manual
-                    </button>
+
+                    <div className="flex items-center bg-surface-hover rounded-xl p-1 border border-border-subtle">
+                      <button
+                        type="button"
+                        onClick={() => setCallMode("ai")}
+                        className={cn(
+                          "px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                          callMode === "ai"
+                            ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md"
+                            : "text-text-muted hover:text-text-primary"
+                        )}
+                      >
+                        AI Voice
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCallMode("manual")}
+                        className={cn(
+                          "px-3 py-1 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                          callMode === "manual"
+                            ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md"
+                            : "text-text-muted hover:text-text-primary"
+                        )}
+                      >
+                        Manual
+                      </button>
+                    </div>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -703,6 +774,7 @@ function DialerTab({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Recipient Phone with Direct Dialer Binding */}
                   <div>
                     <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
                       Recipient Phone *
@@ -717,17 +789,66 @@ function DialerTab({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-text-dim uppercase tracking-wider mb-1">
-                      Recipient Name
-                    </label>
+                  {/* Recipient Name with Autocomplete Search */}
+                  <div className="relative" ref={suggestionsRef}>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-text-dim uppercase tracking-wider">
+                        Recipient Name
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectoryModal(true)}
+                        className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <BookUser className="h-3 w-3" />
+                        <span>Contacts</span>
+                      </button>
+                    </div>
+
                     <input
                       type="text"
                       value={form.recipientName}
-                      onChange={(e) => setForm({ ...form, recipientName: e.target.value })}
-                      placeholder="John Doe"
+                      onChange={(e) => {
+                        setForm({ ...form, recipientName: e.target.value });
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      placeholder="Type name or pick contact..."
                       className="block w-full rounded-xl border border-border-medium px-3.5 py-2 text-sm bg-surface text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none transition-all shadow-inner"
                     />
+
+                    {/* Interactive Autocomplete Suggestions Dropdown */}
+                    {showSuggestions && filteredSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-slate-900 border border-cyan-500/30 rounded-xl shadow-2xl overflow-hidden backdrop-blur-xl animate-fade-in max-h-56 overflow-y-auto">
+                        <div className="px-3 py-1.5 bg-slate-950/80 border-b border-white/5 flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          <span>Directory Matches</span>
+                          <span>{filteredSuggestions.length} found</span>
+                        </div>
+                        {filteredSuggestions.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => handleSelectContact(c)}
+                            className="w-full px-3 py-2 text-left hover:bg-cyan-500/10 flex items-center justify-between transition-colors border-b border-white/5 last:border-0 group cursor-pointer"
+                          >
+                            <div className="min-w-0 pr-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors truncate">
+                                  {c.name}
+                                </span>
+                                <Badge className="text-[9px] py-0 px-1.5 uppercase font-black bg-cyan-500/20 text-cyan-300">
+                                  {c.role}
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] font-mono text-slate-400 mt-0.5">{c.phone || c.email}</p>
+                            </div>
+                            <div className="h-6 w-6 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-white transition-all flex-shrink-0">
+                              <Phone className="h-3 w-3" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -792,12 +913,18 @@ function DialerTab({
 
             {/* Quick Speed Dial Mini Bar */}
             {speedDialContractors.length > 0 && (
-              <div className="p-4 mx-6 mb-4 rounded-xl bg-surface-hover/70 border border-border-subtle">
+              <div className="p-3 mx-6 mb-4 rounded-xl bg-surface-hover/70 border border-border-subtle">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-black text-text-dim uppercase tracking-wider flex items-center gap-1">
-                    <Star className="h-3 w-3 text-yellow-500" /> Speed Dial
+                    <Star className="h-3 w-3 text-yellow-500" /> Contractor Speed Dial
                   </span>
-                  <span className="text-[9px] text-text-muted">Click to populate</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectoryModal(true)}
+                    className="text-[9px] font-bold text-cyan-400 hover:underline cursor-pointer"
+                  >
+                    View All Directory
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {speedDialContractors.slice(0, 2).map((c: any) => (
@@ -810,9 +937,9 @@ function DialerTab({
                           recipientPhone: c.phone,
                           recipientName: c.name,
                           recipientId: c.id,
-                          purpose: `Follow up on work order: ${c.workOrderTitle}`,
+                          purpose: prev.purpose || `Follow up on ${c.workOrderTitle}`,
                         }));
-                        setSelectedWorkOrderId(c.workOrderId);
+                        if (c.workOrderId) setSelectedWorkOrderId(c.workOrderId);
                         toast.success(`Loaded ${c.name}`);
                       }}
                       className="p-2 rounded-lg border border-border-subtle bg-surface hover:border-cyan-500/40 text-left flex items-center justify-between transition-all group cursor-pointer"
@@ -858,7 +985,184 @@ function DialerTab({
           </div>
         </div>
       </div>
+
+      {/* Contractor & Team Directory Modal */}
+      <ContractorDirectoryModal
+        isOpen={showDirectoryModal}
+        onClose={() => setShowDirectoryModal(false)}
+        contacts={contacts}
+        loading={directoryLoading}
+        onSelect={(c) => {
+          handleSelectContact(c);
+          setShowDirectoryModal(false);
+        }}
+        onDirectCall={(phone, c) => {
+          handleSelectContact(c);
+          setShowDirectoryModal(false);
+          handleManualCall(phone);
+        }}
+        onAiCall={(phone, c) => {
+          handleSelectContact(c);
+          setShowDirectoryModal(false);
+          handleAiCall(phone);
+        }}
+      />
     </div>
+  );
+}
+
+function ContractorDirectoryModal({
+  isOpen,
+  onClose,
+  contacts,
+  loading,
+  onSelect,
+  onDirectCall,
+  onAiCall,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  contacts: any[];
+  loading: boolean;
+  onSelect: (contact: any) => void;
+  onDirectCall: (phone: string, contact: any) => void;
+  onAiCall: (phone: string, contact: any) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+
+  const filtered = contacts.filter((c) => {
+    if (roleFilter !== "ALL" && c.role !== roleFilter) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      c.name?.toLowerCase().includes(q) ||
+      c.phone?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.company?.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Contractor & Team Directory" size="lg">
+      <div className="space-y-4">
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search contractors by name, phone, or company..."
+              className="w-full pl-9 pr-4 py-2 bg-surface-hover border border-border-medium rounded-xl text-sm text-text-primary focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex rounded-lg border border-border-subtle bg-surface-hover p-0.5 overflow-x-auto">
+            {["ALL", "CONTRACTOR", "COORDINATOR", "ADMIN"].map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRoleFilter(r)}
+                className={cn(
+                  "px-3 py-1 text-xs font-bold rounded-md capitalize transition-all cursor-pointer whitespace-nowrap",
+                  roleFilter === r
+                    ? "bg-cyan-500 text-white shadow-sm"
+                    : "text-text-muted hover:text-text-primary"
+                )}
+              >
+                {r === "ALL" ? "All" : r.toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Directory List */}
+        <div className="max-h-96 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/[0.08]">
+          {loading ? (
+            <div className="text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-cyan-500 mx-auto mb-2" />
+              <p className="text-sm text-text-muted">Loading directory contacts...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-border-subtle rounded-2xl">
+              <Users className="h-8 w-8 text-text-dim mx-auto mb-2" />
+              <p className="text-sm font-bold text-text-primary">No contacts found</p>
+              <p className="text-xs text-text-muted mt-0.5">Try searching with a different name or role</p>
+            </div>
+          ) : (
+            filtered.map((c) => (
+              <div
+                key={c.id}
+                className="p-3 rounded-xl border border-border-subtle bg-surface-hover/60 hover:bg-surface-hover hover:border-cyan-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center font-black text-cyan-300 text-sm flex-shrink-0">
+                    {c.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors truncate">
+                        {c.name}
+                      </h4>
+                      <Badge className="text-[10px] font-black uppercase py-0 px-2 bg-cyan-500/15 text-cyan-300 border border-cyan-500/20">
+                        {c.role}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5">
+                      <span className="font-mono font-semibold text-text-secondary">{c.phone || "No phone"}</span>
+                      {c.company && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{c.company}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direct Action Buttons */}
+                <div className="flex items-center gap-1.5 self-end sm:self-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onSelect(c)}
+                    className="text-xs h-8 px-2.5 hover:border-cyan-500 hover:text-cyan-400 cursor-pointer"
+                  >
+                    Select
+                  </Button>
+                  
+                  {c.phone && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onDirectCall(c.phone, c)}
+                        className="h-8 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white border border-emerald-500/30 text-xs font-bold flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+                        title="Direct Manual Call"
+                      >
+                        <Phone className="h-3 w-3" />
+                        <span>Direct</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onAiCall(c.phone, c)}
+                        className="h-8 px-2.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500 text-cyan-400 hover:text-white border border-cyan-500/30 text-xs font-bold flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+                        title="AI Cloned Voice Call"
+                      >
+                        <Bot className="h-3 w-3" />
+                        <span>AI Call</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

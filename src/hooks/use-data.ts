@@ -1007,6 +1007,24 @@ export function useCreateVoiceProfile() {
   });
 }
 
+// ─── Call Directory ─────────────────────────────────────────────────────────
+
+export function useCallDirectory(search?: string, role?: string) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (role) params.set("role", role);
+
+  return useQuery({
+    queryKey: ["call-directory", search, role],
+    queryFn: async () => {
+      const res = await fetch(`/api/calls/directory?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch call directory");
+      return res.json();
+    },
+    staleTime: 1000 * 30,
+  });
+}
+
 // ─── Scheduled Calls ─────────────────────────────────────────────────────────
 
 export function useScheduledCalls(status?: string) {
