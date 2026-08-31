@@ -836,28 +836,6 @@ function DialerTab({
               </div>
             </Card>
           )}
-
-          {/* Twilio/ElevenLabs Integration Status */}
-          <Card className="border-dashed">
-            <div className="flex items-center gap-3 text-sm text-text-muted">
-              <Radio className={cn("h-4 w-4", configStatus.configured ? "text-green-500 animate-pulse" : "text-yellow-500")} />
-              <span>
-                <strong className="text-text-dim">Call Routing Provider</strong> — {configStatus.provider}
-              </span>
-              <Badge className={cn("ml-auto", configStatus.configured ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700")}>
-                {configStatus.configured ? "Active" : "Simulation Mode"}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-3 text-sm text-text-muted mt-3">
-              <Waves className="h-4 w-4 text-purple-500" />
-              <span>
-                <strong className="text-text-dim">ElevenLabs Voice AI</strong> — {configStatus.elevenLabsStatus}
-              </span>
-              <Badge className="bg-purple-100 text-purple-700 ml-auto">
-                {configStatus.configured ? "Ready" : "Offline"}
-              </Badge>
-            </div>
-          </Card>
         </div>
 
         {/* Right Side: Dashing Smart Phone Keypad Dialer */}
