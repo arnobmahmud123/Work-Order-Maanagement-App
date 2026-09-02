@@ -3592,10 +3592,8 @@ export default function WorkOrderDetailPage({
                 >
                   <option value="datetime">✓ With date & time stamp</option>
                   <option value="date">With date only stamp</option>
-                  <option value="time">With time only stamp</option>
                   <option value="custom">Custom date & time stamp</option>
                   <option value="customDate">Custom date only (without time)</option>
-                  <option value="customTime">Custom time only (without date)</option>
                   <option value="datetimeExif">With date, time & EXIF data</option>
                   <option value="none">Without date/time stamp</option>
                 </select>
@@ -3611,14 +3609,6 @@ export default function WorkOrderDetailPage({
                   <input
                     type="date"
                     value={photoTabCustomDateTime ? photoTabCustomDateTime.split("T")[0] : ""}
-                    onChange={(e) => setPhotoTabCustomDateTime(e.target.value)}
-                    className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400 outline-none"
-                  />
-                )}
-                {photoTabDownloadMode === "customTime" && (
-                  <input
-                    type="time"
-                    value={photoTabCustomDateTime && photoTabCustomDateTime.includes("T") ? photoTabCustomDateTime.split("T")[1]?.substring(0, 5) : photoTabCustomDateTime}
                     onChange={(e) => setPhotoTabCustomDateTime(e.target.value)}
                     className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400 outline-none"
                   />
@@ -5647,10 +5637,8 @@ function AllPhotosModal({
             >
               <option value="datetime">With date & time stamp</option>
               <option value="date">With date only stamp</option>
-              <option value="time">With time only stamp</option>
               <option value="custom">Custom date & time stamp</option>
               <option value="customDate">Custom date only (without time)</option>
-              <option value="customTime">Custom time only (without date)</option>
               <option value="datetimeExif">With date, time & EXIF data</option>
               <option value="none">Without date/time stamp</option>
             </select>
@@ -5670,15 +5658,6 @@ function AllPhotosModal({
                 onChange={(e) => setCustomDownloadDateTime(e.target.value)}
                 className="h-8 rounded-lg border border-border-subtle bg-surface-hover px-2 text-xs text-text-primary outline-none"
                 title="Custom date only (without time)"
-              />
-            )}
-            {downloadMode === "customTime" && (
-              <input
-                type="time"
-                value={customDownloadDateTime && customDownloadDateTime.includes("T") ? customDownloadDateTime.split("T")[1]?.substring(0, 5) : customDownloadDateTime}
-                onChange={(e) => setCustomDownloadDateTime(e.target.value)}
-                className="h-8 rounded-lg border border-border-subtle bg-surface-hover px-2 text-xs text-text-primary outline-none"
-                title="Custom time only (without date)"
               />
             )}
             <button
