@@ -543,7 +543,7 @@ export default function WorkOrderDetailPage({
   const viewLogged = useRef(false);
   const [globalPhotos, setGlobalPhotos] = useState<PhotoItem[]>([]);
   const [activeTab, setActiveTab] = useState<string>("overview");
-  const [photoTabDownloadMode, setPhotoTabDownloadMode] = useState<"none" | "date" | "datetime" | "datetimeExif" | "custom">("datetime");
+  const [photoTabDownloadMode, setPhotoTabDownloadMode] = useState<"none" | "date" | "time" | "datetime" | "datetimeExif" | "custom" | "customDate" | "customTime">("datetime");
   const [photoTabCustomDateTime, setPhotoTabCustomDateTime] = useState("");
   const [photoTabDownloading, setPhotoTabDownloading] = useState(false);
 
@@ -2037,8 +2037,10 @@ export default function WorkOrderDetailPage({
   }
 
   function photoStampText(photo: any, mode: typeof photoTabDownloadMode, customValue?: string) {
-    const date = photoStampDate(photo, mode === "custom" ? customValue : undefined);
-    if (mode === "date") return date.toLocaleDateString();
+    const isCustom = mode === "custom" || mode === "customDate" || mode === "customTime";
+    const date = photoStampDate(photo, isCustom ? customValue : undefined);
+    if (mode === "date" || mode === "customDate") return date.toLocaleDateString();
+    if (mode === "time" || mode === "customTime") return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
     if (mode === "datetime" || mode === "custom") return date.toLocaleString();
     const exifParts = [
       photo.category ? `Category: ${photo.category}` : null,
@@ -3585,19 +3587,38 @@ export default function WorkOrderDetailPage({
               <div className="flex items-center bg-surface/60 backdrop-blur-md border border-border-subtle rounded-2xl p-1 gap-2">
                 <select
                   value={photoTabDownloadMode}
-                  onChange={(e) => setPhotoTabDownloadMode(e.target.value as typeof photoTabDownloadMode)}
+                  onChange={(e) => setPhotoTabDownloadMode(e.target.value as any)}
                   className="bg-transparent px-3 py-1.5 text-xs text-text-secondary outline-none font-bold cursor-pointer"
                 >
                   <option value="datetime">✓ With date & time stamp</option>
                   <option value="date">With date only stamp</option>
-                  <option value="datetimeExif">With date, time & EXIF data</option>
+                  <option value="time">With time only stamp</option>
                   <option value="custom">Custom date & time stamp</option>
+                  <option value="customDate">Custom date only (without time)</option>
+                  <option value="customTime">Custom time only (without date)</option>
+                  <option value="datetimeExif">With date, time & EXIF data</option>
                   <option value="none">Without date/time stamp</option>
                 </select>
                 {photoTabDownloadMode === "custom" && (
                   <input
                     type="datetime-local"
                     value={photoTabCustomDateTime}
+                    onChange={(e) => setPhotoTabCustomDateTime(e.target.value)}
+                    className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400 outline-none"
+                  />
+                )}
+                {photoTabDownloadMode === "customDate" && (
+                  <input
+                    type="date"
+                    value={photoTabCustomDateTime ? photoTabCustomDateTime.split("T")[0] : ""}
+                    onChange={(e) => setPhotoTabCustomDateTime(e.target.value)}
+                    className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400 outline-none"
+                  />
+                )}
+                {photoTabDownloadMode === "customTime" && (
+                  <input
+                    type="time"
+                    value={photoTabCustomDateTime && photoTabCustomDateTime.includes("T") ? photoTabCustomDateTime.split("T")[1]?.substring(0, 5) : photoTabCustomDateTime}
                     onChange={(e) => setPhotoTabCustomDateTime(e.target.value)}
                     className="bg-surface-hover border border-border-medium rounded-xl px-3 py-1.5 text-xs text-cyan-700 dark:text-cyan-400 outline-none"
                   />
@@ -5314,7 +5335,7 @@ function AllPhotosModal({
   const [filter, setFilter] = useState<string>("ALL");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
-  const [downloadMode, setDownloadMode] = useState<"none" | "date" | "datetime" | "datetimeExif" | "custom">("datetime");
+  const [downloadMode, setDownloadMode] = useState<"none" | "date" | "time" | "datetime" | "datetimeExif" | "custom" | "customDate" | "customTime">("datetime");
   const [customDownloadDateTime, setCustomDownloadDateTime] = useState("");
   const [downloadingPhotos, setDownloadingPhotos] = useState(false);
 
@@ -5620,14 +5641,17 @@ function AllPhotosModal({
             )}
             <select
               value={downloadMode}
-              onChange={(e) => setDownloadMode(e.target.value as typeof downloadMode)}
+              onChange={(e) => setDownloadMode(e.target.value as any)}
               className="h-8 rounded-lg border border-border-subtle bg-surface-hover px-2 text-xs text-text-primary outline-none"
               title="Download stamp option"
             >
               <option value="datetime">With date & time stamp</option>
               <option value="date">With date only stamp</option>
-              <option value="datetimeExif">With date, time & EXIF data</option>
+              <option value="time">With time only stamp</option>
               <option value="custom">Custom date & time stamp</option>
+              <option value="customDate">Custom date only (without time)</option>
+              <option value="customTime">Custom time only (without date)</option>
+              <option value="datetimeExif">With date, time & EXIF data</option>
               <option value="none">Without date/time stamp</option>
             </select>
             {downloadMode === "custom" && (
@@ -5637,6 +5661,24 @@ function AllPhotosModal({
                 onChange={(e) => setCustomDownloadDateTime(e.target.value)}
                 className="h-8 rounded-lg border border-border-subtle bg-surface-hover px-2 text-xs text-text-primary outline-none"
                 title="Custom stamp date and time"
+              />
+            )}
+            {downloadMode === "customDate" && (
+              <input
+                type="date"
+                value={customDownloadDateTime ? customDownloadDateTime.split("T")[0] : ""}
+                onChange={(e) => setCustomDownloadDateTime(e.target.value)}
+                className="h-8 rounded-lg border border-border-subtle bg-surface-hover px-2 text-xs text-text-primary outline-none"
+                title="Custom date only (without time)"
+              />
+            )}
+            {downloadMode === "customTime" && (
+              <input
+                type="time"
+                value={customDownloadDateTime && customDownloadDateTime.includes("T") ? customDownloadDateTime.split("T")[1]?.substring(0, 5) : customDownloadDateTime}
+                onChange={(e) => setCustomDownloadDateTime(e.target.value)}
+                className="h-8 rounded-lg border border-border-subtle bg-surface-hover px-2 text-xs text-text-primary outline-none"
+                title="Custom time only (without date)"
               />
             )}
             <button

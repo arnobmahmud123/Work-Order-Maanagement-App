@@ -4,7 +4,7 @@ import { optimizePhotoForDownload } from "@/lib/image-compression";
 import { triggerFileDownload } from "@/lib/download-helper";
 import toast from "react-hot-toast";
 
-export type PhotoStampMode = "datetime" | "date" | "datetimeExif" | "custom" | "none";
+export type PhotoStampMode = "datetime" | "date" | "time" | "datetimeExif" | "custom" | "customDate" | "customTime" | "none";
 
 export interface PhotoDownloadItem {
   id?: string;
@@ -158,14 +158,16 @@ export function safeFileName(value: string) {
 }
 
 export function getPhotoDate(photo: PhotoDownloadItem, mode: PhotoStampMode, customValue?: string): Date {
-  const raw = mode === "custom" && customValue ? customValue : photo.timestamp || photo.createdAt || photo.updatedAt || photo.date;
+  const isCustom = mode === "custom" || mode === "customDate" || mode === "customTime";
+  const raw = isCustom && customValue ? customValue : photo.timestamp || photo.createdAt || photo.updatedAt || photo.date;
   const parsed = raw ? new Date(raw) : new Date();
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 export function getStampText(photo: PhotoDownloadItem, mode: PhotoStampMode, customValue?: string): string {
   const date = getPhotoDate(photo, mode, customValue);
-  if (mode === "date") return date.toLocaleDateString();
+  if (mode === "date" || mode === "customDate") return date.toLocaleDateString();
+  if (mode === "time" || mode === "customTime") return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
   if (mode === "datetime" || mode === "custom") return date.toLocaleString();
   if (mode === "datetimeExif") {
     const exifParts = [

@@ -229,8 +229,11 @@ export function ItemPhotoDownloadModal({
               >
                 <option value="datetime">✓ With date & time stamp</option>
                 <option value="date">With date only stamp</option>
-                <option value="datetimeExif">With date, time & EXIF data</option>
+                <option value="time">With time only stamp</option>
                 <option value="custom">Custom date & time stamp</option>
+                <option value="customDate">Custom date only (without time)</option>
+                <option value="customTime">Custom time only (without date)</option>
+                <option value="datetimeExif">With date, time & EXIF data</option>
                 <option value="none">Without date/time stamp</option>
               </select>
             </div>
@@ -243,6 +246,24 @@ export function ItemPhotoDownloadModal({
                 onChange={(e) => setCustomDateTime(e.target.value)}
                 className="h-9 rounded-xl border border-cyan-500/40 bg-surface px-2.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-cyan-500/20"
                 title="Pick custom date and time to stamp on photos"
+              />
+            )}
+            {downloadMode === "customDate" && (
+              <input
+                type="date"
+                value={customDateTime ? customDateTime.split("T")[0] : ""}
+                onChange={(e) => setCustomDateTime(e.target.value)}
+                className="h-9 rounded-xl border border-cyan-500/40 bg-surface px-2.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-cyan-500/20"
+                title="Pick custom date (without time) to stamp on photos"
+              />
+            )}
+            {downloadMode === "customTime" && (
+              <input
+                type="time"
+                value={customDateTime && customDateTime.includes("T") ? customDateTime.split("T")[1]?.substring(0, 5) : customDateTime}
+                onChange={(e) => setCustomDateTime(e.target.value)}
+                className="h-9 rounded-xl border border-cyan-500/40 bg-surface px-2.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-cyan-500/20"
+                title="Pick custom time (without date) to stamp on photos"
               />
             )}
 

@@ -84,7 +84,8 @@ function cropAndResizeImage(
 
 export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
-  const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom">("datetime");
+  const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "time" | "custom" | "custom_date" | "custom_time">("datetime");
+  const isCustomMode = downloadMode === "custom" || downloadMode === "custom_date" || downloadMode === "custom_time";
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [customTimeStart, setCustomTimeStart] = useState("");
   const [customTimeEnd, setCustomTimeEnd] = useState("");
@@ -260,7 +261,7 @@ export default function ExifToolsPage() {
   }, [photos, customDate, customTimeStart, customTimeEnd]);
 
   const getEffectiveDateTime = (photo: ProcessedPhoto): Date => {
-    if (downloadMode !== "custom") {
+    if (!isCustomMode) {
       return photo.exifData?.dateTime || new Date(photo.file.lastModified);
     }
     const timedPhoto = photoTimeline.photoMap.get(photo.id);
@@ -295,8 +296,8 @@ export default function ExifToolsPage() {
         };
       });
 
-      // 2. GLOBAL CROSS-CATEGORY VALIDATION — not just sequential (Only in Custom Timeline mode)
-      if (downloadMode === "custom") {
+      // 2. GLOBAL CROSS-CATEGORY VALIDATION — not just sequential (Only in Custom Timeline modes)
+      if (isCustomMode) {
         // 2a. Sequential monotonicity
         for (let i = 1; i < timelineItems.length; i++) {
           const prev = timelineItems[i - 1];
@@ -368,12 +369,25 @@ export default function ExifToolsPage() {
         const croppedCanvas = cropAndResizeImage(img, cropRatio, maxDimension);
         
         // 2. Generate yellow timestamp overlay on top of the cropped & resized canvas
+        const showDate = printTimestamp && (
+          downloadMode === "date" || 
+          downloadMode === "datetime" || 
+          downloadMode === "custom" || 
+          downloadMode === "custom_date"
+        );
+        const showTime = printTimestamp && (
+          downloadMode === "time" || 
+          downloadMode === "datetime" || 
+          downloadMode === "custom" || 
+          downloadMode === "custom_time"
+        );
+
         const canvas = generatePhotoWithOverlay(croppedCanvas, {
           dateTime: effectiveDate,
           gps: effectiveGPS
         }, {
-          showDate: printTimestamp,
-          showTime: printTimestamp && downloadMode !== "date",
+          showDate,
+          showTime,
           showGPS: false,
           showAddress: false,
           position: "bottom-right",
@@ -573,17 +587,9 @@ export default function ExifToolsPage() {
                     <div>
                       <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timestamp Settings</h3>
                       <div className="space-y-2">
-                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
-                          <input 
-                            type="radio" 
-                            name="mode" 
-                            checked={downloadMode === "date"} 
-                            onChange={() => setDownloadMode("date")} 
-                            className="text-cyan-500 focus:ring-cyan-500" 
-                          />
-                          <span className="text-sm font-medium text-text-primary">EXIF Date Only</span>
-                        </label>
-                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                        <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider px-1 pt-0.5">Camera EXIF Timestamps</div>
+                        
+                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
                           <input 
                             type="radio" 
                             name="mode" 
@@ -591,9 +597,43 @@ export default function ExifToolsPage() {
                             onChange={() => setDownloadMode("datetime")} 
                             className="text-cyan-500 focus:ring-cyan-500" 
                           />
-                          <span className="text-sm font-medium text-text-primary">EXIF Date & Time</span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-text-primary block">EXIF Date & Time</span>
+                            <span className="text-[10px] text-text-muted">Original date and time from camera</span>
+                          </div>
                         </label>
-                        <label className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+
+                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                          <input 
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "date"} 
+                            onChange={() => setDownloadMode("date")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
+                          />
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-text-primary block">EXIF Date Only</span>
+                            <span className="text-[10px] text-text-muted">Original date without time</span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                          <input 
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "time"} 
+                            onChange={() => setDownloadMode("time")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
+                          />
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-text-primary block">EXIF Time Only</span>
+                            <span className="text-[10px] text-text-muted">Original time without date</span>
+                          </div>
+                        </label>
+
+                        <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider px-1 pt-2">Custom Timeline Stamping</div>
+
+                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
                           <input 
                             type="radio" 
                             name="mode" 
@@ -601,12 +641,43 @@ export default function ExifToolsPage() {
                             onChange={() => setDownloadMode("custom")} 
                             className="text-cyan-500 focus:ring-cyan-500" 
                           />
-                          <span className="text-sm font-medium text-text-primary">Custom Date/Time (Timeline)</span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-text-primary block">Custom Date/Time (Timeline)</span>
+                            <span className="text-[10px] text-text-muted">Sequential timeline with date & time</span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                          <input 
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "custom_date"} 
+                            onChange={() => setDownloadMode("custom_date")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
+                          />
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-text-primary block">Custom Date Only (Without Time)</span>
+                            <span className="text-[10px] text-text-muted">Custom date without time (shows date only)</span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
+                          <input 
+                            type="radio" 
+                            name="mode" 
+                            checked={downloadMode === "custom_time"} 
+                            onChange={() => setDownloadMode("custom_time")} 
+                            className="text-cyan-500 focus:ring-cyan-500" 
+                          />
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-text-primary block">Custom Time Only (Timeline)</span>
+                            <span className="text-[10px] text-text-muted">Continuous timeline time (shows only time)</span>
+                          </div>
                         </label>
                       </div>
                     </div>
 
-                    {downloadMode === "custom" && (
+                    {isCustomMode && (
                       <div>
                         <h3 className="text-sm font-black text-text-primary uppercase tracking-widest mb-3">Timeline Configuration</h3>
                         
@@ -872,6 +943,9 @@ export default function ExifToolsPage() {
                       if (!photo) return null;
                       const effDate = getEffectiveDateTime(photo);
                       const effGPS = getEffectiveGPS(photo);
+                      const showDateInCard = downloadMode === "date" || downloadMode === "datetime" || downloadMode === "custom" || downloadMode === "custom_date";
+                      const showTimeInCard = downloadMode === "time" || downloadMode === "datetime" || downloadMode === "custom" || downloadMode === "custom_time";
+
                       return (
                         <div 
                           key={photo.id} 
@@ -943,27 +1017,42 @@ export default function ExifToolsPage() {
                           {/* Metadata Overlay Preview */}
                           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3 pt-8">
                             <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300">
-                                  <Calendar className="h-3 w-3" />
-                                  {effDate ? effDate.toLocaleDateString() : "No Date"}
-                                </div>
-                                {photo.category && photo.category !== "none" && (
-                                  <div className={`px-1 rounded text-[8px] font-black uppercase tracking-wider text-white border ${
-                                    photo.category === "before"
-                                      ? "bg-cyan-600/80 border-cyan-400/40"
-                                      : photo.category === "during"
-                                      ? "bg-amber-600/80 border-amber-400/40"
-                                      : "bg-emerald-600/80 border-emerald-400/40"
-                                  }`}>
-                                    {photo.category}
+                              {showDateInCard && (
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300">
+                                    <Calendar className="h-3 w-3" />
+                                    {effDate ? effDate.toLocaleDateString() : "No Date"}
                                   </div>
-                                )}
-                              </div>
-                              {downloadMode !== "date" && (
-                                <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
-                                  <Clock className="h-3 w-3" />
-                                  {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
+                                  {photo.category && photo.category !== "none" && (
+                                    <div className={`px-1 rounded text-[8px] font-black uppercase tracking-wider text-white border ${
+                                      photo.category === "before"
+                                        ? "bg-cyan-600/80 border-cyan-400/40"
+                                        : photo.category === "during"
+                                        ? "bg-amber-600/80 border-amber-400/40"
+                                        : "bg-emerald-600/80 border-emerald-400/40"
+                                    }`}>
+                                      {photo.category}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {showTimeInCard && (
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 text-xs font-mono text-cyan-300/80">
+                                    <Clock className="h-3 w-3" />
+                                    {effDate ? effDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "--:--"}
+                                  </div>
+                                  {!showDateInCard && photo.category && photo.category !== "none" && (
+                                    <div className={`px-1 rounded text-[8px] font-black uppercase tracking-wider text-white border ${
+                                      photo.category === "before"
+                                        ? "bg-cyan-600/80 border-cyan-400/40"
+                                        : photo.category === "during"
+                                        ? "bg-amber-600/80 border-amber-400/40"
+                                        : "bg-emerald-600/80 border-emerald-400/40"
+                                    }`}>
+                                      {photo.category}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               {effGPS ? (
