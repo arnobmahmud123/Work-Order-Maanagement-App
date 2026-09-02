@@ -84,8 +84,8 @@ function cropAndResizeImage(
 
 export default function ExifToolsPage() {
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
-  const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "time" | "custom" | "custom_date" | "custom_time">("datetime");
-  const isCustomMode = downloadMode === "custom" || downloadMode === "custom_date" || downloadMode === "custom_time";
+  const [downloadMode, setDownloadMode] = useState<"date" | "datetime" | "custom" | "custom_date">("datetime");
+  const isCustomMode = downloadMode === "custom" || downloadMode === "custom_date";
   const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [customTimeStart, setCustomTimeStart] = useState("");
   const [customTimeEnd, setCustomTimeEnd] = useState("");
@@ -115,14 +115,13 @@ export default function ExifToolsPage() {
   const dragCounter = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Pre-populate GPS fields if one of the uploaded photos contains GPS data
+  // Pre-populate GPS fields if one of the uploaded photos contains GPS data (overrideGPS remains unchecked by default)
   useEffect(() => {
     if (photos.length > 0 && !customLatitude && !customLongitude) {
       const photoWithGps = photos.find(p => p.exifData?.gps);
       if (photoWithGps?.exifData?.gps) {
         setCustomLatitude(photoWithGps.exifData.gps.latitude.toString());
         setCustomLongitude(photoWithGps.exifData.gps.longitude.toString());
-        setOverrideGPS(true);
       }
     }
   }, [photos, customLatitude, customLongitude]);
@@ -376,10 +375,8 @@ export default function ExifToolsPage() {
           downloadMode === "custom_date"
         );
         const showTime = printTimestamp && (
-          downloadMode === "time" || 
           downloadMode === "datetime" || 
-          downloadMode === "custom" || 
-          downloadMode === "custom_time"
+          downloadMode === "custom"
         );
 
         const canvas = generatePhotoWithOverlay(croppedCanvas, {
@@ -617,20 +614,6 @@ export default function ExifToolsPage() {
                           </div>
                         </label>
 
-                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
-                          <input 
-                            type="radio" 
-                            name="mode" 
-                            checked={downloadMode === "time"} 
-                            onChange={() => setDownloadMode("time")} 
-                            className="text-cyan-500 focus:ring-cyan-500" 
-                          />
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-text-primary block">EXIF Time Only</span>
-                            <span className="text-[10px] text-text-muted">Original time without date</span>
-                          </div>
-                        </label>
-
                         <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider px-1 pt-2">Custom Timeline Stamping</div>
 
                         <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
@@ -658,20 +641,6 @@ export default function ExifToolsPage() {
                           <div className="min-w-0">
                             <span className="text-xs font-bold text-text-primary block">Custom Date Only (Without Time)</span>
                             <span className="text-[10px] text-text-muted">Custom date without time (shows date only)</span>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle cursor-pointer hover:bg-surface-hover transition-colors">
-                          <input 
-                            type="radio" 
-                            name="mode" 
-                            checked={downloadMode === "custom_time"} 
-                            onChange={() => setDownloadMode("custom_time")} 
-                            className="text-cyan-500 focus:ring-cyan-500" 
-                          />
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-text-primary block">Custom Time Only (Timeline)</span>
-                            <span className="text-[10px] text-text-muted">Continuous timeline time (shows only time)</span>
                           </div>
                         </label>
                       </div>
@@ -944,7 +913,7 @@ export default function ExifToolsPage() {
                       const effDate = getEffectiveDateTime(photo);
                       const effGPS = getEffectiveGPS(photo);
                       const showDateInCard = downloadMode === "date" || downloadMode === "datetime" || downloadMode === "custom" || downloadMode === "custom_date";
-                      const showTimeInCard = downloadMode === "time" || downloadMode === "datetime" || downloadMode === "custom" || downloadMode === "custom_time";
+                      const showTimeInCard = downloadMode === "datetime" || downloadMode === "custom";
 
                       return (
                         <div 
