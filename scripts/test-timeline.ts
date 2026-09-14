@@ -76,11 +76,28 @@ function validateGlobalOrder(result: ReturnType<typeof buildContinuousPhotoTimel
     allTimestamps.length === uniqueTimestamps.size,
     `All timestamps must be unique. Got ${allTimestamps.length} photos but only ${uniqueTimestamps.size} unique timestamps.`
   );
+  // Calendar date invariance: EVERY single photo MUST share the exact same calendar date
+  if (result.orderedPhotos.length > 0) {
+    const firstDate = result.orderedPhotos[0].timestamp;
+    const targetYear = firstDate.getFullYear();
+    const targetMonth = firstDate.getMonth();
+    const targetDay = firstDate.getDate();
+
+    for (let i = 0; i < result.orderedPhotos.length; i++) {
+      const p = result.orderedPhotos[i];
+      assert(
+        p.timestamp.getFullYear() === targetYear &&
+        p.timestamp.getMonth() === targetMonth &&
+        p.timestamp.getDate() === targetDay,
+        `Photo #${i + 1} (${p.id}) has date ${p.timestamp.toLocaleDateString()} which does NOT match target date ${firstDate.toLocaleDateString()}!`
+      );
+    }
+  }
 }
 
 function printTimeline(result: ReturnType<typeof buildContinuousPhotoTimeline>) {
   result.orderedPhotos.forEach(p => {
-    console.log(`  #${String(p.timelineIndex + 1).padStart(2)} | ${p.category.toUpperCase().padEnd(7)} | ${p.id.padEnd(4)} | ${p.timeString12h}`);
+    console.log(`  #${String(p.timelineIndex + 1).padStart(2)} | ${p.category.toUpperCase().padEnd(7)} | ${p.id.padEnd(4)} | ${p.timestamp.toLocaleDateString()} ${p.timeString12h}`);
   });
 }
 
@@ -89,7 +106,7 @@ console.log("  STRICT GLOBAL PHOTO TIMELINE VERIFICATION TEST SUITE");
 console.log("════════════════════════════════════════════════════════════\n");
 
 // ──── TEST 1: Standard 9 photos (3 Before, 3 During, 3 After) ────
-console.log("TEST 1: Standard 9 photos with start/end time window");
+console.log("TEST 1: Standard 9 photos with custom single date and window");
 const result1 = buildContinuousPhotoTimeline(
   [
     { id: "b1", category: "before", sortValue: 100 },
@@ -102,14 +119,14 @@ const result1 = buildContinuousPhotoTimeline(
     { id: "a2", category: "after", sortValue: 220 },
     { id: "a3", category: "after", sortValue: 320 },
   ],
-  { startTimeStr: "18:00", endTimeStr: "19:30" }
+  { customDateStr: "2026-09-14", startTimeStr: "18:00", endTimeStr: "19:30" }
 );
 printTimeline(result1);
 validateGlobalOrder(result1);
 console.log("✅ TEST 1 PASSED\n");
 
 // ──── TEST 2: Tight window (forces all into narrow range) ────
-console.log("TEST 2: Tight time window (should auto-expand)");
+console.log("TEST 2: Tight time window (should auto-expand on same day)");
 const result2 = buildContinuousPhotoTimeline(
   [
     { id: "b1", category: "before", sortValue: 1 },
@@ -119,14 +136,14 @@ const result2 = buildContinuousPhotoTimeline(
     { id: "d3", category: "during", sortValue: 5 },
     { id: "a1", category: "after", sortValue: 6 },
   ],
-  { startTimeStr: "14:00", endTimeStr: "14:05" }
+  { customDateStr: "2026-09-14", startTimeStr: "14:00", endTimeStr: "14:05" }
 );
 printTimeline(result2);
 validateGlobalOrder(result2);
 console.log("✅ TEST 2 PASSED\n");
 
-// ──── TEST 3: Midnight crossing ────
-console.log("TEST 3: Midnight crossing (23:58 start, 00:10 end)");
+// ──── TEST 3: Late evening start — must remain strictly on target date ────
+console.log("TEST 3: Late evening start (23:50 start, 23:58 end — must stay on SAME single date)");
 const result3 = buildContinuousPhotoTimeline(
   [
     { id: "b1", category: "before", sortValue: 1 },
@@ -134,14 +151,14 @@ const result3 = buildContinuousPhotoTimeline(
     { id: "d2", category: "during", sortValue: 3 },
     { id: "a1", category: "after", sortValue: 4 },
   ],
-  { startTimeStr: "23:58", endTimeStr: "00:10" }
+  { customDateStr: "2026-09-14", startTimeStr: "23:50", endTimeStr: "23:58" }
 );
 printTimeline(result3);
 validateGlobalOrder(result3);
 console.log("✅ TEST 3 PASSED\n");
 
-// ──── TEST 4: No end time (default 1-min spacing) ────
-console.log("TEST 4: No end time provided (default spacing)");
+// ──── TEST 4: No end time (default 1-min spacing on custom date) ────
+console.log("TEST 4: No end time provided (default spacing on custom date)");
 const result4 = buildContinuousPhotoTimeline(
   [
     { id: "b1", category: "before", sortValue: 1 },

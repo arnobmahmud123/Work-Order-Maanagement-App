@@ -267,6 +267,12 @@ export default function ExifToolsPage() {
     if (timedPhoto) {
       return timedPhoto.timestamp;
     }
+    if (customDate && customDate.includes("-")) {
+      const parts = customDate.split("-").map(Number);
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      }
+    }
     return photo.exifData?.dateTime || new Date(photo.file.lastModified);
   };
 

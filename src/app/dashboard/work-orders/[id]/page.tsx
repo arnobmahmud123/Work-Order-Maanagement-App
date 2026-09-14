@@ -2031,7 +2031,18 @@ export default function WorkOrderDetailPage({
   }
 
   function photoStampDate(photo: any, customValue?: string) {
-    const raw = customValue || photo.timestamp || photo.createdAt || photo.updatedAt || photo.date;
+    if (customValue) {
+      if (customValue.includes("T")) {
+        const [dPart, tPart] = customValue.split("T");
+        const [y, m, d] = dPart.split("-").map(Number);
+        const [hh, mm] = (tPart || "12:00").split(":").map(Number);
+        return new Date(y, m - 1, d, hh || 0, mm || 0, 0);
+      } else if (customValue.includes("-")) {
+        const [y, m, d] = customValue.split("-").map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0);
+      }
+    }
+    const raw = photo.timestamp || photo.createdAt || photo.updatedAt || photo.date;
     const parsed = raw ? new Date(raw) : new Date();
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }

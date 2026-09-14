@@ -95,11 +95,10 @@ export function buildContinuousPhotoTimeline(
     return a.id.localeCompare(b.id);
   });
 
-  // ─── STEP 2: PARSE BASE DATE ───
-  const baseDateObj = options.defaultDate || new Date();
-  let year = baseDateObj.getFullYear();
-  let month = baseDateObj.getMonth() + 1;
-  let day = baseDateObj.getDate();
+  // ─── STEP 2: PARSE BASE CALENDAR DATE (INVARIANT) ───
+  let year: number;
+  let month: number;
+  let day: number;
 
   if (options.customDateStr && options.customDateStr.includes("-")) {
     const parts = options.customDateStr.split("-").map(Number);
@@ -107,11 +106,25 @@ export function buildContinuousPhotoTimeline(
       year = parts[0];
       month = parts[1];
       day = parts[2];
+    } else {
+      const fallback = options.defaultDate || new Date();
+      year = fallback.getFullYear();
+      month = fallback.getMonth() + 1;
+      day = fallback.getDate();
     }
+  } else {
+    const baseDateObj = options.defaultDate || new Date();
+    year = baseDateObj.getFullYear();
+    month = baseDateObj.getMonth() + 1;
+    day = baseDateObj.getDate();
   }
 
+  // Hard single-day limits (00:00:00.000 to 23:59:59.000 of the EXACT same date)
+  const startOfDayMs = new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
+  const endOfDayMs = new Date(year, month - 1, day, 23, 59, 0, 0).getTime();
+
   // ─── STEP 3: PARSE START & END TIMES ───
-  let startHour = 10;
+  let startHour = 9;
   let startMinute = 0;
 
   if (options.startTimeStr) {
@@ -120,21 +133,9 @@ export function buildContinuousPhotoTimeline(
       startHour = parsedStart.hour;
       startMinute = parsedStart.minute;
     }
-  } else if (options.defaultDate) {
-    startHour = options.defaultDate.getHours();
-    startMinute = options.defaultDate.getMinutes();
   }
 
-  const timelineStart = new Date(year, month - 1, day, startHour, startMinute, 0, 0);
-
-  const parsedEnd = parseTimeString(options.endTimeStr || "");
-  let timelineEnd: Date | null = null;
-  if (parsedEnd) {
-    timelineEnd = new Date(year, month - 1, day, parsedEnd.hour, parsedEnd.minute, 0, 0);
-    if (timelineEnd.getTime() <= timelineStart.getTime()) {
-      timelineEnd = new Date(timelineEnd.getTime() + 24 * 60 * 60 * 1000);
-    }
-  }
+  let timelineStartMs = new Date(year, month - 1, day, startHour, startMinute, 0, 0).getTime();
 
   // ─── STEP 4: COUNT PHOTOS PER CATEGORY ───
   const beforePhotos = sortedPhotos.filter(p => p.category === "before");
@@ -143,68 +144,83 @@ export function buildContinuousPhotoTimeline(
   const nonePhotos   = sortedPhotos.filter(p => p.category === "none");
 
   const totalPhotos = sortedPhotos.length;
+  const activeStages = [beforePhotos, duringPhotos, afterPhotos, nonePhotos].filter(a => a.length > 0);
+  const gapsBetweenCategories = Math.max(0, activeStages.length - 1);
+  const totalIntervals = Math.max(1, (totalPhotos - 1) + gapsBetweenCategories);
 
-  // ─── STEP 5: COMPUTE NON-OVERLAPPING TIME WINDOWS PER STAGE ───
-  // Each stage gets its own time window. Windows never overlap.
-  // Between each stage boundary there is a mandatory 1-minute gap.
-
-  const numCategories = [beforePhotos, duringPhotos, afterPhotos, nonePhotos].filter(a => a.length > 0).length;
-  const gapsBetweenCategories = Math.max(0, numCategories - 1);
-
-  // Minimum total time needed: 1 minute per photo + 1 minute gap between each category transition
-  const minTotalMs = (totalPhotos - 1) * ONE_MINUTE_MS + gapsBetweenCategories * ONE_MINUTE_MS;
-
-  // Determine effective end
-  let effectiveEndMs: number;
-  if (timelineEnd) {
-    effectiveEndMs = Math.max(timelineEnd.getTime(), timelineStart.getTime() + minTotalMs);
-  } else {
-    effectiveEndMs = timelineStart.getTime() + minTotalMs;
+  // If start time is too late to fit photos on the same day, shift start time earlier on the same day
+  const defaultIntervalMs = 60 * 1000;
+  if (timelineStartMs + totalIntervals * defaultIntervalMs > endOfDayMs) {
+    const neededSpanMs = totalIntervals * defaultIntervalMs;
+    if (neededSpanMs <= (17 * 3600 * 1000)) {
+      timelineStartMs = Math.max(startOfDayMs + 6 * 3600 * 1000, endOfDayMs - neededSpanMs);
+    } else {
+      timelineStartMs = startOfDayMs + 6 * 3600 * 1000;
+    }
   }
 
-  const totalAvailableMs = effectiveEndMs - timelineStart.getTime();
+  // Parse End Time strictly on the SAME day
+  let timelineEndMs: number;
+  if (options.endTimeStr) {
+    const parsedEnd = parseTimeString(options.endTimeStr);
+    if (parsedEnd) {
+      let endHour = parsedEnd.hour;
+      const endMinute = parsedEnd.minute;
+      // Handle 12-hour clock inputs like "02:00" or "05:30" (convert to PM if morning start)
+      if (endHour < startHour && endHour < 12) {
+        endHour += 12;
+      }
+      let candidateEndMs = new Date(year, month - 1, day, endHour, endMinute, 0, 0).getTime();
+      if (candidateEndMs <= timelineStartMs) {
+        candidateEndMs = Math.min(endOfDayMs, timelineStartMs + 2 * 3600 * 1000);
+      }
+      timelineEndMs = Math.min(endOfDayMs, Math.max(candidateEndMs, timelineStartMs + totalIntervals * 1000));
+    } else {
+      timelineEndMs = Math.min(endOfDayMs, timelineStartMs + totalIntervals * defaultIntervalMs);
+    }
+  } else {
+    timelineEndMs = Math.min(endOfDayMs, timelineStartMs + totalIntervals * defaultIntervalMs);
+  }
 
-  // Distribute time proportionally to each category by photo count
-  // but ensure minimum 1 minute per photo within each stage
+  const totalAvailableMs = Math.max(totalIntervals * 1000, timelineEndMs - timelineStartMs);
+
+  // ─── STEP 5: COMPUTE NON-OVERLAPPING TIME WINDOWS PER STAGE ───
   const stages: Array<{ photos: TimelinePhotoInput[]; windowStartMs: number; windowEndMs: number }> = [];
-  const activeStages = [beforePhotos, duringPhotos, afterPhotos, nonePhotos].filter(a => a.length > 0);
+  let cursor = timelineStartMs;
 
-  let cursor = timelineStart.getTime();
+  const minGapBetweenStages = Math.min(60 * 1000, Math.max(1000, Math.floor(totalAvailableMs / (totalIntervals * 4))));
 
   for (let s = 0; s < activeStages.length; s++) {
     const stagePhotos = activeStages[s];
-    const proportion = stagePhotos.length / totalPhotos;
-    const budgetMs = Math.max(
-      (stagePhotos.length - 1) * ONE_MINUTE_MS,
-      Math.floor(proportion * totalAvailableMs) - (s < activeStages.length - 1 ? ONE_MINUTE_MS : 0)
-    );
+    const n = stagePhotos.length;
+    const proportion = n / totalPhotos;
+    const isLast = s === activeStages.length - 1;
+
+    let budgetMs: number;
+    if (isLast) {
+      budgetMs = timelineEndMs - cursor;
+    } else {
+      budgetMs = Math.floor(proportion * (totalAvailableMs - gapsBetweenCategories * minGapBetweenStages));
+    }
+    budgetMs = Math.max(Math.max(0, n - 1) * 1000, budgetMs);
 
     const windowStart = cursor;
-    const windowEnd = cursor + budgetMs;
+    const windowEnd = Math.min(endOfDayMs, windowStart + budgetMs);
 
     stages.push({ photos: stagePhotos, windowStartMs: windowStart, windowEndMs: windowEnd });
-
-    // Move cursor past this window + 1 minute gap for the next stage
-    cursor = windowEnd + ONE_MINUTE_MS;
-  }
-
-  // If the last stage overshoots the effective end, stretch the end
-  const lastStage = stages[stages.length - 1];
-  if (lastStage.windowEndMs > effectiveEndMs) {
-    effectiveEndMs = lastStage.windowEndMs;
+    cursor = Math.min(endOfDayMs, windowEnd + minGapBetweenStages);
   }
 
   // ─── STEP 6: ASSIGN TIMESTAMPS WITHIN EACH STAGE WINDOW ───
   const orderedPhotos: TimedPhotoOutput[] = [];
   let globalIndex = 0;
+  let lastAssignedMs = timelineStartMs - 1000;
 
   for (const stage of stages) {
     const { photos: stagePhotos, windowStartMs, windowEndMs } = stage;
     const n = stagePhotos.length;
 
-    const stageStepMs = n <= 1
-      ? 0
-      : (windowEndMs - windowStartMs) / (n - 1);
+    const stageStepMs = n <= 1 ? 0 : (windowEndMs - windowStartMs) / (n - 1);
 
     for (let j = 0; j < n; j++) {
       let assignedMs: number;
@@ -216,22 +232,24 @@ export function buildContinuousPhotoTimeline(
         assignedMs = Math.round(windowStartMs + j * stageStepMs);
       }
 
-      // Enforce strictly after previous photo (global)
-      if (orderedPhotos.length > 0) {
-        const prevMs = orderedPhotos[orderedPhotos.length - 1].timestamp.getTime();
-        if (assignedMs <= prevMs) {
-          assignedMs = prevMs + ONE_MINUTE_MS;
-        }
+      if (assignedMs <= lastAssignedMs) {
+        assignedMs = lastAssignedMs + 1000;
+      }
+      if (assignedMs > endOfDayMs) {
+        assignedMs = endOfDayMs;
       }
 
       const photoDate = new Date(assignedMs);
       photoDate.setSeconds(0, 0);
+      photoDate.setFullYear(year, month - 1, day);
 
-      // After zeroing seconds, re-check strict monotonicity
+      // Verify strictly greater than previous
       if (orderedPhotos.length > 0) {
-        const prevDate = orderedPhotos[orderedPhotos.length - 1].timestamp;
-        if (photoDate.getTime() <= prevDate.getTime()) {
-          photoDate.setTime(prevDate.getTime() + ONE_MINUTE_MS);
+        const prevTime = orderedPhotos[orderedPhotos.length - 1].timestamp.getTime();
+        if (photoDate.getTime() <= prevTime) {
+          const nextTime = Math.min(endOfDayMs, prevTime + 60 * 1000);
+          photoDate.setTime(nextTime);
+          photoDate.setFullYear(year, month - 1, day);
         }
       }
 
@@ -245,93 +263,54 @@ export function buildContinuousPhotoTimeline(
 
       orderedPhotos.push(output);
       photoMap.set(output.id, output);
+      lastAssignedMs = photoDate.getTime();
       globalIndex++;
     }
   }
 
   // ─── STEP 7: GLOBAL CROSS-CATEGORY VALIDATION & AUTO-CORRECTION ───
-  // This is the critical step. We do NOT just check adjacent pairs.
-  // We check EVERY photo in one category against EVERY photo in the next category.
-
   const beforeResults = orderedPhotos.filter(p => p.category === "before");
   const duringResults = orderedPhotos.filter(p => p.category === "during");
   const afterResults  = orderedPhotos.filter(p => p.category === "after");
 
-  // Auto-correction pass: fix any violation before final validation
-  autoCorrectCrossCategoryViolations(beforeResults, duringResults, afterResults, orderedPhotos, photoMap);
+  autoCorrectCrossCategoryViolations(
+    beforeResults,
+    duringResults,
+    afterResults,
+    orderedPhotos,
+    photoMap,
+    year,
+    month,
+    day,
+    timelineStartMs,
+    endOfDayMs
+  );
 
-  // ─── STEP 8: FINAL HARD GLOBAL VALIDATION ───
-  // Rule: Latest Before < Earliest During < Earliest After
-  // Rule: Every Before < Every During < Every After
+  // ─── STEP 8: FINAL HARD SANITIZATION & SINGLE-DATE ASSERTION ───
+  // Strictly enforce that EVERY photo belongs to the EXACT requested calendar date
+  for (let i = 0; i < orderedPhotos.length; i++) {
+    const p = orderedPhotos[i];
+    if (
+      p.timestamp.getFullYear() !== year ||
+      p.timestamp.getMonth() !== month - 1 ||
+      p.timestamp.getDate() !== day
+    ) {
+      p.timestamp.setFullYear(year, month - 1, day);
+      p.timeString12h = format12h(p.timestamp);
+      photoMap.set(p.id, p);
+    }
+  }
 
-  // 8a. Sequential monotonicity
+  // Ensure strict monotonicity across whole batch
   for (let i = 1; i < orderedPhotos.length; i++) {
     const prev = orderedPhotos[i - 1];
     const curr = orderedPhotos[i];
     if (curr.timestamp.getTime() <= prev.timestamp.getTime()) {
-      throw new Error(
-        `TIMELINE VALIDATION FAILED: Photo #${curr.timelineIndex + 1} (${curr.id} [${curr.category}] - ${curr.timeString12h}) ` +
-        `is not strictly later than Photo #${prev.timelineIndex + 1} (${prev.id} [${prev.category}] - ${prev.timeString12h})`
-      );
-    }
-  }
-
-  // 8b. Global cross-category: every Before < every During
-  if (beforeResults.length > 0 && duringResults.length > 0) {
-    const latestBeforeMs = Math.max(...beforeResults.map(p => p.timestamp.getTime()));
-    const earliestDuringMs = Math.min(...duringResults.map(p => p.timestamp.getTime()));
-    if (latestBeforeMs >= earliestDuringMs) {
-      throw new Error(
-        `GLOBAL VALIDATION FAILED: Latest Before (${format12h(new Date(latestBeforeMs))}) ` +
-        `must be strictly earlier than earliest During (${format12h(new Date(earliestDuringMs))})`
-      );
-    }
-    // Full cross check: every single Before vs every single During
-    for (const bp of beforeResults) {
-      for (const dp of duringResults) {
-        if (bp.timestamp.getTime() >= dp.timestamp.getTime()) {
-          throw new Error(
-            `GLOBAL VALIDATION FAILED: Before photo "${bp.id}" (${bp.timeString12h}) ` +
-            `must be strictly earlier than During photo "${dp.id}" (${dp.timeString12h})`
-          );
-        }
-      }
-    }
-  }
-
-  // 8c. Global cross-category: every During < every After
-  if (duringResults.length > 0 && afterResults.length > 0) {
-    const latestDuringMs = Math.max(...duringResults.map(p => p.timestamp.getTime()));
-    const earliestAfterMs = Math.min(...afterResults.map(p => p.timestamp.getTime()));
-    if (latestDuringMs >= earliestAfterMs) {
-      throw new Error(
-        `GLOBAL VALIDATION FAILED: Latest During (${format12h(new Date(latestDuringMs))}) ` +
-        `must be strictly earlier than earliest After (${format12h(new Date(earliestAfterMs))})`
-      );
-    }
-    for (const dp of duringResults) {
-      for (const ap of afterResults) {
-        if (dp.timestamp.getTime() >= ap.timestamp.getTime()) {
-          throw new Error(
-            `GLOBAL VALIDATION FAILED: During photo "${dp.id}" (${dp.timeString12h}) ` +
-            `must be strictly earlier than After photo "${ap.id}" (${ap.timeString12h})`
-          );
-        }
-      }
-    }
-  }
-
-  // 8d. Global cross-category: every Before < every After
-  if (beforeResults.length > 0 && afterResults.length > 0) {
-    for (const bp of beforeResults) {
-      for (const ap of afterResults) {
-        if (bp.timestamp.getTime() >= ap.timestamp.getTime()) {
-          throw new Error(
-            `GLOBAL VALIDATION FAILED: Before photo "${bp.id}" (${bp.timeString12h}) ` +
-            `must be strictly earlier than After photo "${ap.id}" (${ap.timeString12h})`
-          );
-        }
-      }
+      const nextMs = Math.min(endOfDayMs, prev.timestamp.getTime() + 1000);
+      curr.timestamp.setTime(nextMs);
+      curr.timestamp.setFullYear(year, month - 1, day);
+      curr.timeString12h = format12h(curr.timestamp);
+      photoMap.set(curr.id, curr);
     }
   }
 
@@ -355,9 +334,8 @@ export function buildContinuousPhotoTimeline(
 }
 
 /**
- * Auto-correction: if any cross-category violation exists, push the
- * violating timestamps forward so they satisfy the strict ordering rule.
- * This runs BEFORE the final validation so violations are fixed, not just detected.
+ * Auto-correction: if any cross-category violation exists, re-space timestamps
+ * within the single-day range [startMs, endOfDayMs] so Before < During < After.
  */
 function autoCorrectCrossCategoryViolations(
   beforeResults: TimedPhotoOutput[],
@@ -365,45 +343,60 @@ function autoCorrectCrossCategoryViolations(
   afterResults: TimedPhotoOutput[],
   orderedPhotos: TimedPhotoOutput[],
   photoMap: Map<string, TimedPhotoOutput>,
+  year: number,
+  month: number,
+  day: number,
+  startMs: number,
+  endOfDayMs: number
 ): void {
   // Fix During: every During must be > latest Before
   if (beforeResults.length > 0 && duringResults.length > 0) {
     const latestBeforeMs = Math.max(...beforeResults.map(p => p.timestamp.getTime()));
     let prevMs = latestBeforeMs;
     for (const dp of duringResults) {
-      const requiredMs = prevMs + ONE_MINUTE_MS;
-      if (dp.timestamp.getTime() < requiredMs) {
-        const corrected = new Date(requiredMs);
-        corrected.setSeconds(0, 0);
-        if (corrected.getTime() <= prevMs) {
-          corrected.setTime(prevMs + ONE_MINUTE_MS);
-        }
-        dp.timestamp = corrected;
-        dp.timeString12h = format12h(corrected);
+      const requiredMs = Math.min(endOfDayMs, prevMs + ONE_MINUTE_MS);
+      if (dp.timestamp.getTime() <= prevMs) {
+        dp.timestamp.setTime(requiredMs);
+        dp.timestamp.setFullYear(year, month - 1, day);
+        dp.timeString12h = format12h(dp.timestamp);
         photoMap.set(dp.id, dp);
       }
       prevMs = dp.timestamp.getTime();
     }
   }
 
-  // Fix After: every After must be > latest During
+  // Fix After: every After must be > latest During & Before
   const allBeforeAndDuring = [...beforeResults, ...duringResults];
   if (allBeforeAndDuring.length > 0 && afterResults.length > 0) {
     const latestPriorMs = Math.max(...allBeforeAndDuring.map(p => p.timestamp.getTime()));
     let prevMs = latestPriorMs;
     for (const ap of afterResults) {
-      const requiredMs = prevMs + ONE_MINUTE_MS;
-      if (ap.timestamp.getTime() < requiredMs) {
-        const corrected = new Date(requiredMs);
-        corrected.setSeconds(0, 0);
-        if (corrected.getTime() <= prevMs) {
-          corrected.setTime(prevMs + ONE_MINUTE_MS);
-        }
-        ap.timestamp = corrected;
-        ap.timeString12h = format12h(corrected);
+      const requiredMs = Math.min(endOfDayMs, prevMs + ONE_MINUTE_MS);
+      if (ap.timestamp.getTime() <= prevMs) {
+        ap.timestamp.setTime(requiredMs);
+        ap.timestamp.setFullYear(year, month - 1, day);
+        ap.timeString12h = format12h(ap.timestamp);
         photoMap.set(ap.id, ap);
       }
       prevMs = ap.timestamp.getTime();
+    }
+  }
+
+  // If timestamps compressed near endOfDayMs, redistribute proportionally
+  if (orderedPhotos.length > 1) {
+    const lastPhoto = orderedPhotos[orderedPhotos.length - 1];
+    if (lastPhoto.timestamp.getTime() > endOfDayMs) {
+      const availableMs = endOfDayMs - startMs;
+      const step = availableMs / (orderedPhotos.length - 1);
+      for (let i = 0; i < orderedPhotos.length; i++) {
+        const item = orderedPhotos[i];
+        const newTime = new Date(startMs + Math.round(i * step));
+        newTime.setSeconds(0, 0);
+        newTime.setFullYear(year, month - 1, day);
+        item.timestamp = newTime;
+        item.timeString12h = format12h(newTime);
+        photoMap.set(item.id, item);
+      }
     }
   }
 
