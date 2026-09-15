@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge, Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -62,6 +62,17 @@ export function ChannelInfoPanel({
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit states
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [editName, setEditName] = useState(channel?.name || "");
+  const [editDesc, setEditDesc] = useState(channel?.description || "");
+
+  useEffect(() => {
+    setEditName(channel?.name || "");
+    setEditDesc(channel?.description || "");
+    setIsEditingInfo(false);
+  }, [channel?.id, channel?.name, channel?.description]);
 
   const isContractor = userRole === "CONTRACTOR";
 
@@ -218,6 +229,31 @@ export function ChannelInfoPanel({
     }
   }
 
+  // ─── Save Channel Info ────────────────────────────────────────────────
+  async function handleSaveInfo() {
+    if (!editName.trim()) {
+      toast.error("Channel name cannot be empty");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/chat/channels/${channel.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          action: "update",
+          name: editName.trim(), 
+          description: editDesc.trim() 
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      toast.success("Channel updated");
+      setIsEditingInfo(false);
+      onChannelUpdate?.();
+    } catch {
+      toast.error("Failed to update channel");
+    }
+  }
+
   return (
     <div className="w-80 border-l border-border-subtle flex flex-col bg-surface-hover flex-shrink-0">
       {/* Header */}
@@ -273,27 +309,78 @@ export function ChannelInfoPanel({
           </div>
 
           <div className="flex-1 min-w-0">
-            <h4 className="text-lg font-bold text-text-primary leading-tight">
-              {channel?.name}
-            </h4>
-            {channel?.description && (
-              <p className="text-sm text-text-secondary mt-1">
-                {channel.description}
-              </p>
+            {isEditingInfo ? (
+              <div className="space-y-2 mt-1">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-background border border-border-medium rounded px-2 py-1 text-sm font-bold text-text-primary focus:border-cyan-500 focus:outline-none"
+                  placeholder="Channel name"
+                />
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  className="w-full bg-background border border-border-medium rounded px-2 py-1 text-xs text-text-secondary focus:border-cyan-500 focus:outline-none resize-none h-16"
+                  placeholder="Description (optional)"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveInfo}
+                    className="flex-1 px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs font-bold hover:bg-cyan-500/30 transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditingInfo(false);
+                      setEditName(channel?.name || "");
+                      setEditDesc(channel?.description || "");
+                    }}
+                    className="flex-1 px-2 py-1 bg-surface border border-border-medium rounded text-xs text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h4 className="text-lg font-bold text-text-primary leading-tight break-words">
+                      {channel?.name}
+                    </h4>
+                    {channel?.description && (
+                      <p className="text-sm text-text-secondary mt-1 break-words">
+                        {channel.description}
+                      </p>
+                    )}
+                  </div>
+                  {!isContractor && (isAdmin || isOwner) && (
+                    <button
+                      onClick={() => setIsEditingInfo(true)}
+                      className="p-1.5 -mr-1.5 rounded-lg text-text-muted hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors flex-shrink-0"
+                      title="Edit channel info"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-3">
+                  <button
+                    onClick={() => setMuted(!muted)}
+                    className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary"
+                  >
+                    {muted ? (
+                      <BellOff className="h-4 w-4" />
+                    ) : (
+                      <Bell className="h-4 w-4" />
+                    )}
+                    {muted ? "Unmute" : "Mute"}
+                  </button>
+                </div>
+              </>
             )}
-            <div className="flex items-center gap-3 mt-3">
-              <button
-                onClick={() => setMuted(!muted)}
-                className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary"
-              >
-                {muted ? (
-                  <BellOff className="h-4 w-4" />
-                ) : (
-                  <Bell className="h-4 w-4" />
-                )}
-                {muted ? "Unmute" : "Mute"}
-              </button>
-            </div>
           </div>
         </div>
       </div>
