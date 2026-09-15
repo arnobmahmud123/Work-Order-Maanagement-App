@@ -48,7 +48,6 @@ import {
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Work Orders", href: "/dashboard/work-orders", icon: ClipboardList },
-  { label: "GPS Camera", href: "/dashboard/camera", icon: Camera },
   { label: "Assets", href: "/dashboard/assets", icon: Building2 },
   { label: "Chat", href: "/dashboard/chat", icon: Hash, badgeKey: "chat" as const },
   { label: "SMS Chat", href: "/dashboard/sms-chat", icon: MessageSquare },
