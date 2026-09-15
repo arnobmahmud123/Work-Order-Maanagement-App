@@ -18,22 +18,26 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      await signIn("credentials", {
+      const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password: password.trim(),
-        redirectTo: "/dashboard",
+        redirect: false,
       });
-    } catch (err: any) {
-      if (err?.message?.includes("NEXT_REDIRECT")) {
-        throw err; // Allow Next.js to handle the redirect
-      }
-      
-      // If we reach here, signIn threw an error (like CredentialsSignin)
-      if (err?.type === "CredentialsSignin" || err?.message?.includes("CredentialsSignin")) {
-        setError("Invalid email or password");
+
+      if (result?.error) {
+        setError(
+          result.error === "CredentialsSignin"
+            ? "Invalid email or password"
+            : `Login error: ${result.error}`
+        );
       } else {
-        setError(err?.message || "Something went wrong during sign in");
+        // Wait briefly for cookies to be stored by the browser before redirecting
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 500);
       }
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong during sign in");
     } finally {
       setLoading(false);
     }
@@ -46,20 +50,21 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      await signIn("credentials", {
+      const result = await signIn("credentials", {
         email: demoEmail.trim().toLowerCase(),
         password: demoPass.trim(),
-        redirectTo: "/dashboard",
+        redirect: false,
       });
-    } catch (err: any) {
-      if (err?.message?.includes("NEXT_REDIRECT")) {
-        throw err;
-      }
-      if (err?.type === "CredentialsSignin" || err?.message?.includes("CredentialsSignin")) {
+
+      if (result?.error) {
         setError("Invalid email or password");
       } else {
-        setError(err?.message || "Login failed");
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 500);
       }
+    } catch (err: any) {
+      setError(err?.message || "Login failed");
     } finally {
       setLoading(false);
     }

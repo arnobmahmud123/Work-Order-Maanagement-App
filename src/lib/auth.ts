@@ -32,19 +32,6 @@ export const {
   return {
     session: { strategy: "jwt" },
     trustHost: true,
-    useSecureCookies: true,
-    cookies: {
-      sessionToken: {
-        name: '__Secure-authjs.session-token',
-        options: {
-          httpOnly: true,
-          sameSite: 'lax',
-          path: '/',
-          secure: true,
-          domain: env?.AUTH_URL ? new URL(env.AUTH_URL).hostname : undefined
-        }
-      }
-    },
     secret: env?.AUTH_SECRET || env?.NEXTAUTH_SECRET || "d3f7495b219e4a8b98163f92a0e5c1d847a9e6b3c2d1e0f4a8b7c6d5e4f3a2b1",
     pages: {
       signIn: "/auth/signin",
