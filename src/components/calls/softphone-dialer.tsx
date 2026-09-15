@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
 import { useCallStore } from "@/hooks/use-call";
-import { Mic, MicOff, PhoneOff, Phone as PhoneIcon, Loader2, Volume2 } from "lucide-react";
+import { Phone as PhoneIcon, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { SmartPhoneDialer } from "./smart-phone-dialer";
 
 export function SoftphoneDialer() {
   const { activeNumber, isDialing, endCall } = useCallStore();
@@ -13,7 +14,24 @@ export function SoftphoneDialer() {
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [callStatus, setCallStatus] = useState<"idle" | "connecting" | "ringing" | "in-progress" | "ended">("idle");
   const [isMuted, setIsMuted] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState(activeNumber || "");
+  const [isOpen, setIsOpen] = useState(false);
   
+  // Keep local phone number in sync if it changes externally
+  useEffect(() => {
+    if (activeNumber) {
+      setPhoneNumber(activeNumber);
+      setIsOpen(true);
+    }
+  }, [activeNumber]);
+
+  // Global toggle listener
+  useEffect(() => {
+    const handleToggle = () => setIsOpen((prev) => !prev);
+    window.addEventListener("toggle-softphone", handleToggle);
+    return () => window.removeEventListener("toggle-softphone", handleToggle);
+  }, []);
+
   // Initialize device only once
   useEffect(() => {
     async function initDevice() {
@@ -34,7 +52,6 @@ export function SoftphoneDialer() {
         setDevice(newDevice);
       } catch (err: any) {
         console.error("Twilio Device initialization error:", err);
-        toast.error(err.message || "Twilio not configured properly");
       }
     }
     
@@ -53,14 +70,22 @@ export function SoftphoneDialer() {
     }
   }, [activeNumber, isDialing, device]);
 
-  const initiateCall = async (phoneNumber: string) => {
-    if (!device) return;
+  const initiateCall = async (phone: string) => {
+    if (!device) {
+      toast.error("Phone system not connected. Try again in a moment.");
+      return;
+    }
+    if (!phone) {
+      toast.error("Please enter a phone number");
+      return;
+    }
     
     setCallStatus("connecting");
+    setIsOpen(true);
     try {
       const call = await device.connect({
         params: {
-          To: phoneNumber,
+          To: phone,
         },
       });
       
@@ -85,13 +110,6 @@ export function SoftphoneDialer() {
     }
   };
 
-  const handleMute = () => {
-    if (!activeCall) return;
-    const currentlyMuted = activeCall.isMuted();
-    activeCall.mute(!currentlyMuted);
-    setIsMuted(!currentlyMuted);
-  };
-
   const handleHangup = () => {
     if (activeCall) {
       activeCall.disconnect();
@@ -106,69 +124,54 @@ export function SoftphoneDialer() {
     endCall();
   };
 
-  if (!activeNumber && callStatus === "idle") return null;
+  if (!isOpen && !activeCall) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 w-80 bg-zinc-900 border border-white/10 shadow-2xl rounded-2xl overflow-hidden z-[9999] animate-in slide-in-from-bottom-5">
-      {/* Header */}
-      <div className="bg-cyan-900/40 p-4 border-b border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
-              <PhoneIcon className="h-5 w-5 text-cyan-400" />
-            </div>
-            {callStatus === "in-progress" && (
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-zinc-900 rounded-full animate-pulse" />
-            )}
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">{activeNumber}</h3>
-            <p className="text-xs text-cyan-400 font-medium capitalize">
-              {callStatus}
-              {callStatus === "connecting" && "..."}
-            </p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Visualizer & Controls */}
-      <div className="p-6 flex flex-col items-center">
-        {/* Status indicator */}
-        <div className="h-16 flex items-center justify-center mb-4 text-zinc-500">
-          {callStatus === "connecting" || callStatus === "ringing" ? (
-            <Loader2 className="h-8 w-8 animate-spin text-cyan-500/50" />
-          ) : callStatus === "in-progress" ? (
-            <div className="flex gap-1 items-center h-8">
-              <div className="w-1.5 bg-cyan-400 animate-[bounce_1s_infinite] h-4 rounded-full" style={{ animationDelay: '0ms' }} />
-              <div className="w-1.5 bg-cyan-400 animate-[bounce_1s_infinite] h-8 rounded-full" style={{ animationDelay: '150ms' }} />
-              <div className="w-1.5 bg-cyan-400 animate-[bounce_1s_infinite] h-6 rounded-full" style={{ animationDelay: '300ms' }} />
-              <div className="w-1.5 bg-cyan-400 animate-[bounce_1s_infinite] h-8 rounded-full" style={{ animationDelay: '450ms' }} />
-              <div className="w-1.5 bg-cyan-400 animate-[bounce_1s_infinite] h-4 rounded-full" style={{ animationDelay: '600ms' }} />
-            </div>
-          ) : (
-            <Volume2 className="h-8 w-8 opacity-20" />
-          )}
-        </div>
+    <div className="fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-bottom-5">
+      <div className="relative">
+        <button
+          onClick={() => {
+            if (activeCall) {
+              toast("Can't close dialer while on an active call", { icon: "📞" });
+              return;
+            }
+            setIsOpen(false);
+          }}
+          className="absolute -top-3 -right-3 h-8 w-8 bg-surface border border-border-subtle rounded-full flex items-center justify-center text-text-muted hover:text-rose-400 hover:border-rose-400/50 shadow-lg shadow-black/20 z-10 transition-all cursor-pointer z-50"
+          title="Close Phone"
+        >
+          <X className="h-4 w-4" />
+        </button>
         
-        {/* Actions */}
-        <div className="flex items-center gap-6 w-full justify-center">
-          <button
-            onClick={handleMute}
-            disabled={callStatus !== "in-progress"}
-            className={`h-12 w-12 rounded-full flex items-center justify-center transition-all ${
-              isMuted ? "bg-white text-black" : "bg-white/10 text-white hover:bg-white/20"
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-          </button>
-          
-          <button
-            onClick={handleHangup}
-            className="h-14 w-14 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-lg shadow-red-900/20 transition-all hover:scale-105"
-          >
-            <PhoneOff className="h-6 w-6 text-white" />
-          </button>
-        </div>
+        <SmartPhoneDialer
+          phoneNumber={phoneNumber}
+          onChangePhoneNumber={setPhoneNumber}
+          onManualCall={callStatus === "idle" ? initiateCall : handleHangup}
+          onAiCall={() => toast.error("AI Calling requires a voice profile setup from the AI Calling page.")}
+          isManualCalling={callStatus === "connecting" || callStatus === "ringing" || callStatus === "in-progress"}
+          disabled={callStatus !== "idle" && callStatus !== "ended"}
+          className="shadow-2xl shadow-cyan-500/10 border-cyan-500/40"
+        />
+        
+        {/* Active Call Overlay Banner embedded on top of dialer */}
+        {callStatus !== "idle" && callStatus !== "ended" && (
+          <div className="absolute top-12 left-4 right-4 bg-cyan-950/90 backdrop-blur-md rounded-xl p-3 border border-cyan-500/50 shadow-inner flex items-center justify-between z-20">
+             <div className="flex flex-col">
+               <span className="text-[10px] uppercase font-black text-cyan-400 tracking-wider">
+                 {callStatus}
+               </span>
+               <span className="text-sm font-mono font-bold text-white">
+                 {phoneNumber}
+               </span>
+             </div>
+             <button
+               onClick={handleHangup}
+               className="h-8 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider shadow-md active:scale-95 transition-all"
+             >
+               End
+             </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { useNotifications, useProfile } from "@/hooks/use-data";
 import { Avatar } from "@/components/ui/avatar";
-import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles, Users, CreditCard, Shield, Zap, Cable } from "lucide-react";
+import { Bell, Menu, LogOut, ChevronDown, ChevronUp, MessageSquare, ClipboardList, Settings, User, Sun, Moon, Sparkles, Users, CreditCard, Shield, Zap, Cable, Phone } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { formatRelativeTime, cn } from "@/lib/utils";
@@ -139,6 +139,17 @@ export function TopNav({ onMenuClick }: { onMenuClick?: () => void }) {
               ) : (
                 <Moon className="h-5 w-5 transition-transform group-hover:-rotate-12" />
               )}
+            </button>
+          )}
+
+          {/* Global Phone Dialer */}
+          {mounted && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('toggle-softphone'))}
+              className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-emerald-400 transition-all relative group"
+              title="Open Phone Dialer"
+            >
+              <Phone className="h-5 w-5 group-hover:scale-110 transition-transform" />
             </button>
           )}
 

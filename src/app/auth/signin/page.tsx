@@ -21,7 +21,7 @@ export default function SignIn() {
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password: password.trim(),
-        redirect: false,
+        redirectTo: "/dashboard",
       });
 
       if (result?.error) {
@@ -30,10 +30,12 @@ export default function SignIn() {
             ? "Invalid email or password"
             : `Login error: ${result.error}`
         );
-      } else {
-        window.location.href = "/dashboard";
       }
     } catch (err: any) {
+      if (err?.message?.includes("NEXT_REDIRECT")) {
+        // Next.js redirect thrown by NextAuth
+        throw err;
+      }
       setError(err?.message || "Something went wrong during sign in");
     } finally {
       setLoading(false);
@@ -50,15 +52,16 @@ export default function SignIn() {
       const result = await signIn("credentials", {
         email: demoEmail.trim().toLowerCase(),
         password: demoPass.trim(),
-        redirect: false,
+        redirectTo: "/dashboard",
       });
 
       if (result?.error) {
         setError("Invalid email or password");
-      } else {
-        window.location.href = "/dashboard";
       }
     } catch (err: any) {
+      if (err?.message?.includes("NEXT_REDIRECT")) {
+        throw err;
+      }
       setError(err?.message || "Login failed");
     } finally {
       setLoading(false);
