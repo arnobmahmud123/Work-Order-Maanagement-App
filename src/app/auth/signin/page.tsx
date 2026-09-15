@@ -18,25 +18,22 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
+      await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password: password.trim(),
         redirectTo: "/dashboard",
       });
-
-      if (result?.error) {
-        setError(
-          result.error === "CredentialsSignin"
-            ? "Invalid email or password"
-            : `Login error: ${result.error}`
-        );
-      }
     } catch (err: any) {
       if (err?.message?.includes("NEXT_REDIRECT")) {
-        // Next.js redirect thrown by NextAuth
-        throw err;
+        throw err; // Allow Next.js to handle the redirect
       }
-      setError(err?.message || "Something went wrong during sign in");
+      
+      // If we reach here, signIn threw an error (like CredentialsSignin)
+      if (err?.type === "CredentialsSignin" || err?.message?.includes("CredentialsSignin")) {
+        setError("Invalid email or password");
+      } else {
+        setError(err?.message || "Something went wrong during sign in");
+      }
     } finally {
       setLoading(false);
     }
@@ -49,20 +46,20 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
+      await signIn("credentials", {
         email: demoEmail.trim().toLowerCase(),
         password: demoPass.trim(),
         redirectTo: "/dashboard",
       });
-
-      if (result?.error) {
-        setError("Invalid email or password");
-      }
     } catch (err: any) {
       if (err?.message?.includes("NEXT_REDIRECT")) {
         throw err;
       }
-      setError(err?.message || "Login failed");
+      if (err?.type === "CredentialsSignin" || err?.message?.includes("CredentialsSignin")) {
+        setError("Invalid email or password");
+      } else {
+        setError(err?.message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
