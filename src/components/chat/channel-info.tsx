@@ -273,23 +273,23 @@ export function ChannelInfoPanel({
           </div>
 
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-semibold text-text-primary">
+            <h4 className="text-lg font-bold text-text-primary leading-tight">
               {channel?.name}
             </h4>
             {channel?.description && (
-              <p className="text-xs text-text-secondary mt-1">
+              <p className="text-sm text-text-secondary mt-1">
                 {channel.description}
               </p>
             )}
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-3">
               <button
                 onClick={() => setMuted(!muted)}
-                className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary"
+                className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary"
               >
                 {muted ? (
-                  <BellOff className="h-3.5 w-3.5" />
+                  <BellOff className="h-4 w-4" />
                 ) : (
-                  <Bell className="h-3.5 w-3.5" />
+                  <Bell className="h-4 w-4" />
                 )}
                 {muted ? "Unmute" : "Mute"}
               </button>

@@ -1362,16 +1362,16 @@ function ChatArea({
             </button>
           )}
           {isDM ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <div className="relative">
                 <Avatar
                   src={otherUser?.image}
                   name={otherUser?.name}
-                  size="md"
+                  size="lg"
                 />
                 <div
                   className={cn(
-                    "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface",
+                    "absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface",
                     otherUser?.isActive !== false
                       ? "bg-emerald-500"
                       : "bg-gray-600"
@@ -1379,10 +1379,10 @@ function ChatArea({
                 />
               </div>
               <div>
-                <h3 className="font-semibold text-text-primary text-sm">
+                <h3 className="font-bold text-text-primary text-xl">
                   {otherUser?.name}
                 </h3>
-                <p className="text-[11px] text-text-muted">
+                <p className="text-[13px] text-text-muted">
                   {otherUser?.isActive !== false ? "Active now" : "Offline"}
                 </p>
               </div>
@@ -1390,7 +1390,7 @@ function ChatArea({
           ) : (
             <>
               <div className={cn(
-                "h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all border shadow-lg overflow-hidden",
+                "h-14 w-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-all border shadow-lg overflow-hidden",
                 channel?.type === "WORK_ORDERS" 
                   ? "bg-amber-500/10 border-amber-500/20 text-amber-400" 
                   : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"
@@ -1398,17 +1398,17 @@ function ChatArea({
                 {channel?.imageUrl || channel?.image || channel?.metadata?.image ? (
                   <img src={channel.imageUrl || channel.image || channel.metadata?.image} alt={channel?.name} className="h-full w-full object-contain" />
                 ) : channel?.type === "WORK_ORDERS" ? (
-                  <Home className="h-5 w-5" />
+                  <Home className="h-7 w-7" />
                 ) : (
-                  <ChannelIcon className="h-5 w-5" />
+                  <ChannelIcon className="h-7 w-7" />
                 )}
               </div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-text-primary text-sm truncate">
+              <div className="min-w-0 ml-1">
+                <h3 className="font-bold text-text-primary text-xl truncate">
                   {channel?.name}
                 </h3>
                 {channel?.description && (
-                  <p className="text-[11px] text-text-muted truncate">
+                  <p className="text-[13px] text-text-muted truncate mt-0.5">
                     {channel.description}
                   </p>
                 )}
